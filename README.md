@@ -19,8 +19,8 @@ The game saves automatically (every 20 s, when you quit, and when you die) to
 | E (or the on-screen button) | Search container / pick up item |
 | R | Reload (restart when dead) |
 | 1 / 2 / 3, mouse wheel | Primary / secondary / melee weapon |
-| X | Put hands item away |
-| Tab or I | Inventory: hands + pockets (right-click use/hold, drag to move, drag outside to drop) |
+| X | Lower weapon (fists) |
+| Tab or I | Inventory: nearby / storage / gear (drag to move, right-click use/wear/equip/take, drag outside to drop) |
 | F / G / H | Eat / Drink / Bandage |
 | Esc | Pause (Q = save & quit to menu) |
 | F11 | Fullscreen |

@@ -121,7 +121,7 @@ func to_save() -> Dictionary:
 		"player": {
 			"pos": [p.position.x, p.position.y], "health": p.health, "hunger": p.hunger,
 			"thirst": p.thirst, "bleeding": p.bleeding,
-			"hands": p.inv.hands, "pockets": p.inv.pockets, "weapons": p.inv.weapons,
+			"inv": p.inv.to_save(),
 		},
 		"loot": loot, "zombies": zs,
 	}
@@ -142,12 +142,8 @@ func _apply_save(s: Dictionary) -> void:
 	player.hunger = ps["hunger"]
 	player.thirst = ps["thirst"]
 	player.bleeding = ps["bleeding"]
-	player.inv.hands = SaveGame.fix_item(ps["hands"])
-	player.inv.pockets.clear()
-	for it in ps["pockets"]:
-		player.inv.pockets.append(SaveGame.fix_item(it))
-	for slot in Inventory.WEAPON_SLOTS:
-		player.inv.weapons[slot] = SaveGame.fix_item(ps["weapons"][slot])
+	if ps.has("inv"):
+		player.inv.load_save(ps["inv"])
 	for zd in s["zombies"]:
 		var z := add_zombie(SaveGame.vec(zd["pos"]), zd["big"])
 		z.health = zd["health"]

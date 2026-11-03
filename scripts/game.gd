@@ -16,6 +16,9 @@ var save_path := "user://save.json"
 ## Save data to load when the game scene starts; empty = new game.
 var pending_load := {}
 
+## Set by the player to ask the HUD to open the inventory (searching a container).
+var open_inventory := false
+
 ## Set when a click was used by a UI button, so it doesn't also fire a gun. Cleared on release.
 var click_used := false
 
@@ -170,4 +173,141 @@ func thirst_fill() -> Texture2D:
 			img.set_pixel(x, y, Color(l * 0.45, l * 0.9, l * 1.7, c.a))
 	var t := ImageTexture.create_from_image(img)
 	_tex_cache["_thirst_fill"] = t
+	return t
+
+
+# ---------------------------------------------------------------- clothing icons
+# Original pixel-art icons for clothing (the art packs have none). o = outline.
+
+const _SHIRT := [
+	"....oo..oo....",
+	"..ooaaooaaoo..",
+	".oaaaaaaaaaao.",
+	"oaaaaaaaaaaaao",
+	"oaaoaaaaaaoaao",
+	".oo.oaaaaao.oo",
+	"....oaaaaao...",
+	"....oaaaaao...",
+	"....oaaaaao...",
+	"....oaaaaao...",
+	"....obbbbbo...",
+	".....ooooo....",
+]
+const _COAT := [
+	"....oo..oo....",
+	"..ooaaooaaoo..",
+	".oaaaaobaaaao.",
+	"oaaaaaobaaaaao",
+	"oaaoaaobaaoaao",
+	"oaaoaaobaaoaao",
+	"oaaoaaobaaoaao",
+	"oaaoaaobaaoaao",
+	"oddoaaobaaoddo",
+	".oo.oaobaao.oo",
+	"....oaobaao...",
+	"....ooooooo...",
+]
+const _PANTS := [
+	"oooooooooooo",
+	"obbbbbbbbbbo",
+	"oaaaaaaaaaao",
+	"oaaaaooaaaao",
+	"oaaao..oaaao",
+	"oaaao..oaaao",
+	"oapao..oapao",
+	"oapao..oapao",
+	"oaaao..oaaao",
+	"oaaao..oaaao",
+	"occco..occco",
+	"ooooo..ooooo",
+]
+const _BOOT := [
+	".oooo.....",
+	".oaao.....",
+	".oaao.....",
+	".oaao.....",
+	".oaao.....",
+	".oaaooooo.",
+	".oaaaaaaao",
+	"obbbbbbbbo",
+	"oooooooooo",
+]
+const _VEST := [
+	".ooo....ooo.",
+	".oao....oao.",
+	"ooaao..oaaoo",
+	"oaaaaooaaaao",
+	"oaaaaobaaaao",
+	"oaccaobaccao",
+	"oaccaobaccao",
+	"oaaaaobaaaao",
+	"oaccaobaccao",
+	"oaccaobaccao",
+	"oaaaaobaaaao",
+	"oooooooooooo",
+]
+const _HELMET := [
+	"....ooooo....",
+	"..ooaaaaaoo..",
+	".oaabbaaaaao.",
+	".oabaaaaaaao.",
+	"oaabaaaaaaaao",
+	"oaaaaaaaaaaao",
+	"occccccccccco",
+	"ooooooooooooo",
+]
+const _PACK := [
+	"...oooooo...",
+	"..oo....oo..",
+	".oooooooooo.",
+	"oaaaaaaaaaao",
+	"obbbbbbbbbbo",
+	"obbbbbbbbbbo",
+	"oaaaaddaaaao",
+	"oaaaaaaaaaao",
+	"oaoccccccoao",
+	"oaoccccccoao",
+	"oaooooooooao",
+	"oaaaaaaaaaao",
+	".oooooooooo.",
+]
+
+const ICONS := {
+	"tshirt": [_SHIRT, {"a": "6b7a4a", "b": "4e5a36"}, false],
+	"flannel": [_SHIRT, {"a": "8c3b3b", "b": "5e2a2e", "c": "6a2a2a"}, true],
+	"hoodie": [_COAT, {"a": "5a5f6e", "b": "8a8f9e", "d": "3e4250"}, false],
+	"jacket": [_COAT, {"a": "6e4a32", "b": "a07050", "d": "4a3020"}, false],
+	"jeans": [_PANTS, {"a": "3b5a8c", "b": "2a3e63", "c": "5878a8", "p": "3b5a8c"}, false],
+	"cargo_pants": [_PANTS, {"a": "6a6440", "b": "4a4630", "c": "8a8458", "p": "4a4630"}, false],
+	"boots": [_BOOT, {"a": "5a4030", "b": "2a1e18"}, false],
+	"vest": [_VEST, {"a": "4e5434", "b": "7a8050", "c": "3a3e26"}, false],
+	"helmet": [_HELMET, {"a": "4e5a3a", "b": "7a8a5a", "c": "2e3422"}, false],
+	"backpack_small": [_PACK, {"a": "5a6a3a", "b": "46542e", "c": "4a5830", "d": "c9a46a"}, false],
+	"backpack_large": [_PACK, {"a": "6a4a30", "b": "553a24", "c": "5a3e28", "d": "c9a46a"}, false],
+}
+
+
+func pixel_icon(name: String) -> Texture2D:
+	var key := "_px_" + name
+	if _tex_cache.has(key):
+		return _tex_cache[key]
+	var spec: Array = ICONS[name]
+	var rows: Array = spec[0]
+	var pal: Dictionary = spec[1]
+	var checker: bool = spec[2]
+	var img := Image.create_empty(rows[0].length(), rows.size(), false, Image.FORMAT_RGBA8)
+	for y in rows.size():
+		var row: String = rows[y]
+		for x in row.length():
+			var ch := row[x]
+			if ch == ".":
+				continue
+			if ch == "o":
+				img.set_pixel(x, y, Color("1a1016"))
+				continue
+			if checker and ch == "a" and (x + y) % 2 == 0:
+				ch = "c"
+			img.set_pixel(x, y, Color(pal.get(ch, pal["a"])))
+	var t := ImageTexture.create_from_image(img)
+	_tex_cache[key] = t
 	return t

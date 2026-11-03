@@ -35,9 +35,14 @@ func _process(_delta: float) -> void:
 		p.inv.pickup({"id": "pistol", "count": 1, "mag": 5})
 		p.inv.pickup(Items.make("bat"))
 		p.inv.pickup({"id": "shotgun", "count": 1, "mag": 3})
+		p.inv.pickup(Items.make("backpack_small"))
+		p.inv.pickup(Items.make("hoodie"))
+		p.inv.pickup(Items.make("vest"))
+		p.inv.pickup(Items.make("boots"))
 		p.inv.add("ammo_pistol", 14)
 		p.inv.add("ammo_shotgun", 6)
 		p.inv.add("food", 1)
+		p.inv.add("cargo_pants")
 		p.switch_weapon("primary")
 		p.hunger = 62.0
 		p.thirst = 45.0
@@ -48,9 +53,10 @@ func _process(_delta: float) -> void:
 		_shot("outside")
 		var l: LootSpot = null
 		for n in get_tree().get_nodes_in_group("loot"):
-			if n.is_bag:
+			if not n.is_bag:
 				l = n
 				break
+		l.contents = [Items.make("water"), Items.make("helmet"), Items.make("ammo_pistol", 8)]
 		p.global_position = l.global_position + Vector2(10, 0)
 	if frame == 100:
 		_shot("inside")

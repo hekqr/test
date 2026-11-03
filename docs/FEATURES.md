@@ -24,14 +24,21 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ Deep-colour grading + vignette shader
 
 ## Milestone 2 — Core survival loop
-- ✅ Inventory = **Hands + Pockets**. Hands hold one item (or one stack); pockets have 12 space and every item has a size
-  (can/water/bandage 1, pistol 3, bat 5, shotgun 6), so big items may not fit even when small ones do
-- ✅ Pockets list grows with items, always one empty slot at the end + "space left" counter
-- ✅ Weapon slots: primary (shotgun), secondary (pistol), melee (bat) — don't use pocket space;
-  switch with 1 / 2 / 3 or mouse wheel (no hotbar)
-- ✅ Drag between hands / slots / pockets, right-click use/hold/equip, drag outside to drop; X empties hands
+- ✅ **Gear-slot inventory** (slots, not space): Head, Armour, Coat, Shirt, Pants, Boots, Back, Hands (extra slot),
+  1 Main gun, 2 Secondary, 3 Melee
+- ✅ Clothing & backpacks give storage slots (T-shirt 1, Flannel 2, Hoodie 2, Jacket 4, Jeans 2, Cargo pants 4,
+  Vest 2, Small backpack 6, Hiking backpack 10). One item or one stack per slot. Clothes keep their contents
+  when taken off or dropped
+- ✅ Coat + shirt can be worn together
+- ✅ Weapons & clothing are "big": only fit in a backpack, Hands, or their own slot
+- ✅ Helmet (15%) and vest (30%) reduce zombie damage and lose condition; coat/vest lower bleeding chance;
+  boots make footsteps quieter
+- ✅ Inventory screen: NEARBY (container / ground) | STORAGE cards | GEAR; drag & drop, right-click
+  use/wear/equip/take, Take all, drag outside to drop
+- ✅ Containers open into the inventory and keep what you store in them
+- ✅ Weapon switching 1 / 2 / 3 or mouse wheel (weapon stays in its slot; X = fists)
 - ✅ Action button appears automatically near containers ("Search") and ground items ("Pick up …")
-- ✅ Loose items lying on floors, dropped items show their own icon
+- ✅ Loose items lying on floors, dropped items show their own icon (and join a pile at your feet)
 - ✅ Night = uniform dark-blue tint (no limited light radius)
 - ✅ Melee fights for you (auto-swings at zombies in reach); guns are aimed and fired with the mouse
 - ✅ Baseball bat (melee) and shotgun (6-pellet spread, shells)
@@ -42,7 +49,7 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ Death keeps the save but marks it dead — it can't be continued
 - ✅ Title menu: Continue / New Game (confirms before replacing a living survivor) / Quit
 - 💭 Dev "revive" for dead saves
-- 🔜 Item variety: medkit, painkillers, **backpacks** (more pocket space)
+- 🔜 Item variety: medkit, painkillers, more clothing
 - 📌 **Stacking rule:** only items that make sense to stack get a max-stack value (ammo now: pistol 30, shells 12).
   Every new stackable item (e.g. nails, rags, matches) gets its own max stack when it's added; it then merges
   automatically on pickup. Food, water, bandages and weapons stay single items.
@@ -51,8 +58,7 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - 🔜 Sound + music (after saving)
 
 ## Ideas to borrow (inspired by other survival games, built our own way)
-- 💭 Clothing slots (helmet, vest, shirt, pants) where clothes add pocket space + condition %
-- 💭 Backpack slot for extra space
+- 💭 Show worn clothing / helmet on the character sprite
 - 💭 Character portrait in the HUD
 - 💭 Notebook menu: local map (towns/roads), guides, crafting, tasks
 - 💭 Temperature / warmth bar

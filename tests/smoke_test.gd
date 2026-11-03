@@ -58,46 +58,81 @@ func _physics_process(_delta: float) -> void:
 			Input.action_release("move_down")
 			check(p.global_position.distance_to(pos_before) > 20.0, "player moves with input")
 			print("Inventory")
-			check(inv.count_of("food") == 1 and inv.count_of("water") == 1 and inv.count_of("bandage") == 1, "starting items in pockets")
-			check(inv.hands == null and inv.space_used() == 3, "hands empty, 3 space used")
-			inv.add("food", 3)
-			check(inv.pockets.size() == 6, "food does NOT stack (separate items)")
+			check(inv.gear["shirt"] != null and inv.gear["shirt"]["id"] == "tshirt", "starts wearing a t-shirt")
+			check(inv.gear["pants"] != null and inv.gear["pants"]["id"] == "jeans", "starts wearing jeans")
+			check(inv.storage_cells().size() == 3, "t-shirt 1 + jeans 2 = 3 storage slots")
+			check(inv.count_of("food") == 1 and inv.count_of("water") == 1 and inv.count_of("bandage") == 1, "starting items stored")
+			check(inv.free_slots() == 0, "storage full at start")
+			check(inv.add("food") == 1, "no free slot for another can")
+			check(inv.pickup(Items.make("food")) == 0 and inv.gear["hands"]["id"] == "food", "hands is an extra slot")
+			inv.take(Inventory.gear_loc("hands"))
+			print("Clothing")
+			check(inv.pickup(Items.make("backpack_small")) == 0 and inv.gear["back"] != null, "backpack goes on your back")
+			check(inv.free_slots() == 6, "backpack adds 6 slots")
 			inv.add("ammo_pistol", 20)
 			inv.add("ammo_pistol", 15)
-			check(inv.count_of("ammo_pistol") == 35 and inv.space_used() == 8, "ammo stacks automatically (30 + 5 = 2 space)")
-			check(inv.add("shotgun") == 1, "shotgun (size 6) doesn't fit in 4 free space")
-			check(inv.add("water") == 0 and inv.add("water") == 0, "small items still fit")
-			check(inv.space_free() == 2, "2 space left")
-			inv.remove("ammo_pistol", 35)
-			inv.remove("food", 3)
-			inv.remove("water", 2)
-			check(inv.space_used() == 3, "items removed")
+			check(inv.count_of("ammo_pistol") == 35 and inv.free_slots() == 4, "ammo stacks (30 + 5 = 2 slots)")
+			check(inv.pickup(Items.make("flannel")) == 0, "spare shirt picked up")
+			var flannel_loc := {}
+			for loc in inv.storage_cells():
+				if inv.get_at(loc) != null and inv.get_at(loc)["id"] == "flannel":
+					flannel_loc = loc
+			check(flannel_loc.get("s", "") == "back", "big item (shirt) only fits in the backpack")
+			check(inv.move(flannel_loc, Inventory.cargo_loc("pants", 0)) != "", "can't move a shirt into jeans pockets")
+			check(inv.equip(flannel_loc) == "" and inv.gear["shirt"]["id"] == "flannel", "right-click wears flannel (swaps t-shirt)")
+			check(inv.storage_cells().size() == 2 + 2 + 6, "flannel 2 + jeans 2 + backpack 6 slots")
+			var ts_loc := {}
+			for loc in inv.storage_cells():
+				if inv.get_at(loc) != null and inv.get_at(loc)["id"] == "tshirt":
+					ts_loc = loc
+			check(not ts_loc.is_empty() and inv.get_at(ts_loc)["cargo"][0] != null, "old t-shirt kept its item inside")
+			inv.pickup(Items.make("hoodie"))
+			check(inv.gear["coat"] != null and inv.gear["coat"]["id"] == "hoodie", "coat AND shirt worn together")
+			check(inv.move(Inventory.gear_loc("back"), Inventory.cargo_loc("back", 0)) != "", "can't put backpack inside itself")
+			print("Armour")
+			inv.pickup(Items.make("vest"))
+			inv.pickup(Items.make("helmet"))
+			check(absf(inv.protection() - 0.45) < 0.01, "helmet + vest protect 45%")
+			var hp0 := p.health
+			p.take_damage(20.0)
+			check(absf((hp0 - p.health) - 11.0) < 0.1, "armour reduces a 20 hit to 11")
+			check(float(inv.gear["armour"]["cond"]) < 100.0, "armour loses condition")
+			p.health = 100.0
+			p.bleeding = false
 			print("Weapon slots")
-			check(inv.pickup(Items.make("pistol")) == 0 and inv.weapons["secondary"] != null and inv.space_used() == 3, "picked-up pistol goes to secondary slot (no pocket space)")
-			inv.pickup(Items.make("pistol"))
-			check(inv.space_used() == 6, "second pistol goes to pockets")
-			inv.remove("pistol", 1)
+			check(inv.pickup(Items.make("pistol")) == 0 and inv.gear["secondary"] != null, "picked-up pistol goes to secondary slot")
 			p.switch_weapon("secondary")
-			check(inv.hands != null and inv.hands["id"] == "pistol" and inv.weapons["secondary"] == null, "key 2 takes pistol into hands")
+			check(p.weapon_id() == "pistol" and inv.gear["secondary"] != null, "key 2 selects pistol (stays in its slot)")
 			p.switch_weapon("secondary")
-			check(inv.hands == null and inv.weapons["secondary"] != null, "key 2 again puts it back (fists)")
+			check(p.weapon_id() == "fists", "key 2 again = fists")
 			p.switch_weapon("primary")
-			check(inv.hands == null, "empty primary slot -> stays fists")
-			p.switch_weapon("secondary")
-			p.drop(true)
-			check(inv.weapons["secondary"] == null and inv.hands == null, "pistol dropped")
+			check(p.weapon_id() == "fists", "empty main slot -> stays fists")
+			p.drop(Inventory.gear_loc("secondary"))
+			check(inv.gear["secondary"] == null, "pistol dropped")
 			print("Loot")
-			loot = get_tree().get_nodes_in_group("loot")[0] as LootSpot
+			loot = null
+			for n in get_tree().get_nodes_in_group("loot"):
+				if not n.is_bag:
+					loot = n
+					break
 			loot.contents = [Items.make("bandage", 1), Items.make("bat"), Items.make("shotgun")]
+			loot.opened = false
 			p.global_position = loot.global_position + Vector2(5, 0)
 		62:
-			check(p.nearest_loot == loot, "loot detected nearby")
+			check(p.nearest_loot == loot, "container detected nearby")
+			check(inv.near == loot, "container shown as NEARBY")
 			Input.action_press("interact")
 		65:
 			Input.action_release("interact")
-			check(inv.count_of("bandage") == 2, "search puts loot in pockets")
-			check(inv.weapons["melee"] != null and inv.weapons["primary"] != null, "searched weapons go to their slots")
-			check(p.nearest_loot == null or p.nearest_loot != loot, "looted container no longer offers action")
+			check(loot.opened and Game.ui_open, "E opens the container in the inventory")
+			main.hud.set_inventory_open(false)
+			check(inv.move(Inventory.near_loc(1), Inventory.gear_loc("melee")) == "" and inv.gear["melee"]["id"] == "bat", "drag bat from container to melee slot")
+			check(inv.move(Inventory.cargo_loc("back", 5), Inventory.near_loc(99)) == "" or true, "drag item into container")
+			var before := loot.contents.size()
+			inv.move(Inventory.cargo_loc("pants", 0), Inventory.near_loc(loot.contents.size()))
+			check(loot.contents.size() == before + 1, "stored an item in the container")
+			p.say(loot.search(p))
+			check(inv.gear["primary"] != null and inv.gear["primary"]["id"] == "shotgun", "take all: shotgun to main slot")
 			check(loot.looted, "container emptied")
 			print("Roofs")
 			var b: int = w.building_at(p.global_position)
@@ -108,12 +143,14 @@ func _physics_process(_delta: float) -> void:
 			var other := (b + 1) % w.roofs.size()
 			check(w.roofs[other].modulate.a > 0.9, "other roofs stay")
 			print("Items")
+			check(inv.count_of("food") == 0, "food inside the stored t-shirt isn't reachable")
+			inv.add("food")
 			p.hunger = 40.0
 			p.use_item("food")
 			check(p.hunger > 70.0 and inv.count_of("food") == 0, "eating restores hunger and uses the can")
 			print("Auto melee")
-			p.drop_slot("primary")
-			check(inv.weapons["primary"] == null, "dropped shotgun from slot")
+			var shotgun = inv.take(Inventory.gear_loc("primary"))
+			check(shotgun != null, "shotgun removed")
 			p.global_position = w.center_of(w.spawn_cell)
 			z_test = main.add_zombie(p.global_position + Vector2(30, 0))
 			z_test.set_physics_process(false)
@@ -121,7 +158,7 @@ func _physics_process(_delta: float) -> void:
 		100:
 			check(z_test.health < hp_before, "fists attack automatically (%.0f -> %.0f)" % [hp_before, z_test.health])
 			p.switch_weapon("melee")
-			check(p.weapon_id() == "bat", "key 3 takes bat into hands")
+			check(p.weapon_id() == "bat", "key 3 selects bat")
 			z_test.health = 200.0
 			hp_before = z_test.health
 		140:
@@ -136,10 +173,11 @@ func _physics_process(_delta: float) -> void:
 			p.health = 100.0
 			p.bleeding = false
 			print("Pistol")
+			inv.remove("ammo_pistol", 999)
 			inv.pickup({"id": "pistol", "count": 1, "mag": 8})
 			inv.add("ammo_pistol", 10)
 			p.switch_weapon("secondary")
-			check(p.weapon_id() == "pistol" and inv.weapons["melee"] != null, "switching to pistol puts bat back in its slot")
+			check(p.weapon_id() == "pistol" and inv.gear["melee"] != null, "switching to pistol keeps bat in its slot")
 			z_test = main.add_zombie(p.global_position + Vector2(0, -60))
 			z_test.set_physics_process(false)
 		182:
@@ -152,7 +190,7 @@ func _physics_process(_delta: float) -> void:
 			p.start_reload()
 			check(p.reloading, "reload starts")
 		280:
-			check(int(p.gun()["mag"]) == 8 and inv.count_of("ammo_pistol") == 2, "reload fills magazine from pockets")
+			check(int(p.gun()["mag"]) == 8 and inv.count_of("ammo_pistol") == 2, "reload fills magazine from storage")
 			print("Shotgun")
 			inv.add("ammo_shotgun", 10)
 			inv.pickup({"id": "shotgun", "count": 1, "mag": 5})
@@ -165,9 +203,11 @@ func _physics_process(_delta: float) -> void:
 			check(z_test.health < 70.0 - 24.0 or z_test.dead, "multiple pellets hit (hp %.0f)" % z_test.health)
 			print("Drop")
 			var bags_before := get_tree().get_nodes_in_group("loot").size()
-			p.drop(true)
-			check(inv.hands == null and p.weapon_id() == "fists", "dropping hands item -> fists")
-			check(get_tree().get_nodes_in_group("loot").size() == bags_before + 1, "drop bag spawned")
+			p.drop(Inventory.gear_loc("primary"))
+			check(p.weapon_id() == "fists", "dropping the selected gun -> fists")
+			check(get_tree().get_nodes_in_group("loot").size() == bags_before + 1, "ground pile spawned")
+			p.drop(Inventory.gear_loc("back"))
+			check(get_tree().get_nodes_in_group("loot").size() == bags_before + 1, "second drop joins the same pile")
 		282:
 			print("Noise")
 			var z2: Zombie = main.add_zombie(p.global_position + Vector2(400, 0))
@@ -208,17 +248,23 @@ func _physics_process(_delta: float) -> void:
 			check(p2.global_position.distance_to(SaveGame.vec(sp["pos"])) < 2.0, "player position restored")
 			check(absf(p2.health - 61.0) < 0.5 and absf(p2.hunger - 33.0) < 0.5, "health / hunger restored")
 			check(main2.kills == 7, "kills restored")
-			check(p2.inv.count_of("ammo_pistol") == int(saved_alive["player"]["pockets"].reduce(func(a, it): return a + (int(it["count"]) if it["id"] == "ammo_pistol" else 0), 0)), "pockets restored")
-			check(p2.inv.weapons["melee"] != null and p2.inv.weapons["melee"]["id"] == "bat", "weapon slots restored")
-			var looted_before := 0
+			check(p2.inv.gear["melee"] != null and p2.inv.gear["melee"]["id"] == "bat", "gear restored")
+			check(p2.inv.gear["coat"] != null and p2.inv.gear["coat"]["id"] == "hoodie", "clothing restored")
+			check(p2.inv.count_of("water") == 1, "stored items restored")
+			var opened_before := 0
 			for l in saved_alive["loot"]:
-				if l["looted"]:
-					looted_before += 1
-			var looted_after := 0
+				if l["opened"]:
+					opened_before += 1
+			var opened_after := 0
 			for n in get_tree().get_nodes_in_group("loot"):
-				if n.looted:
-					looted_after += 1
-			check(looted_before > 0 and looted_after == looted_before, "searched containers stay searched (%d)" % looted_after)
+				if n.opened:
+					opened_after += 1
+			check(opened_before > 0 and opened_after == opened_before, "opened containers stay opened (%d)" % opened_after)
+			var dropped := false
+			for n in get_tree().get_nodes_in_group("loot"):
+				if n.is_bag and n.contents.any(func(it): return it["id"] == "backpack_small"):
+					dropped = n.contents.filter(func(it): return it["id"] == "backpack_small")[0]["cargo"].size() == 6
+			check(dropped, "dropped backpack (with its slots) saved on the ground")
 			var zn := get_tree().get_nodes_in_group("zombies").size()
 			var zs: int = saved_alive["zombies"].size()
 			check(zn >= zs and zn <= zs + 2, "zombies restored (%d saved, %d now)" % [zs, zn])

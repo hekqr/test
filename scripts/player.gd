@@ -78,6 +78,8 @@ func _ready() -> void:
 	add_child(cam)
 
 
+	inv.pickup(Items.make("tshirt"))
+	inv.pickup(Items.make("jeans"))
 	inv.add("food")
 	inv.add("water")
 	inv.add("bandage")
@@ -95,64 +97,76 @@ func set_night(_n: float) -> void:
 
 # ---------------------------------------------------------------- weapons
 
-## Weapon in hands, or "fists" if the hands are empty / holding a non-weapon.
+## Selected weapon (1/2/3), or "fists".
 func weapon_id() -> String:
-	if inv.hands != null and Items.is_weapon(inv.hands["id"]):
-		return inv.hands["id"]
-	return "fists"
+	var w = inv.weapon_item()
+	return "fists" if w == null else String(w["id"])
 
 
 func weapon() -> Dictionary:
 	return Items.WEAPONS[weapon_id()]
 
 
+## The selected gun's item dict (holds "mag"), or {} for melee.
 func gun() -> Dictionary:
-	return inv.hands if not weapon()["melee"] else {}
+	return inv.weapon_item() if not weapon()["melee"] else {}
 
 
-## Inventory: put pocket item i into the hands.
-func hold_pocket(i: int) -> void:
-	reloading = false
-	var err := inv.to_hands(i)
-	say(err if err != "" else "Holding " + Items.name_of(inv.hands["id"]).to_lower())
-
-
-## 1/2/3 and mouse wheel: switch between primary, secondary and melee.
+## 1/2/3 and mouse wheel: switch between main gun, secondary and melee.
 func switch_weapon(slot: String) -> void:
 	reloading = false
 	var err := inv.switch_to(slot)
-	if err != "":
-		say(err)
-	else:
-		say("Fists" if inv.hands == null else Items.name_of(inv.hands["id"]))
+	say(err if err != "" else weapon()["name"])
 
 
 func cycle_weapon(step: int) -> void:
-	var order := ["primary", "secondary", "melee"]
-	var cur := order.find(Items.slot_of(inv.hands["id"])) if inv.hands != null else -1
+	var order := Inventory.WEAPON_SLOTS
+	var cur := order.find(inv.active)
 	for k in range(1, 4):
 		var slot: String = order[posmod(cur + step * k, 3)]
-		if inv.weapons[slot] != null:
+		if inv.gear[slot] != null and slot != inv.active:
 			switch_weapon(slot)
 			return
 
 
-## Inventory: put the hands item away.
+## X: lower weapon (fists).
 func holster() -> void:
-	if inv.hands == null:
-		return
 	reloading = false
-	var err := inv.holster()
-	say(err if err != "" else "Hands empty")
+	inv.active = ""
+	say("Fists")
 
 
-## Right-click a pocket item: consumables are used, anything else goes into the hands.
-func use_pocket(i: int) -> void:
-	var s: Dictionary = inv.pockets[i]
-	if Items.DEFS[s["id"]]["kind"] == "consumable":
-		use_item(s["id"])
-	else:
-		hold_pocket(i)
+## Inventory right-click: consumables are used, clothing / weapons are worn / equipped,
+## items nearby are picked up.
+func quick_use(loc: Dictionary) -> void:
+	var it = inv.get_at(loc)
+	if it == null:
+		return
+	var id: String = it["id"]
+	if Items.kind(id) == "consumable":
+		_consume(loc, id)
+	elif Items.equip_of(id) != "" and not (loc["t"] == "gear" and loc["s"] == Items.equip_of(id)):
+		var err := inv.equip(loc)
+		say(err if err != "" else ("Wearing " if Items.is_clothing(id) else "Equipped ") + Items.name_of(id).to_lower())
+	elif loc["t"] == "near":
+		var left := inv.pickup(it)
+		var taken: Dictionary = inv.take(loc)
+		if left > 0:
+			taken["count"] = left
+			inv.near.contents.append(taken)
+			inv.near.refresh()
+			say("No free slots")
+	elif loc["t"] == "gear" and loc["s"] in Inventory.WEAPON_SLOTS:
+		switch_weapon(loc["s"])
+
+
+func _consume(loc: Dictionary, id: String) -> void:
+	if not _apply_consumable(id):
+		return
+	var it: Dictionary = inv.get_at(loc)
+	it["count"] -= 1
+	if it["count"] <= 0:
+		inv.take(loc)
 
 
 # ---------------------------------------------------------------- loop
@@ -211,7 +225,8 @@ func _move(delta: float) -> void:
 		_noise_t -= delta
 		if _noise_t <= 0.0:
 			_noise_t = 0.4
-			Game.make_noise(global_position, 280.0 if sprinting else 90.0)
+			var quiet := 0.7 if inv.gear["boots"] != null else 1.0
+			Game.make_noise(global_position, (280.0 if sprinting else 90.0) * quiet)
 
 
 func _needs(delta: float) -> void:
@@ -233,7 +248,7 @@ func _needs(delta: float) -> void:
 func _actions() -> void:
 	if Input.is_action_just_pressed("reload"):
 		start_reload()
-	if Input.is_action_just_pressed("holster"):
+	if Input.is_action_just_pressed("holster") and inv.active != "":
 		holster()
 	if Input.is_action_just_pressed("weapon_primary"):
 		switch_weapon("primary")
@@ -250,9 +265,6 @@ func _actions() -> void:
 	var w := weapon()
 	if w["melee"]:
 		_auto_melee()
-		# Left click with food / water / bandage in hands uses it.
-		if Input.is_action_just_pressed("attack") and not Game.click_used and inv.hands != null and Items.DEFS[inv.hands["id"]]["kind"] == "consumable":
-			use_item(inv.hands["id"])
 	elif Input.is_action_pressed("attack") and not Game.click_used and _attack_cd <= 0.0 and not reloading:
 		shoot()
 	if Input.is_action_just_pressed("interact"):
@@ -267,8 +279,13 @@ func _actions() -> void:
 
 ## E / action button: search the nearby container or pick up the nearby item.
 func interact() -> void:
-	if nearest_loot:
+	if nearest_loot == null:
+		return
+	if nearest_loot.is_bag:
 		say(nearest_loot.search(self))
+	else:
+		nearest_loot.opened = true
+		Game.open_inventory = true
 
 
 ## Melee fights for you: swing at the nearest zombie in reach.
@@ -352,57 +369,78 @@ func use_item(item: String) -> void:
 	if inv.count_of(item) <= 0:
 		say("No %s" % Items.name_of(item).to_lower())
 		return
+	if _apply_consumable(item):
+		inv.remove(item, 1)
+
+
+## Applies a consumable's effect. Returns false if it wasn't needed.
+func _apply_consumable(item: String) -> bool:
 	match item:
 		"food":
 			if hunger > 95.0:
 				say("Not hungry")
-				return
+				return false
 			hunger = minf(hunger + 35.0, 100.0)
 			say("Ate canned food")
 		"water":
 			if thirst > 95.0:
 				say("Not thirsty")
-				return
+				return false
 			thirst = minf(thirst + 40.0, 100.0)
 			say("Drank water")
 		"bandage":
 			if not bleeding and health > 90.0:
 				say("No need for a bandage")
-				return
+				return false
 			bleeding = false
 			health = minf(health + 15.0, 100.0)
 			say("Bandaged wounds")
-	inv.remove(item, 1)
+	return true
 
 
-func drop_slot(slot: String) -> void:
-	_drop_item(inv.take_slot(slot))
-
-
-## Drops an item on the ground. from_hands, or pocket index i.
-func drop(from_hands: bool, i := -1) -> void:
-	_drop_item(inv.take_hands() if from_hands else inv.take_pocket(i))
-
-
-func _drop_item(s) -> void:
-	if s == null:
+## Drops an item on the ground at the player's feet (joins a pile that's right here).
+func drop_item(item) -> void:
+	if item == null:
 		return
 	reloading = false
-	var bag := LootSpot.new()
-	bag.is_bag = true
-	bag.contents = [s]
-	bag.position = global_position + Vector2(randf_range(-6, 6), 8)
-	get_parent().add_child(bag)
-	say("Dropped " + Items.name_of(s["id"]).to_lower())
+	var pile: LootSpot = null
+	for n in get_tree().get_nodes_in_group("loot"):
+		var l := n as LootSpot
+		if l.is_bag and l.global_position.distance_to(global_position) < 30.0:
+			pile = l
+			break
+	if pile == null:
+		pile = LootSpot.new()
+		pile.is_bag = true
+		pile.contents = [item]
+		pile.position = global_position + Vector2(randf_range(-6, 6), 8)
+		get_parent().add_child(pile)
+	else:
+		pile.contents.append(item)
+		pile.refresh()
+	say("Dropped " + Items.name_of(item["id"]).to_lower())
+
+
+## Drops whatever is at an inventory location.
+func drop(loc: Dictionary) -> void:
+	if loc["t"] == "near":
+		return
+	drop_item(inv.take(loc))
 
 
 func take_damage(amount: float, can_bleed := true) -> void:
 	if dead:
 		return
+	if can_bleed:
+		# Helmet / armour absorb part of a hit and wear down.
+		var prot := minf(inv.protection(), 0.6)
+		inv.wear_armour(amount * 0.6)
+		amount *= 1.0 - prot
 	health -= amount
 	if can_bleed:
 		_hurt_t = 0.2
-		if not bleeding and randf() < 0.3:
+		var covered := inv.gear["coat"] != null or inv.gear["armour"] != null
+		if not bleeding and randf() < (0.18 if covered else 0.3):
 			bleeding = true
 			say("You are bleeding! Press H to bandage")
 	if health <= 0.0:
@@ -421,12 +459,13 @@ func _find_loot() -> void:
 	var best := 44.0
 	for n in get_tree().get_nodes_in_group("loot"):
 		var l := n as LootSpot
-		if l.looted:
+		if l.is_queued_for_deletion():
 			continue
 		var d := l.global_position.distance_to(global_position)
 		if d < best:
 			best = d
 			nearest_loot = l
+	inv.near = nearest_loot
 
 
 # ---------------------------------------------------------------- visuals
