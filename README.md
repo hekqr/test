@@ -11,11 +11,12 @@ Download `Ashfall.exe` (Windows) and double-click it. No install needed.
 | Key | Action |
 |---|---|
 | WASD | Move |
-| Shift | Sprint |
+| Shift | Sprint (louder — attracts zombies) |
 | Mouse / Left click | Aim / Attack |
 | E | Search container |
 | R | Reload (restart when dead) |
-| 1 / 2 | Fists / Pistol |
+| 1–6 | Use / equip hotbar slot |
+| Tab or I | Inventory (drag to move, right-click use/equip, drag outside to drop) |
 | F / G / H | Eat / Drink / Bandage |
 | Esc | Pause (Q to quit) |
 | F11 | Fullscreen |

@@ -1,5 +1,5 @@
 extends Node
-## Saves day + night screenshots. Run under a display: godot --path . res://tests/screenshot.tscn -- <out_dir>
+## Saves screenshots. Run under a display: godot --path . res://tests/screenshot.tscn -- <out_dir>
 
 var main: Node
 var frame := 0
@@ -14,21 +14,41 @@ func _ready() -> void:
 	add_child(main)
 
 
+func _shot(name: String) -> void:
+	get_viewport().get_texture().get_image().save_png(out + "/" + name + ".png")
+
+
 func _process(_delta: float) -> void:
 	frame += 1
 	var p: Player = main.player
+	var w: World = main.world
 	if frame == 5:
-		# Stand next to a building with loot so there's something to see.
+		# Stand just outside a building so the roof is visible.
+		var b: Rect2i = w.buildings[0]
+		p.global_position = w.center_of(Vector2i(b.end.x + 1, b.position.y + b.size.y / 2))
+		p.inv.add_stack({"id": "pistol", "count": 1, "mag": 5})
+		p.inv.add_stack({"id": "shotgun", "count": 1, "mag": 3})
+		p.inv.add("bat")
+		p.inv.add("ammo_pistol", 14)
+		p.inv.add("ammo_shotgun", 6)
+		p.inv.add("food", 2)
+		p.use_slot(3)
+		p.hunger = 62.0
+		p.thirst = 45.0
+		p.health = 78.0
+		main.add_zombie(p.global_position + Vector2(140, 60))
+		main.add_zombie(p.global_position + Vector2(160, -60), true)
+	if frame == 60:
+		_shot("outside")
 		var l := get_tree().get_nodes_in_group("loot")[0] as LootSpot
 		p.global_position = l.global_position + Vector2(10, 0)
-		main.add_zombie(p.global_position + Vector2(120, 60))
-		main.add_zombie(p.global_position + Vector2(-140, -40), true)
-		p.has_pistol = true
-		p.weapon = 1
-		p.mag = 8
-	if frame == 60:
-		get_viewport().get_texture().get_image().save_png(out + "/day.png")
+	if frame == 100:
+		_shot("inside")
+		main.hud.set_inventory_open(true)
+	if frame == 104:
+		_shot("inventory")
+		main.hud.set_inventory_open(false)
 		main.time_of_day = 0.02
-	if frame == 90:
-		get_viewport().get_texture().get_image().save_png(out + "/night.png")
+	if frame == 130:
+		_shot("night")
 		get_tree().quit()

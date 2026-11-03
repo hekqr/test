@@ -42,6 +42,31 @@ PA.update({
     "bush_1.png": "Objects/Nature/Dark-Green/Bush_1_Dark-Green.png",
     "bush_2.png": "Objects/Nature/Dark-Green/Bush_2_Dark-Green.png",
 })
+PA.update({
+    "item_shotgun.png": "Objects/Pickable/Shotgun.png",
+    "item_bat.png": "Objects/Pickable/Bat.png",
+    "tiles_roof.png": "Tiles/Roof_TileSet.png",
+    "ui_hp_bar.png": "UI/HP/HP-Bar.png",
+    "ui_hp_fill.png": "UI/HP/HP.png",
+    "ui_hunger_bar.png": "UI/Hunger/Hunger-Bar.png",
+    "ui_hunger_fill.png": "UI/Hunger/Hunger.png",
+    "ui_inventory.png": "UI/Inventory/Inventory_2.png",
+    "ui_cell.png": "UI/Inventory/Inventory-Cell.png",
+    "ui_cell_chosen.png": "UI/Inventory/Inventory-Chosen.png",
+    "ui_hotbar.png": "UI/Inventory/Quick-Access-Inventory.png",
+    "ui_cursor.png": "UI/Menu/Cursor.png",
+    "ui_bullet_pistol.png": "UI/Bullet Indicators/Small/Pistol-Bullet_Small.png",
+    "ui_bullet_pistol_empty.png": "UI/Bullet Indicators/Small/Pistol-Bullet_Small_Empty.png",
+    "ui_bullet_shotgun.png": "UI/Bullet Indicators/Small/Shotgun-Bullet_Small.png",
+    "ui_bullet_shotgun_empty.png": "UI/Bullet Indicators/Small/Shotgun-Bullet_Small_Empty.png",
+    "icon_food.png": "UI/Inventory/Objects/Icon_Canned-food.png",
+    "icon_bandage.png": "UI/Inventory/Objects/Icon_Bandage.png",
+    "icon_ammo_pistol.png": "UI/Inventory/Objects/Icon_Bullet-box_Green.png",
+    "icon_ammo_shotgun.png": "UI/Inventory/Objects/Icon_Bullet-box_Red.png",
+    "icon_pistol.png": "UI/Inventory/Objects/Icon_Pistol.png",
+    "icon_shotgun.png": "UI/Inventory/Objects/Icon_Shotgun.png",
+    "icon_bat.png": "UI/Inventory/Objects/Icon_Bat.png",
+})
 for i in range(1, 6):
     PA[f"grass_{i}.png"] = f"Objects/Nature/Dark-Green/Grass_{i}_Dark-Green.png"
 for i, n in enumerate(["1_Spruce", "2_Spruce-Sparse", "3_Normal", "5_Big", "6_Big-pine",

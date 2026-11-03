@@ -6,8 +6,8 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 
 ## Milestone 1 — Playable prototype ✅
 - ✅ Random map: roads, buildings with doors & rooms, forests, map border
-- ✅ Top-down movement, mouse aim, sprint with stamina
-- ✅ Needs: health, hunger, thirst, stamina, bleeding
+- ✅ Top-down movement, mouse aim, sprint
+- ✅ Needs: health, hunger, thirst, bleeding
 - ✅ Loot containers in buildings (food, water, bandages, ammo, pistol)
 - ✅ Knife (melee) + pistol (ammo, magazine, reload)
 - ✅ Zombies: wander, hear noise (walking/sprinting/gunshots), chase on sight, pathfind around walls
@@ -23,14 +23,18 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ Item icons in HUD, container sprites
 - ✅ Deep-colour grading + vignette shader
 
-## Milestone 2 — Core survival loop 🔜
-- 🔜 Real inventory screen (grid, weight/slots, drop/equip items)
-- 🔜 More weapons: bat, axe, shotgun, rifle; weapon durability (bat & shotgun sprites already in the art packs)
-- 🔜 Item variety: canned food, soda, medkit, painkillers, backpacks
-- 🔜 Vision cone / fog of war (can't see behind walls or inside buildings)
+## Milestone 2 — Core survival loop
+- ✅ Inventory screen: 18 slots, stacking, drag & drop, right-click use/equip, drop as bag
+- ✅ 6-slot hotbar (keys 1–6)
+- ✅ Baseball bat (melee) and shotgun (6-pellet spread, shells)
+- ✅ Roofs over buildings that fade when you walk inside
+- ✅ Pixel-art stat bars (health / hunger / thirst) and bullet indicators
+- ✅ Stamina removed (sprint is unlimited but loud)
+- 🔜 **Save & load** (next)
+- 🔜 Item variety: medkit, painkillers, backpacks (bigger inventory)
+- 🔜 Weapon durability
 - 🔜 Building interiors: furniture, doors that open/close
-- 🔜 Sound + music
-- 🔜 Save & load
+- 🔜 Sound + music (after saving)
 
 ## Milestone 3 — World & content
 - 💭 Hand-designed + generated towns, named locations, a world map

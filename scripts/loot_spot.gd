@@ -1,52 +1,58 @@
 class_name LootSpot
 extends Node2D
-## A searchable container (cabinet / fridge / crate) inside buildings.
+## A searchable container inside buildings, or a bag of dropped items.
 
 const KINDS := ["loot_box_1", "loot_box_2", "loot_trash_1", "loot_trash_2"]
 
 var looted := false
+var is_bag := false
+var contents: Array = [] # item stacks
 var kind := 0
 var _sprite: Sprite2D
 
 
 func _ready() -> void:
 	add_to_group("loot")
-	kind = randi() % KINDS.size()
+	if is_bag:
+		kind = 1
+	else:
+		kind = randi() % KINDS.size()
+		if contents.is_empty():
+			contents = Items.roll_loot()
 	_sprite = Game.make_sprite(KINDS[kind])
 	_sprite.offset = Vector2(0, -_sprite.texture.get_height() / 2.0 + 3.0)
+	if is_bag:
+		_sprite.scale = Vector2(1.5, 1.5)
 	add_child(_sprite)
 
 
+## Moves everything that fits into the player's inventory.
 func search(p: Player) -> String:
 	if looted:
 		return "Already searched"
-	looted = true
-	queue_redraw()
 	var found := PackedStringArray()
-	for i in randi_range(1, 2):
-		var r := randf()
-		if r < 0.15:
-			continue
-		elif r < 0.38:
-			p.inventory["food"] += 1
-			found.append("food")
-		elif r < 0.60:
-			p.inventory["water"] += 1
-			found.append("water")
-		elif r < 0.75:
-			p.inventory["bandage"] += 1
-			found.append("bandage")
-		elif r < 0.96 or p.has_pistol:
-			var n := randi_range(4, 10)
-			p.inventory["ammo"] += n
-			found.append("%d ammo" % n)
-		else:
-			p.has_pistol = true
-			p.mag = 4
-			found.append("PISTOL (press 2)")
-	if found.is_empty():
-		return "Nothing useful here"
-	return "Found: " + ", ".join(found)
+	var left := []
+	for it in contents:
+		var before: int = it["count"]
+		var rest := p.inv.add_stack(it)
+		var took := before - rest
+		if took > 0:
+			found.append(Items.name_of(it["id"]) + ("" if took == 1 else " x%d" % took))
+		if rest > 0:
+			var r: Dictionary = it.duplicate()
+			r["count"] = rest
+			left.append(r)
+	var had_items := not contents.is_empty()
+	contents = left
+	if contents.is_empty():
+		looted = true
+		if is_bag:
+			queue_free()
+	queue_redraw()
+	var msg := "Nothing useful here" if not had_items else ("Found: " + ", ".join(found) if not found.is_empty() else "")
+	if not left.is_empty():
+		msg = (msg + "  -  " if msg != "" else "") + "Inventory full!"
+	return msg
 
 
 func _draw() -> void:

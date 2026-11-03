@@ -9,6 +9,8 @@ signal noise_made(pos: Vector2, radius: float)
 
 ## 0 = full daylight, 1 = darkest night. Set by main.gd.
 var night := 0.0
+## True while a full-screen UI (inventory) is open: blocks attacking/moving.
+var ui_open := false
 
 
 func _ready() -> void:
@@ -19,8 +21,9 @@ func _ready() -> void:
 	_key("sprint", [KEY_SHIFT])
 	_key("interact", [KEY_E])
 	_key("reload", [KEY_R])
-	_key("weapon_1", [KEY_1])
-	_key("weapon_2", [KEY_2])
+	for i in 6:
+		_key("slot_%d" % (i + 1), [KEY_1 + i])
+	_key("inventory", [KEY_TAB, KEY_I])
 	_key("eat", [KEY_F])
 	_key("drink", [KEY_G])
 	_key("bandage", [KEY_H])
@@ -100,3 +103,56 @@ func make_sprite(name: String, scale_px := 2.0) -> Sprite2D:
 	s.texture = tex(name)
 	s.scale = Vector2(scale_px, scale_px)
 	return s
+
+
+## Thirst bar frame: the HP bar frame with the heart swapped for a water drop.
+func thirst_bar() -> Texture2D:
+	if _tex_cache.has("_thirst_bar"):
+		return _tex_cache["_thirst_bar"]
+	var img := tex("ui_hp_bar").get_image()
+	img.convert(Image.FORMAT_RGBA8)
+	var outline := img.get_pixel(12, 4)
+	for y in img.get_height():
+		for x in 12:
+			img.set_pixel(x, y, Color(0, 0, 0, 0))
+	for y in range(3, 9):
+		img.set_pixel(11, y, outline)
+	# 9x11 water drop: o = outline, a = dark blue, b = blue, c = highlight
+	var drop := [
+		"....o....",
+		"...oao...",
+		"...oao...",
+		"..oaboo..",
+		"..obbbo..",
+		".oabbbbo.",
+		".oabcbbo.",
+		"oabbcbbbo",
+		"oaabbbbao",
+		".oaaaaao.",
+		"..ooooo..",
+	]
+	var cols := {"o": outline, "a": Color("2c4a7a"), "b": Color("4a7fc0"), "c": Color("a8d0f0")}
+	for y in drop.size():
+		var row: String = drop[y]
+		for x in row.length():
+			if cols.has(row[x]):
+				img.set_pixel(1 + x, y, cols[row[x]])
+	var t := ImageTexture.create_from_image(img)
+	_tex_cache["_thirst_bar"] = t
+	return t
+
+
+## HP fill recoloured blue for the thirst bar.
+func thirst_fill() -> Texture2D:
+	if _tex_cache.has("_thirst_fill"):
+		return _tex_cache["_thirst_fill"]
+	var img := tex("ui_hp_fill").get_image()
+	img.convert(Image.FORMAT_RGBA8)
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			var l := c.get_luminance()
+			img.set_pixel(x, y, Color(l * 0.45, l * 0.9, l * 1.7, c.a))
+	var t := ImageTexture.create_from_image(img)
+	_tex_cache["_thirst_fill"] = t
+	return t

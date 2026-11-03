@@ -75,6 +75,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if not player.dead:
 		survived += delta
+	world.update_roofs(player.global_position, delta)
 	time_of_day += delta / DAY_LENGTH
 	if time_of_day >= 1.0:
 		time_of_day -= 1.0

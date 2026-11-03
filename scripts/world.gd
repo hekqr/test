@@ -17,6 +17,7 @@ var tree_cells: Array[Vector2i] = []
 var spawn_cell := Vector2i(W / 2, H / 2)
 var road_v: Array[int] = [] # x of vertical roads (3 wide)
 var road_h: Array[int] = [] # y of horizontal roads (3 wide)
+var roofs: Array[TileMapLayer] = [] # one per building, same order as `buildings`
 
 # Atlas coords in tiles_ground.png / tiles_building.png (16x16 tiles)
 const GRASS_TILES := [Vector2i(0, 0), Vector2i(2, 0), Vector2i(5, 0), Vector2i(14, 0), Vector2i(16, 0),
@@ -78,6 +79,7 @@ func generate(seed_value: int, entities: Node2D) -> void:
 	_build_tilemaps()
 	_place_trees(entities)
 	_scatter_decor()
+	_build_roofs()
 
 
 # ---------------------------------------------------------------- generation
@@ -404,6 +406,60 @@ func _scatter_decor() -> void:
 		s.position = center_of(c) + Vector2(rng.randf_range(-8, 8), rng.randf_range(-8, 8))
 		s.flip_h = rng.randf() < 0.5
 		decor.add_child(s)
+
+
+# ---------------------------------------------------------------- roofs
+
+## Roofs cover every building and fade out while the player is inside it.
+func _build_roofs() -> void:
+	var ts := TileSet.new()
+	ts.tile_size = Vector2i(16, 16)
+	var coords := []
+	for col in [0, 1, 2, 8, 9, 10]:
+		for row in 5:
+			coords.append(Vector2i(col, row))
+	var src_id := ts.add_source(_atlas(Game.tex("tiles_roof"), coords))
+	for r in buildings:
+		var roof := TileMapLayer.new()
+		roof.tile_set = ts
+		roof.scale = Vector2(2, 2)
+		roof.z_index = 5
+		var base := 8 if rng.randf() < 0.5 else 0
+		var mid := r.position.y + r.size.y / 2
+		for y in range(r.position.y, r.end.y):
+			for x in range(r.position.x, r.end.x):
+				var c := Vector2i(x, y)
+				var edge := x == r.position.x or y == r.position.y or x == r.end.x - 1 or y == r.end.y - 1
+				if edge and get_tile(c) == FLOOR:
+					continue # doorway stays open so entrances are visible
+				var col := 0 if x == r.position.x else (2 if x == r.end.x - 1 else 1)
+				var row := 0
+				if y == r.end.y - 1:
+					row = 4
+				elif y == mid:
+					row = 2
+				elif y > r.position.y:
+					row = 1 if (y - r.position.y) % 2 == 1 else 3
+				roof.set_cell(c, src_id, Vector2i(base + col, row))
+		add_child(roof)
+		roofs.append(roof)
+
+
+func building_at(p: Vector2) -> int:
+	var c := cell_of(p)
+	for i in buildings.size():
+		if buildings[i].has_point(c):
+			return i
+	return -1
+
+
+func update_roofs(player_pos: Vector2, delta: float) -> void:
+	var inside := building_at(player_pos)
+	for i in roofs.size():
+		var target := 0.0 if i == inside else 1.0
+		var r := roofs[i]
+		r.modulate.a = move_toward(r.modulate.a, target, delta * 4.0)
+		r.visible = r.modulate.a > 0.01
 
 
 # ---------------------------------------------------------------- queries
