@@ -1,12 +1,14 @@
 class_name Items
 ## Item, clothing and weapon definitions.
 ##
-## kind   consumable | ammo | weapon | clothing
-## stack  max per stack; 1 = not stackable. Stackable items merge automatically when picked up.
-## equip  gear slot the item is worn / carried in (weapons and clothing)
-## cargo  storage slots a piece of clothing / backpack gives
-## big    true = only fits in a backpack, the Hands slot or its own gear slot
-## protect fraction of zombie damage absorbed (helmet / armour)
+## kind    consumable | ammo | weapon | clothing
+## stack   max per stack; 1 = not stackable. Stackable items merge automatically when picked up.
+## equip   gear slot the item is worn / carried in (weapons and clothing)
+## cargo   storage slots a piece of clothing / backpack gives
+## big     true = only fits in a backpack, the Hands slot or its own gear slot
+## armour  armour points (1 point = 10% less damage; best possible gear stays well below 10)
+## warmth  how much the item warms you
+## sleeves takes extra wear when you're attacked
 
 const DEFS := {
 	"food": {"name": "Canned food", "icon": "icon_food", "stack": 1, "kind": "consumable"},
@@ -19,17 +21,19 @@ const DEFS := {
 	"bat": {"name": "Baseball bat", "icon": "icon_bat", "stack": 1, "kind": "weapon", "equip": "melee", "big": true},
 	"shotgun": {"name": "Shotgun", "icon": "icon_shotgun", "stack": 1, "kind": "weapon", "equip": "primary", "big": true},
 
-	"tshirt": {"name": "T-shirt", "icon": "px:tshirt", "stack": 1, "kind": "clothing", "equip": "shirt", "cargo": 1, "big": true},
-	"flannel": {"name": "Flannel shirt", "icon": "px:flannel", "stack": 1, "kind": "clothing", "equip": "shirt", "cargo": 2, "big": true},
-	"hoodie": {"name": "Hoodie", "icon": "px:hoodie", "stack": 1, "kind": "clothing", "equip": "coat", "cargo": 2, "big": true},
-	"jacket": {"name": "Leather jacket", "icon": "px:jacket", "stack": 1, "kind": "clothing", "equip": "coat", "cargo": 4, "big": true, "protect": 0.05},
-	"jeans": {"name": "Jeans", "icon": "px:jeans", "stack": 1, "kind": "clothing", "equip": "pants", "cargo": 2, "big": true},
-	"cargo_pants": {"name": "Cargo pants", "icon": "px:cargo_pants", "stack": 1, "kind": "clothing", "equip": "pants", "cargo": 4, "big": true},
-	"boots": {"name": "Work boots", "icon": "px:boots", "stack": 1, "kind": "clothing", "equip": "boots", "cargo": 0, "big": true},
-	"vest": {"name": "Tactical vest", "icon": "px:vest", "stack": 1, "kind": "clothing", "equip": "armour", "cargo": 2, "big": true, "protect": 0.3},
-	"helmet": {"name": "Helmet", "icon": "px:helmet", "stack": 1, "kind": "clothing", "equip": "head", "cargo": 0, "big": true, "protect": 0.15},
-	"backpack_small": {"name": "Small backpack", "icon": "px:backpack_small", "stack": 1, "kind": "clothing", "equip": "back", "cargo": 6, "big": true},
-	"backpack_large": {"name": "Hiking backpack", "icon": "px:backpack_large", "stack": 1, "kind": "clothing", "equip": "back", "cargo": 10, "big": true},
+	"cap": {"name": "Baseball cap", "icon": "px:cap", "stack": 1, "kind": "clothing", "equip": "head", "cargo": 0, "big": true, "warmth": 2.0},
+	"beanie": {"name": "Beanie", "icon": "px:beanie", "stack": 1, "kind": "clothing", "equip": "head", "cargo": 0, "big": true, "warmth": 10.0},
+	"helmet": {"name": "Helmet", "icon": "px:helmet", "stack": 1, "kind": "clothing", "equip": "head", "cargo": 0, "big": true, "warmth": 3.0, "armour": 2.0},
+	"tshirt": {"name": "T-shirt", "icon": "px:tshirt", "stack": 1, "kind": "clothing", "equip": "shirt", "cargo": 1, "big": true, "warmth": 3.0},
+	"flannel": {"name": "Flannel shirt", "icon": "px:flannel", "stack": 1, "kind": "clothing", "equip": "shirt", "cargo": 2, "big": true, "warmth": 8.0, "armour": 0.2, "sleeves": true},
+	"hoodie": {"name": "Hoodie", "icon": "px:hoodie", "stack": 1, "kind": "clothing", "equip": "coat", "cargo": 2, "big": true, "warmth": 14.0, "armour": 0.3, "sleeves": true},
+	"jacket": {"name": "Leather jacket", "icon": "px:jacket", "stack": 1, "kind": "clothing", "equip": "coat", "cargo": 4, "big": true, "warmth": 20.0, "armour": 0.8, "sleeves": true},
+	"jeans": {"name": "Jeans", "icon": "px:jeans", "stack": 1, "kind": "clothing", "equip": "pants", "cargo": 2, "big": true, "warmth": 7.0, "armour": 0.3},
+	"cargo_pants": {"name": "Cargo pants", "icon": "px:cargo_pants", "stack": 1, "kind": "clothing", "equip": "pants", "cargo": 4, "big": true, "warmth": 8.0, "armour": 0.4},
+	"boots": {"name": "Work boots", "icon": "px:boots", "stack": 1, "kind": "clothing", "equip": "boots", "cargo": 0, "big": true, "warmth": 6.0, "armour": 0.3},
+	"vest": {"name": "Tactical vest", "icon": "px:vest", "stack": 1, "kind": "clothing", "equip": "armour", "cargo": 2, "big": true, "warmth": 4.0, "armour": 3.0},
+	"backpack_small": {"name": "Small backpack", "icon": "px:backpack_small", "stack": 1, "kind": "clothing", "equip": "back", "cargo": 6, "big": true, "warmth": 2.0},
+	"backpack_large": {"name": "Hiking backpack", "icon": "px:backpack_large", "stack": 1, "kind": "clothing", "equip": "back", "cargo": 10, "big": true, "warmth": 3.0},
 }
 
 const WEAPONS := {
@@ -51,6 +55,7 @@ const LOOT_TABLE := [
 	["tshirt", 4, 1, 1], ["flannel", 4, 1, 1], ["hoodie", 4, 1, 1], ["jacket", 2, 1, 1],
 	["jeans", 4, 1, 1], ["cargo_pants", 3, 1, 1], ["boots", 3, 1, 1],
 	["vest", 1, 1, 1], ["helmet", 2, 1, 1], ["backpack_small", 3, 1, 1], ["backpack_large", 1, 1, 1],
+	["cap", 4, 1, 1], ["beanie", 3, 1, 1],
 ]
 
 
@@ -90,6 +95,26 @@ static func is_big(id: String) -> bool:
 
 static func cargo_of(id: String) -> int:
 	return DEFS[id].get("cargo", 0)
+
+
+static func armour_of(id: String) -> float:
+	return DEFS[id].get("armour", 0.0)
+
+
+static func warmth_of(id: String) -> float:
+	return DEFS[id].get("warmth", 0.0)
+
+
+static func is_ruined(it: Dictionary) -> bool:
+	return it.has("cond") and float(it["cond"]) <= 0.0
+
+
+## Worn-down clothing keeps most of its value: 100% at full condition, 60% just before ruined, 0 when ruined.
+static func cond_factor(it: Dictionary) -> float:
+	if not it.has("cond"):
+		return 1.0
+	var c := float(it["cond"])
+	return 0.0 if c <= 0.0 else 0.6 + 0.4 * c / 100.0
 
 
 static func max_stack(id: String) -> int:

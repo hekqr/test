@@ -238,12 +238,13 @@ func _panel(r: Rect2, fill := C_FILL) -> void:
 
 
 ## Pixel-art stat bar: fill drawn under the frame, cropped to the value.
-func _stat_bar(pos: Vector2, frame: Texture2D, fill: Texture2D, fill_at: Vector2, value: float, low: bool) -> void:
+func _stat_bar(pos: Vector2, frame: Texture2D, fill: Texture2D, fill_at: Vector2, value: float, low: bool, tint := Color.WHITE) -> void:
 	var v := clampf(value / 100.0, 0.0, 1.0)
 	var fsz := fill.get_size()
 	var src := Rect2(Vector2.ZERO, Vector2(ceilf(fsz.x * v), fsz.y))
 	var blink := low and fmod(Time.get_ticks_msec() / 250.0, 2.0) < 1.0
-	var mod := Color(1.4, 1.4, 1.4) if blink else Color.WHITE
+	var mod := tint * (1.4 if blink else 1.0)
+	mod.a = 1.0
 	if src.size.x > 0:
 		draw_texture_rect_region(fill, Rect2(pos + fill_at * UI_SCALE, src.size * UI_SCALE), src, mod)
 	_tex(frame, pos, UI_SCALE)
@@ -273,11 +274,31 @@ func _cell_item(inv: Inventory, loc: Dictionary, r: Rect2, chosen := false) -> v
 		draw_rect(r.grow(-8), Color(1, 1, 1, 0.08))
 	if not _drag.is_empty() and _drag == loc:
 		return
-	_item_icon(it, r, 2.5)
+	_item_icon(it, r, 2.5, Color(0.55, 0.45, 0.45) if Items.is_ruined(it) else Color.WHITE)
 
 
 func _cond_text(it: Dictionary) -> String:
+	if Items.is_ruined(it):
+		return "RUINED"
 	return "%d%%" % int(round(float(it.get("cond", 100.0))))
+
+
+func _cond_color(it: Dictionary) -> Color:
+	var c := float(it.get("cond", 100.0))
+	if c <= 0.0:
+		return Color(1, 0.4, 0.35)
+	return C_DIM if c > 30.0 else Color(1, 0.75, 0.4)
+
+
+## Bar tint: blue when freezing -> orange when warm.
+func _temp_color(t: float) -> Color:
+	if t < Player.TEMP_FREEZING:
+		return Color("4a7fc0")
+	if t < Player.TEMP_COLD:
+		return Color("6fa8d8")
+	if t < Player.TEMP_WARM:
+		return Color("b8c8c8")
+	return Color("e09048")
 
 
 # ---------------------------------------------------------------- draw
@@ -291,10 +312,20 @@ func _draw() -> void:
 
 	# Stat bars (bottom-left)
 	var bx := 18.0
-	var by := vs.y - 150.0
+	var by := vs.y - 192.0
 	_stat_bar(Vector2(bx, by), Game.tex("ui_hp_bar"), Game.tex("ui_hp_fill"), Vector2(11, 4), p.health, p.health < 25.0)
 	_stat_bar(Vector2(bx + 9, by + 44), Game.tex("ui_hunger_bar"), Game.tex("ui_hunger_fill"), Vector2(11, 6), p.hunger, p.hunger < 20.0)
 	_stat_bar(Vector2(bx, by + 92), Game.thirst_bar(), Game.thirst_fill(), Vector2(11, 4), p.thirst, p.thirst < 20.0)
+	var tcol := _temp_color(p.body_temp)
+	_stat_bar(Vector2(bx, by + 136), Game.temp_bar(), Game.temp_fill(), Vector2(11, 4), p.body_temp, p.body_temp < Player.TEMP_FREEZING, tcol)
+	var status := p.temp_status()
+	var trend := p.target_temp() - p.body_temp
+	var arrow := " ^" if trend > 1.0 else (" v" if trend < -1.0 else "")
+	_text(Vector2(bx + 176, by + 162), status + arrow, 14, tcol.lightened(0.3) if status != "Warm" else C_DIM)
+	if p.indoors():
+		_text(Vector2(bx + 176, by + 146), "indoors", 11, C_DIM)
+	if not p.can_heal() and p.health < 100.0 and not p.dead:
+		_text(Vector2(bx + 176, by + 26), "not healing", 11, C_DIM)
 	if p.bleeding:
 		_tex(Game.tex("blood_2"), Vector2(bx + 176, by + 4), 3.0)
 		_text(Vector2(bx + 210, by + 26), "Bleeding [H]", 15, Color(1, 0.4, 0.4))
@@ -352,11 +383,11 @@ func _draw() -> void:
 	if show_help and not inventory_open:
 		var lines := [
 			"WASD move   Shift sprint   Melee is automatic   Click to shoot",
-			"E / button: search, pick up   R reload   X lower weapon",
+			"E / button: search, pick up   R reload   X lower weapon   Heal: warm, fed, watered",
 			"1 / 2 / 3 or wheel: main / secondary / melee   Tab inventory",
 			"F eat   G drink   H bandage   Esc pause   F1 hide help",
 		]
-		draw_rect(Rect2(14, 14, 540, 104), Color(0.08, 0.04, 0.07, 0.6))
+		draw_rect(Rect2(14, 14, 660, 104), Color(0.08, 0.04, 0.07, 0.6))
 		for i in lines.size():
 			_text(Vector2(24, 38 + i * 22), lines[i], 15)
 	elif not inventory_open:
@@ -421,22 +452,23 @@ func _draw_inventory(p: Player, vs: Vector2) -> void:
 		draw_rect(cr.grow(-2), C_CARD)
 		_tex(Items.icon(g["id"]), cr.position + Vector2(8, 6), 1.5)
 		_text(cr.position + Vector2(34, 22), Items.name_of(g["id"]), 14, C_TEXT)
-		_text(Vector2(cr.end.x - 8, cr.position.y + 22), _cond_text(g), 12, C_DIM, HORIZONTAL_ALIGNMENT_RIGHT, 0)
+		_text(Vector2(cr.end.x - 8, cr.position.y + 22), _cond_text(g), 12, _cond_color(g), HORIZONTAL_ALIGNMENT_RIGHT, 0)
 		for i in g["cargo"].size():
 			_cell_item(inv, Inventory.cargo_loc(s, i), cargo_cell(cr, i))
 
 	# ---- GEAR slots
 	_panel(GEAR_RECT)
 	_text(GEAR_RECT.position + Vector2(14, 30), "GEAR", 20, C_TEXT)
-	var prot := int(round(minf(inv.protection(), 0.6) * 100))
-	_text(Vector2(GEAR_RECT.end.x - 14, GEAR_RECT.position.y + 30), "Protection %d%%" % prot, 14, C_DIM, HORIZONTAL_ALIGNMENT_RIGHT, 0)
+	var ap := inv.armour_points()
+	_text(Vector2(GEAR_RECT.end.x - 14, GEAR_RECT.position.y + 22), "Armour %.1f  (-%d%% dmg)" % [ap, int(round(ap * 10))], 13, C_DIM, HORIZONTAL_ALIGNMENT_RIGHT, 0)
+	_text(Vector2(GEAR_RECT.end.x - 14, GEAR_RECT.position.y + 40), "Warmth +%d" % int(round(inv.warmth())), 13, C_DIM, HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	for s in Inventory.GEAR:
 		var r := gear_cell(s)
 		_text(Vector2(r.position.x - 20, r.position.y - 8), GEAR_NAMES[s], 12, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, r.size.x + 40)
 		_cell_item(inv, Inventory.gear_loc(s), r, inv.active == s)
 		var it = inv.gear[s]
 		if it != null and it.has("cond"):
-			_text(Vector2(r.position.x, r.end.y + 14), _cond_text(it), 11, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
+			_text(Vector2(r.position.x, r.end.y + 14), _cond_text(it), 11, _cond_color(it), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
 
 	_text(Vector2(0, vs.y - 30), "Drag to move   -   Right-click: use / wear / equip / take   -   Drag outside to drop   -   Tab to close", 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 
@@ -448,9 +480,13 @@ func _draw_inventory(p: Player, vs: Vector2) -> void:
 			var d: Dictionary = tip_item
 			var tip := Items.name_of(d["id"])
 			if Items.is_clothing(d["id"]):
-				tip += "   %d slots   %s" % [Items.cargo_of(d["id"]), _cond_text(d)]
-				if Items.DEFS[d["id"]].has("protect"):
-					tip += "   protects %d%%" % int(Items.DEFS[d["id"]]["protect"] * 100)
+				var f := Items.cond_factor(d)
+				tip += "   %s" % _cond_text(d)
+				if Items.cargo_of(d["id"]) > 0:
+					tip += "   %d slots" % Items.cargo_of(d["id"])
+				tip += "   warmth %d" % int(round(Items.warmth_of(d["id"]) * f))
+				if Items.armour_of(d["id"]) > 0.0:
+					tip += "   armour %.1f" % (Items.armour_of(d["id"]) * f)
 			elif d.has("mag"):
 				tip += "   %d loaded" % d["mag"]
 			elif int(d["count"]) > 1:

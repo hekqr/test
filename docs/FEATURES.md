@@ -31,8 +31,16 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
   when taken off or dropped
 - ✅ Coat + shirt can be worn together
 - ✅ Weapons & clothing are "big": only fit in a backpack, Hands, or their own slot
-- ✅ Helmet (15%) and vest (30%) reduce zombie damage and lose condition; coat/vest lower bleeding chance;
-  boots make footsteps quieter
+- ✅ **Armour points**: 1 point = 10% less damage (8 pts = 20% dmg, 9 pts = 10%). Helmet 2, vest 3, clothes
+  0.2–0.8. Best possible gear ≈ 6.7 (hard cap 7.5) — you can never reach 10
+- ✅ **Wear**: zombie hits wear down worn clothing — outer layers and sleeves wear more, a shirt under a coat less.
+  Worn items keep 60–100% of their armour/warmth; at 0% they're **ruined** (no armour/warmth, can't be worn,
+  nothing new fits inside)
+- ✅ Head slot takes all head items: helmet, baseball cap, beanie
+- ✅ Coat/vest lower bleeding chance; boots make footsteps quieter
+- ✅ **Temperature**: body temp drifts toward outside air (35 day / 10 night) + 25 indoors + clothing warmth
+  (t-shirt 3 … leather jacket 20, beanie 10). Below 50 = chilly, below 30 = cold, below 15 = freezing (hurts)
+- ✅ **Healing** only when warm (≥ 50), hunger ≥ 75%, thirst ≥ 75% and not bleeding
 - ✅ Inventory screen: NEARBY (container / ground) | STORAGE cards | GEAR; drag & drop, right-click
   use/wear/equip/take, Take all, drag outside to drop
 - ✅ Containers open into the inventory and keep what you store in them

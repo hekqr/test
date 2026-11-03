@@ -120,7 +120,7 @@ func to_save() -> Dictionary:
 		"survived": survived, "kills": kills,
 		"player": {
 			"pos": [p.position.x, p.position.y], "health": p.health, "hunger": p.hunger,
-			"thirst": p.thirst, "bleeding": p.bleeding,
+			"thirst": p.thirst, "bleeding": p.bleeding, "temp": p.body_temp,
 			"inv": p.inv.to_save(),
 		},
 		"loot": loot, "zombies": zs,
@@ -142,6 +142,7 @@ func _apply_save(s: Dictionary) -> void:
 	player.hunger = ps["hunger"]
 	player.thirst = ps["thirst"]
 	player.bleeding = ps["bleeding"]
+	player.body_temp = ps.get("temp", 60.0)
 	if ps.has("inv"):
 		player.inv.load_save(ps["inv"])
 	for zd in s["zombies"]:

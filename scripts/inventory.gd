@@ -103,12 +103,16 @@ func can_place(item: Dictionary, loc: Dictionary) -> String:
 			var slot: String = loc["s"]
 			if slot != "hands" and Items.equip_of(id) != slot:
 				return "That doesn't go there"
+			if slot != "hands" and Items.is_ruined(item):
+				return "It's ruined - you can't wear it"
 		"cargo":
 			var owner = gear[loc["s"]]
 			if owner == null or loc["i"] >= owner["cargo"].size():
 				return "No slot there"
 			if is_same(owner, item):
 				return "Can't put it inside itself"
+			if Items.is_ruined(owner):
+				return Items.name_of(owner["id"]) + " is ruined"
 			if Items.is_big(id) and loc["s"] != "back":
 				return "Too big - only fits in a backpack or hands"
 			if Items.equip_of(id) == "back":
@@ -276,22 +280,57 @@ func weapon_item() -> Variant:
 	return gear[active] if active != "" else null
 
 
-## Total damage protection from worn gear that isn't ruined.
-func protection() -> float:
+const MAX_ARMOUR := 7.5 # safety cap; the best real gear adds up to ~6.7
+
+# How much of each hit a slot's clothing soaks up (outer layers more).
+const WEAR_WEIGHT := {"head": 1.0, "coat": 2.0, "shirt": 1.5, "armour": 2.0, "pants": 1.2, "boots": 0.4, "back": 0.6}
+const CLOTHING_SLOTS := ["head", "armour", "coat", "shirt", "pants", "boots", "back"]
+
+
+## Armour points from worn clothing (1 point = 10% less damage). Worn-down items give a bit less.
+func armour_points() -> float:
 	var p := 0.0
-	for s in ["head", "armour", "coat"]:
+	for s in CLOTHING_SLOTS:
 		var g = gear[s]
-		if g != null and float(g.get("cond", 100.0)) > 0.0:
-			p += float(Items.DEFS[g["id"]].get("protect", 0.0))
-	return p
+		if g != null:
+			p += Items.armour_of(g["id"]) * Items.cond_factor(g)
+	return minf(p, MAX_ARMOUR)
 
 
-## Armour pieces lose condition when they absorb a hit.
-func wear_armour(amount: float) -> void:
-	for s in ["head", "armour"]:
+## Fraction of damage that gets through: 8 points -> 0.2, 9 points -> 0.1.
+func damage_taken_mult() -> float:
+	return 1.0 - armour_points() * 0.1
+
+
+## Total warmth from worn clothing.
+func warmth() -> float:
+	var w := 0.0
+	for s in CLOTHING_SLOTS:
 		var g = gear[s]
-		if g != null and Items.DEFS[g["id"]].get("protect", 0.0) > 0.0:
-			g["cond"] = maxf(float(g["cond"]) - amount, 0.0)
+		if g != null:
+			w += Items.warmth_of(g["id"]) * Items.cond_factor(g)
+	return w
+
+
+## A hit wears down worn clothing: outer layers and sleeves take more, a shirt under a coat less.
+## Returns names of items that just became ruined.
+func wear_from_hit(damage: float) -> PackedStringArray:
+	var ruined := PackedStringArray()
+	for s in CLOTHING_SLOTS:
+		var g = gear[s]
+		if g == null or Items.is_ruined(g):
+			continue
+		var w: float = WEAR_WEIGHT[s]
+		if Items.DEFS[g["id"]].get("sleeves", false):
+			w *= 1.5
+		if s == "shirt" and gear["coat"] != null and not Items.is_ruined(gear["coat"]):
+			w *= 0.35
+		g["cond"] = maxf(float(g["cond"]) - damage * 0.15 * w * randf_range(0.6, 1.4), 0.0)
+		if Items.is_ruined(g):
+			ruined.append(Items.name_of(g["id"]))
+	if not ruined.is_empty():
+		changed.emit()
+	return ruined
 
 
 func to_save() -> Dictionary:

@@ -272,7 +272,45 @@ const _PACK := [
 	".oooooooooo.",
 ]
 
+const _CAP := [
+	"....oooooo....",
+	"...oaaaaaao...",
+	"..oabaaaaaao..",
+	"..oaaaaaaaao..",
+	"..oaaaaaaaaooo",
+	"..occcccccccco",
+	"..oooooooooooo",
+]
+const _BEANIE := [
+	".....oo.....",
+	"....obbo....",
+	"...oaaaao...",
+	"..oaaaaaao..",
+	".oaaaaaaaao.",
+	".oaaaaaaaao.",
+	"oddddddddddo",
+	"odcdcdcdcdco",
+	"oddddddddddo",
+	"oooooooooooo",
+]
+const _THERMO := [
+	"...ooo...",
+	"...oco...",
+	"...oco...",
+	"...oco...",
+	"...oao...",
+	"...oao...",
+	"..oaaao..",
+	".oaaaaao.",
+	".oaabaao.",
+	".oaaaaao.",
+	"..ooooo..",
+]
+
 const ICONS := {
+	"cap": [_CAP, {"a": "8a3030", "b": "c05050", "c": "5a2020"}, false],
+	"beanie": [_BEANIE, {"a": "3a4a5a", "b": "d0c8b0", "c": "4a5a6a", "d": "2a3644"}, false],
+	"thermo": [_THERMO, {"a": "c04040", "b": "f08080", "c": "cfd8e0"}, false],
 	"tshirt": [_SHIRT, {"a": "6b7a4a", "b": "4e5a36"}, false],
 	"flannel": [_SHIRT, {"a": "8c3b3b", "b": "5e2a2e", "c": "6a2a2a"}, true],
 	"hoodie": [_COAT, {"a": "5a5f6e", "b": "8a8f9e", "d": "3e4250"}, false],
@@ -310,4 +348,39 @@ func pixel_icon(name: String) -> Texture2D:
 			img.set_pixel(x, y, Color(pal.get(ch, pal["a"])))
 	var t := ImageTexture.create_from_image(img)
 	_tex_cache[key] = t
+	return t
+
+
+## Temperature bar frame: the HP bar frame with the heart swapped for a thermometer.
+func temp_bar() -> Texture2D:
+	if _tex_cache.has("_temp_bar"):
+		return _tex_cache["_temp_bar"]
+	var img := tex("ui_hp_bar").get_image()
+	img.convert(Image.FORMAT_RGBA8)
+	var outline := img.get_pixel(12, 4)
+	for y in img.get_height():
+		for x in 12:
+			img.set_pixel(x, y, Color(0, 0, 0, 0))
+	for y in range(3, 9):
+		img.set_pixel(11, y, outline)
+	var icon := pixel_icon("thermo").get_image()
+	img.blend_rect(icon, Rect2i(Vector2i.ZERO, icon.get_size()), Vector2i(1, 0))
+	var t := ImageTexture.create_from_image(img)
+	_tex_cache["_temp_bar"] = t
+	return t
+
+
+## Grey version of the HP fill, tinted per temperature when drawn.
+func temp_fill() -> Texture2D:
+	if _tex_cache.has("_temp_fill"):
+		return _tex_cache["_temp_fill"]
+	var img := tex("ui_hp_fill").get_image()
+	img.convert(Image.FORMAT_RGBA8)
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			var l := minf(c.get_luminance() * 2.2, 1.0)
+			img.set_pixel(x, y, Color(l, l, l, c.a))
+	var t := ImageTexture.create_from_image(img)
+	_tex_cache["_temp_fill"] = t
 	return t

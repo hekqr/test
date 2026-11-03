@@ -14,7 +14,17 @@ var health := 100.0
 var hunger := 100.0
 var thirst := 100.0
 var bleeding := false
+var body_temp := 60.0 # 0 freezing .. 100 hot
 var dead := false
+
+# Temperature (kept simple): body temp drifts toward outside air + indoors bonus + clothing warmth.
+const TEMP_DAY := 35.0
+const TEMP_NIGHT := 10.0
+const TEMP_INDOORS := 25.0
+const TEMP_RATE := 0.3 # per second
+const TEMP_WARM := 50.0 # needed to heal
+const TEMP_COLD := 30.0
+const TEMP_FREEZING := 15.0 # loses health below this
 var inv := Inventory.new()
 var aim := Vector2.RIGHT # mouse aim (guns)
 var facing := Vector2.RIGHT # where the body looks (aim, or the melee target)
@@ -232,6 +242,7 @@ func _move(delta: float) -> void:
 func _needs(delta: float) -> void:
 	hunger = maxf(hunger - delta * 100.0 / 900.0, 0.0) # full -> empty in 15 min
 	thirst = maxf(thirst - delta * 100.0 / 600.0, 0.0) # full -> empty in 10 min
+	body_temp = move_toward(body_temp, target_temp(), TEMP_RATE * delta)
 	var dmg := 0.0
 	if hunger <= 0.0:
 		dmg += 1.0
@@ -239,10 +250,39 @@ func _needs(delta: float) -> void:
 		dmg += 1.5
 	if bleeding:
 		dmg += 1.5
+	if body_temp < TEMP_FREEZING:
+		dmg += 0.5
 	if dmg > 0.0:
 		take_damage(dmg * delta, false)
-	elif hunger > 50.0 and thirst > 50.0:
+	elif can_heal():
 		health = minf(health + 0.4 * delta, 100.0)
+
+
+func indoors() -> bool:
+	return world != null and world.building_at(global_position) >= 0
+
+
+## Temperature the body is heading towards.
+func target_temp() -> float:
+	var air := lerpf(TEMP_DAY, TEMP_NIGHT, Game.night)
+	if indoors():
+		air += TEMP_INDOORS
+	return clampf(air + inv.warmth(), 0.0, 100.0)
+
+
+## Healing needs: warm enough, hunger & thirst at least 75%, not bleeding.
+func can_heal() -> bool:
+	return body_temp >= TEMP_WARM and hunger >= 75.0 and thirst >= 75.0 and not bleeding
+
+
+func temp_status() -> String:
+	if body_temp < TEMP_FREEZING:
+		return "Freezing"
+	if body_temp < TEMP_COLD:
+		return "Cold"
+	if body_temp < TEMP_WARM:
+		return "Chilly"
+	return "Warm"
 
 
 func _actions() -> void:
@@ -432,10 +472,12 @@ func take_damage(amount: float, can_bleed := true) -> void:
 	if dead:
 		return
 	if can_bleed:
-		# Helmet / armour absorb part of a hit and wear down.
-		var prot := minf(inv.protection(), 0.6)
-		inv.wear_armour(amount * 0.6)
-		amount *= 1.0 - prot
+		# Armour points reduce the hit (1 point = 10%); worn clothes wear down.
+		var raw := amount
+		amount *= inv.damage_taken_mult()
+		var ruined := inv.wear_from_hit(raw)
+		if not ruined.is_empty():
+			say(", ".join(ruined) + (" is" if ruined.size() == 1 else " are") + " ruined!")
 	health -= amount
 	if can_bleed:
 		_hurt_t = 0.2

@@ -92,13 +92,40 @@ func _physics_process(_delta: float) -> void:
 			print("Armour")
 			inv.pickup(Items.make("vest"))
 			inv.pickup(Items.make("helmet"))
-			check(absf(inv.protection() - 0.45) < 0.01, "helmet + vest protect 45%")
+			var ap := inv.armour_points()
+			# helmet 2 + vest 3 + hoodie 0.3 + flannel 0.2 + jeans 0.3 = 5.8
+			check(absf(ap - 5.8) < 0.01, "armour points add up (%.1f)" % ap)
 			var hp0 := p.health
 			p.take_damage(20.0)
-			check(absf((hp0 - p.health) - 11.0) < 0.1, "armour reduces a 20 hit to 11")
-			check(float(inv.gear["armour"]["cond"]) < 100.0, "armour loses condition")
+			check(absf((hp0 - p.health) - 20.0 * (1.0 - ap * 0.1)) < 0.1, "1 point = 10%% less damage (took %.1f)" % (hp0 - p.health))
+			check(float(inv.gear["coat"]["cond"]) < float(inv.gear["shirt"]["cond"]) or float(inv.gear["shirt"]["cond"]) == 100.0, "coat (sleeves, outer) wears more than shirt under it")
+			check(float(inv.gear["armour"]["cond"]) < 100.0, "vest loses condition")
+			check(inv.armour_points() < ap, "worn gear gives a little less armour")
+			check(inv.armour_points() > ap * 0.9, "...but not much less")
+			var tmp := Inventory.new()
+			for id in ["helmet", "vest", "jacket", "flannel", "cargo_pants", "boots"]:
+				tmp.pickup(Items.make(id))
+			check(tmp.armour_points() < 7.0, "best possible gear stays far from 10 (%.1f)" % tmp.armour_points())
+			print("Ruined")
+			inv.gear["head"]["cond"] = 0.0
+			check(absf(inv.armour_points() - (ap - 2.0)) < 0.5, "ruined helmet gives no armour")
+			var helm = inv.take(Inventory.gear_loc("head"))
+			inv.gear["hands"] = helm
+			check(inv.move(Inventory.gear_loc("hands"), Inventory.gear_loc("head")) != "", "ruined helmet can't be worn again")
+			inv.take(Inventory.gear_loc("hands"))
 			p.health = 100.0
 			p.bleeding = false
+			print("Temperature")
+			var w0 := inv.warmth()
+			inv.gear["coat"]["cond"] = 100.0
+			var tmp2 := Inventory.new()
+			tmp2.pickup(Items.make("tshirt"))
+			var t_shirt_only := tmp2.warmth()
+			tmp2.pickup(Items.make("jacket"))
+			check(tmp2.warmth() > t_shirt_only + 15.0, "jacket is much warmer than a t-shirt")
+			tmp2.pickup(Items.make("hoodie"))
+			check(tmp2.gear["coat"]["id"] == "jacket", "only one coat at a time")
+			check(w0 > 0.0, "clothes give warmth (%.0f)" % w0)
 			print("Weapon slots")
 			check(inv.pickup(Items.make("pistol")) == 0 and inv.gear["secondary"] != null, "picked-up pistol goes to secondary slot")
 			p.switch_weapon("secondary")
@@ -137,6 +164,12 @@ func _physics_process(_delta: float) -> void:
 			print("Roofs")
 			var b: int = w.building_at(p.global_position)
 			check(b >= 0, "player is inside a building")
+			print("Indoors warmth")
+			var inside_target := p.target_temp()
+			var keep := p.global_position
+			p.global_position = w.center_of(w.spawn_cell)
+			check(not p.indoors() and p.target_temp() < inside_target - 20.0, "houses are warmer (in %.0f / out %.0f)" % [inside_target, p.target_temp()])
+			p.global_position = keep
 		95:
 			var b: int = w.building_at(p.global_position)
 			check(b >= 0 and w.roofs[b].modulate.a < 0.2, "roof fades when inside")
@@ -148,6 +181,27 @@ func _physics_process(_delta: float) -> void:
 			p.hunger = 40.0
 			p.use_item("food")
 			check(p.hunger > 70.0 and inv.count_of("food") == 0, "eating restores hunger and uses the can")
+			print("Healing rules")
+			p.bleeding = false
+			p.hunger = 80.0
+			p.thirst = 80.0
+			p.body_temp = 60.0
+			check(p.can_heal(), "heals when warm + fed + watered")
+			p.body_temp = 40.0
+			check(not p.can_heal(), "no healing when chilly")
+			p.body_temp = 60.0
+			p.hunger = 70.0
+			check(not p.can_heal(), "no healing below 75% hunger")
+			p.hunger = 80.0
+			p.thirst = 70.0
+			check(not p.can_heal(), "no healing below 75% thirst")
+			p.thirst = 100.0
+			p.hunger = 100.0
+			p.body_temp = 10.0
+			var hp_cold := p.health
+			p._needs(1.0)
+			check(p.health < hp_cold, "freezing hurts")
+			p.body_temp = 60.0
 			print("Auto melee")
 			var shotgun = inv.take(Inventory.gear_loc("primary"))
 			check(shotgun != null, "shotgun removed")
@@ -251,6 +305,7 @@ func _physics_process(_delta: float) -> void:
 			check(p2.inv.gear["melee"] != null and p2.inv.gear["melee"]["id"] == "bat", "gear restored")
 			check(p2.inv.gear["coat"] != null and p2.inv.gear["coat"]["id"] == "hoodie", "clothing restored")
 			check(p2.inv.count_of("water") == 1, "stored items restored")
+			check(absf(p2.body_temp - float(saved_alive["player"]["temp"])) < 0.5, "body temperature restored")
 			var opened_before := 0
 			for l in saved_alive["loot"]:
 				if l["opened"]:
