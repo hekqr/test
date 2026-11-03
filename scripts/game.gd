@@ -307,32 +307,73 @@ const _THERMO := [
 	"..ooooo..",
 ]
 
+const _SODA := [
+	".oooooo.",
+	"occcccco",
+	"oaaaaaao",
+	"oabaaaao",
+	"oabaaaao",
+	"oawwwwao",
+	"oabaaaao",
+	"oaaaaaao",
+	"occcccco",
+	".oooooo.",
+]
+const _MEAT := [
+	"..ooooo....",
+	".oaaaaaoo..",
+	"oabaaaaaao.",
+	"oaaaccaaaao",
+	"oaaaaaaaaao",
+	".oaaaaaaoww",
+	"..oooooowwo",
+	".......ooo.",
+]
+
+## [rows, palette, checker, default base colour]. Palette values: hex, or a shade of the item's colour:
+## "base", "light", "dark", "darker".
 const ICONS := {
-	"cap": [_CAP, {"a": "8a3030", "b": "c05050", "c": "5a2020"}, false],
-	"beanie": [_BEANIE, {"a": "3a4a5a", "b": "d0c8b0", "c": "4a5a6a", "d": "2a3644"}, false],
-	"thermo": [_THERMO, {"a": "c04040", "b": "f08080", "c": "cfd8e0"}, false],
-	"tshirt": [_SHIRT, {"a": "6b7a4a", "b": "4e5a36"}, false],
-	"flannel": [_SHIRT, {"a": "8c3b3b", "b": "5e2a2e", "c": "6a2a2a"}, true],
-	"hoodie": [_COAT, {"a": "5a5f6e", "b": "8a8f9e", "d": "3e4250"}, false],
-	"jacket": [_COAT, {"a": "6e4a32", "b": "a07050", "d": "4a3020"}, false],
-	"jeans": [_PANTS, {"a": "3b5a8c", "b": "2a3e63", "c": "5878a8", "p": "3b5a8c"}, false],
-	"cargo_pants": [_PANTS, {"a": "6a6440", "b": "4a4630", "c": "8a8458", "p": "4a4630"}, false],
-	"boots": [_BOOT, {"a": "5a4030", "b": "2a1e18"}, false],
-	"vest": [_VEST, {"a": "4e5434", "b": "7a8050", "c": "3a3e26"}, false],
-	"helmet": [_HELMET, {"a": "4e5a3a", "b": "7a8a5a", "c": "2e3422"}, false],
-	"backpack_small": [_PACK, {"a": "5a6a3a", "b": "46542e", "c": "4a5830", "d": "c9a46a"}, false],
-	"backpack_large": [_PACK, {"a": "6a4a30", "b": "553a24", "c": "5a3e28", "d": "c9a46a"}, false],
+	"tshirt": [_SHIRT, {"a": "base", "b": "dark"}, false, "6b7a4a"],
+	"flannel": [_SHIRT, {"a": "base", "b": "dark", "c": "darker"}, true, "8c3b3b"],
+	"hoodie": [_COAT, {"a": "base", "b": "light", "d": "dark"}, false, "5a5f6e"],
+	"jacket": [_COAT, {"a": "base", "b": "light", "d": "dark"}, false, "6e4a32"],
+	"jeans": [_PANTS, {"a": "base", "b": "dark", "c": "light", "p": "base"}, false, "3b5a8c"],
+	"cargo_pants": [_PANTS, {"a": "base", "b": "dark", "c": "light", "p": "dark"}, false, "6a6440"],
+	"boots": [_BOOT, {"a": "base", "b": "darker"}, false, "5a4030"],
+	"vest": [_VEST, {"a": "base", "b": "light", "c": "dark"}, false, "4e5434"],
+	"helmet": [_HELMET, {"a": "base", "b": "light", "c": "darker"}, false, "4e5a3a"],
+	"backpack_small": [_PACK, {"a": "base", "b": "dark", "c": "dark", "d": "c9a46a"}, false, "5a6a3a"],
+	"backpack_large": [_PACK, {"a": "base", "b": "dark", "c": "dark", "d": "c9a46a"}, false, "6a4a30"],
+	"cap": [_CAP, {"a": "base", "b": "light", "c": "dark"}, false, "8a3030"],
+	"beanie": [_BEANIE, {"a": "base", "b": "d0c8b0", "c": "light", "d": "dark"}, false, "3a4a5a"],
+	"thermo": [_THERMO, {"a": "c04040", "b": "f08080", "c": "cfd8e0"}, false, "c04040"],
+	"soda": [_SODA, {"a": "base", "b": "light", "c": "b0b0b8", "w": "e8e4dc"}, false, "a83838"],
+	"meat": [_MEAT, {"a": "a83a3a", "b": "d06060", "c": "e8c8b8", "w": "e8e0d0"}, false, "a83a3a"],
 }
 
 
-func pixel_icon(name: String) -> Texture2D:
-	var key := "_px_" + name
+static func shade(base: Color, role: String) -> Color:
+	match role:
+		"light":
+			return base.lightened(0.28)
+		"dark":
+			return base.darkened(0.3)
+		"darker":
+			return base.darkened(0.5)
+	return base
+
+
+func pixel_icon(name: String, color := "") -> Texture2D:
+	if name.begins_with("furn_") or FURNITURE.has(name):
+		return furniture(name.trim_prefix("furn_"))
+	var key := "_px_%s_%s" % [name, color]
 	if _tex_cache.has(key):
 		return _tex_cache[key]
 	var spec: Array = ICONS[name]
 	var rows: Array = spec[0]
 	var pal: Dictionary = spec[1]
 	var checker: bool = spec[2]
+	var base := Color(color if color != "" else spec[3])
 	var img := Image.create_empty(rows[0].length(), rows.size(), false, Image.FORMAT_RGBA8)
 	for y in rows.size():
 		var row: String = rows[y]
@@ -345,7 +386,110 @@ func pixel_icon(name: String) -> Texture2D:
 				continue
 			if checker and ch == "a" and (x + y) % 2 == 0:
 				ch = "c"
-			img.set_pixel(x, y, Color(pal.get(ch, pal["a"])))
+			var v: String = pal.get(ch, pal["a"])
+			img.set_pixel(x, y, shade(base, v) if v in ["base", "light", "dark", "darker"] else Color(v))
+	var t := ImageTexture.create_from_image(img)
+	_tex_cache[key] = t
+	return t
+
+
+## One frame of a horizontal sprite sheet.
+func sheet_frame(name: String, frames: int, idx: int) -> Texture2D:
+	var key := "_sheet_%s_%d" % [name, idx]
+	if not _tex_cache.has(key):
+		var t := tex(name)
+		var w := t.get_width() / frames
+		var at := AtlasTexture.new()
+		at.atlas = t
+		at.region = Rect2(idx * w, 0, w, t.get_height())
+		_tex_cache[key] = at
+	return _tex_cache[key]
+
+
+# ---------------------------------------------------------------- furniture (drawn, the packs have none)
+
+const FURNITURE := ["counter", "wardrobe", "medcabinet", "desk", "shelf", "shelf_white", "locker",
+	"bed_head", "bed_foot", "table", "sofa", "toilet", "bath"]
+const C_OUT := Color("1a1016")
+
+
+func _box(img: Image, r: Rect2i, fill: Color, outline := true) -> void:
+	img.fill_rect(r, C_OUT if outline else fill)
+	if outline:
+		img.fill_rect(r.grow(-1), fill)
+
+
+func furniture(name: String) -> Texture2D:
+	var key := "_furn_" + name
+	if _tex_cache.has(key):
+		return _tex_cache[key]
+	var img := Image.create_empty(16, 16, false, Image.FORMAT_RGBA8)
+	var wood := Color("6e4a32")
+	var wood_d := Color("4a3020")
+	var wood_l := Color("8a6040")
+	match name:
+		"counter":
+			_box(img, Rect2i(0, 1, 16, 15), Color("cfc6b4"))
+			img.fill_rect(Rect2i(1, 9, 14, 6), wood)
+			img.fill_rect(Rect2i(7, 9, 1, 6), wood_d)
+			img.fill_rect(Rect2i(5, 11, 1, 2), Color("d8d0c0"))
+			img.fill_rect(Rect2i(9, 11, 1, 2), Color("d8d0c0"))
+			img.fill_rect(Rect2i(3, 3, 4, 3), Color("9aa0a8"))
+		"wardrobe":
+			_box(img, Rect2i(1, 0, 14, 16), wood)
+			img.fill_rect(Rect2i(2, 1, 12, 2), wood_l)
+			img.fill_rect(Rect2i(7, 3, 1, 12), wood_d)
+			img.fill_rect(Rect2i(5, 8, 1, 2), Color("c9a46a"))
+			img.fill_rect(Rect2i(9, 8, 1, 2), Color("c9a46a"))
+		"medcabinet":
+			_box(img, Rect2i(2, 3, 12, 11), Color("dcdcd8"))
+			img.fill_rect(Rect2i(7, 5, 2, 7), Color("b83a3a"))
+			img.fill_rect(Rect2i(5, 7, 6, 2), Color("b83a3a"))
+		"desk":
+			_box(img, Rect2i(0, 2, 16, 12), wood_l)
+			img.fill_rect(Rect2i(1, 11, 14, 2), wood)
+			img.fill_rect(Rect2i(3, 4, 5, 4), Color("e8e4dc"))
+			img.fill_rect(Rect2i(10, 4, 3, 3), Color("3a3a44"))
+		"shelf", "shelf_white":
+			var frame := Color("7a7a84") if name == "shelf" else Color("d8d8d4")
+			_box(img, Rect2i(0, 0, 16, 16), frame)
+			var goods := [Color("b84a3a"), Color("c8a838"), Color("3a6aa8"), Color("4a8a4a"), Color("d8d4cc")]
+			if name == "shelf_white":
+				goods = [Color("e8e4dc"), Color("b83a3a"), Color("e8e4dc"), Color("6a9ac8")]
+			for row in 3:
+				img.fill_rect(Rect2i(1, 5 + row * 5, 14, 1), frame.darkened(0.35))
+				for i in 4:
+					img.fill_rect(Rect2i(2 + i * 3, 2 + row * 5, 2, 3), goods[(row * 4 + i) % goods.size()])
+		"locker":
+			_box(img, Rect2i(1, 0, 14, 16), Color("4a5a6e"))
+			img.fill_rect(Rect2i(7, 1, 1, 14), Color("2e3a48"))
+			for i in 3:
+				img.fill_rect(Rect2i(3, 2 + i * 2, 3, 1), Color("2e3a48"))
+				img.fill_rect(Rect2i(9, 2 + i * 2, 3, 1), Color("2e3a48"))
+			img.fill_rect(Rect2i(5, 9, 1, 2), Color("b0b8c0"))
+			img.fill_rect(Rect2i(9, 9, 1, 2), Color("b0b8c0"))
+		"bed_head":
+			_box(img, Rect2i(1, 0, 14, 16), wood)
+			img.fill_rect(Rect2i(2, 2, 12, 14), Color("e0d8c8"))
+			_box(img, Rect2i(3, 3, 10, 6), Color("f0ece4"))
+		"bed_foot":
+			_box(img, Rect2i(1, 0, 14, 16), wood)
+			img.fill_rect(Rect2i(2, 0, 12, 14), Color("5a6a8c"))
+			img.fill_rect(Rect2i(2, 0, 12, 2), Color("7a8aac"))
+		"table":
+			_box(img, Rect2i(1, 2, 14, 12), wood_l)
+			img.fill_rect(Rect2i(2, 3, 12, 1), Color("a07850"))
+		"sofa":
+			_box(img, Rect2i(0, 2, 16, 13), Color("6a4a5a"))
+			img.fill_rect(Rect2i(1, 3, 14, 4), Color("5a3a4a"))
+			img.fill_rect(Rect2i(7, 7, 1, 7), Color("4a2e3c"))
+		"toilet":
+			_box(img, Rect2i(4, 1, 8, 4), Color("e8e8e4"))
+			_box(img, Rect2i(3, 4, 10, 10), Color("e8e8e4"))
+			img.fill_rect(Rect2i(5, 6, 6, 6), Color("b8c8d0"))
+		"bath":
+			_box(img, Rect2i(0, 1, 16, 14), Color("e8e8e4"))
+			img.fill_rect(Rect2i(2, 3, 12, 10), Color("8ab0c8"))
 	var t := ImageTexture.create_from_image(img)
 	_tex_cache[key] = t
 	return t

@@ -40,6 +40,7 @@ var _font: Font
 var _mouse := Vector2.ZERO
 var _btn_down := false
 var _drag := {} # location being dragged
+var _menu := {} # right-click menu: {"loc", "pos", "items": [[label, action], ...]}
 
 
 func _ready() -> void:
@@ -140,6 +141,7 @@ func set_inventory_open(open: bool) -> void:
 	inventory_open = open
 	Game.ui_open = open
 	_drag = {}
+	_menu = {}
 	Input.set_default_cursor_shape(Input.CURSOR_ARROW if open else Input.CURSOR_CROSS)
 
 
@@ -162,6 +164,15 @@ func _input(event: InputEvent) -> void:
 
 	var inv := p.inv
 	var loc := loc_at(mb.position)
+	# Right-click menu open: a left click picks an option (or closes the menu).
+	if not _menu.is_empty() and mb.pressed:
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			var i := _menu_index(mb.position)
+			if i >= 0:
+				p.do_action(_menu["loc"], _menu["items"][i][1])
+		_menu = {}
+		get_viewport().set_input_as_handled()
+		return
 	if mb.button_index == MOUSE_BUTTON_LEFT:
 		if mb.pressed:
 			if inv.near and not inv.near.contents.is_empty() and take_all_rect().has_point(mb.position):
@@ -172,8 +183,31 @@ func _input(event: InputEvent) -> void:
 			_drop_drag(p, mb.position, loc)
 			_drag = {}
 	elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed and not loc.is_empty():
-		p.quick_use(loc)
+		var acts := p.actions_for(loc)
+		if not acts.is_empty():
+			_menu = {"loc": loc, "pos": mb.position, "items": acts}
 	get_viewport().set_input_as_handled()
+
+
+const MENU_W := 190.0
+const MENU_ROW := 26.0
+
+
+func _menu_rect() -> Rect2:
+	var vs := get_viewport_rect().size
+	var h: float = _menu["items"].size() * MENU_ROW + 8
+	var pos: Vector2 = _menu["pos"]
+	pos.x = minf(pos.x, vs.x - MENU_W - 4)
+	pos.y = minf(pos.y, vs.y - h - 4)
+	return Rect2(pos, Vector2(MENU_W, h))
+
+
+func _menu_index(pos: Vector2) -> int:
+	var r := _menu_rect()
+	if not r.has_point(pos):
+		return -1
+	var i := int((pos.y - r.position.y - 4) / MENU_ROW)
+	return i if i >= 0 and i < _menu["items"].size() else -1
 
 
 func _drop_drag(p: Player, pos: Vector2, loc: Dictionary) -> void:
@@ -251,7 +285,7 @@ func _stat_bar(pos: Vector2, frame: Texture2D, fill: Texture2D, fill_at: Vector2
 
 
 func _item_icon(item: Dictionary, cell: Rect2, scale_px: float, modulate := Color.WHITE) -> void:
-	var t := Items.icon(item["id"])
+	var t := Items.item_icon(item)
 	var sz := t.get_size() * scale_px
 	_tex(t, cell.get_center() - sz / 2.0, scale_px, modulate)
 	if int(item["count"]) > 1:
@@ -324,11 +358,13 @@ func _draw() -> void:
 	_text(Vector2(bx + 176, by + 162), status + arrow, 14, tcol.lightened(0.3) if status != "Warm" else C_DIM)
 	if p.indoors():
 		_text(Vector2(bx + 176, by + 146), "indoors", 11, C_DIM)
-	if not p.can_heal() and p.health < 100.0 and not p.dead:
+	if not p.can_heal() and p.health < 100.0 and not p.dead and not p.bleeding:
 		_text(Vector2(bx + 176, by + 26), "not healing", 11, C_DIM)
 	if p.bleeding:
 		_tex(Game.tex("blood_2"), Vector2(bx + 176, by + 4), 3.0)
 		_text(Vector2(bx + 210, by + 26), "Bleeding [H]", 15, Color(1, 0.4, 0.4))
+	if p.poison_t > 0.0:
+		_text(Vector2(bx + 186, by + 70), "Sick (%ds)" % int(ceil(p.poison_t)), 15, Color(0.7, 0.9, 0.4))
 
 	# Weapon slots 1 / 2 / 3 (bottom-centre)
 	var cs := Game.tex("ui_cell").get_size() * UI_SCALE
@@ -358,11 +394,17 @@ func _draw() -> void:
 		var step := full.get_width() * 2.0 + 2.0
 		var n := int(w["mag"])
 		var start := wx - n * step - 70.0
-		for i in n:
-			_tex(full if i < mag else empty, Vector2(start + i * step, wy - 58), 2.0)
+		if n > 10:
+			# Big magazines: one bullet icon + count
+			start = wx - 160.0
+			_tex(full, Vector2(start, wy - 58), 2.0)
+			_text(Vector2(start + 20, wy - 40), "%d / %d" % [mag, n], 18, Color.WHITE)
+		else:
+			for i in n:
+				_tex(full if i < mag else empty, Vector2(start + i * step, wy - 58), 2.0)
 		_text(Vector2(wx, wy - 32), "+%d" % p.inv.count_of(w["ammo"]), 18, Color(0.95, 0.85, 0.6), HORIZONTAL_ALIGNMENT_RIGHT, 0)
 		if p.reloading:
-			var rr := Rect2(Vector2(start, wy - 16), Vector2(n * step, 6))
+			var rr := Rect2(Vector2(start, wy - 16), Vector2(minf(n, 10) * step, 6))
 			draw_rect(rr.grow(2), C_EDGE)
 			draw_rect(Rect2(rr.position, Vector2(rr.size.x * p.reload_progress, rr.size.y)), Color(0.9, 0.8, 0.5))
 
@@ -385,7 +427,7 @@ func _draw() -> void:
 			"WASD move   Shift sprint   Melee is automatic   Click to shoot",
 			"E / button: search, pick up   R reload   X lower weapon   Heal: warm, fed, watered",
 			"1 / 2 / 3 or wheel: main / secondary / melee   Tab inventory",
-			"F eat   G drink   H bandage   Esc pause   F1 hide help",
+			"F eat   G drink   H bandage / first aid   Esc pause   F1 hide help",
 		]
 		draw_rect(Rect2(14, 14, 660, 104), Color(0.08, 0.04, 0.07, 0.6))
 		for i in lines.size():
@@ -450,8 +492,8 @@ func _draw_inventory(p: Player, vs: Vector2) -> void:
 		var g: Dictionary = inv.gear[s]
 		draw_rect(cr, C_EDGE)
 		draw_rect(cr.grow(-2), C_CARD)
-		_tex(Items.icon(g["id"]), cr.position + Vector2(8, 6), 1.5)
-		_text(cr.position + Vector2(34, 22), Items.name_of(g["id"]), 14, C_TEXT)
+		_tex(Items.item_icon(g), cr.position + Vector2(8, 6), 1.5)
+		_text(cr.position + Vector2(34, 22), Items.display_name(g), 14, C_TEXT)
 		_text(Vector2(cr.end.x - 8, cr.position.y + 22), _cond_text(g), 12, _cond_color(g), HORIZONTAL_ALIGNMENT_RIGHT, 0)
 		for i in g["cargo"].size():
 			_cell_item(inv, Inventory.cargo_loc(s, i), cargo_cell(cr, i))
@@ -470,7 +512,20 @@ func _draw_inventory(p: Player, vs: Vector2) -> void:
 		if it != null and it.has("cond"):
 			_text(Vector2(r.position.x, r.end.y + 14), _cond_text(it), 11, _cond_color(it), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
 
-	_text(Vector2(0, vs.y - 30), "Drag to move   -   Right-click: use / wear / equip / take   -   Drag outside to drop   -   Tab to close", 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+	_text(Vector2(0, vs.y - 30), "Drag to move   -   Right-click for actions (use, wear, tear, drop...)   -   Drag outside to drop   -   Tab to close", 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+
+	# Right-click menu
+	if not _menu.is_empty():
+		var mr := _menu_rect()
+		draw_rect(mr, C_EDGE)
+		draw_rect(mr.grow(-2), C_CARD)
+		var hi := _menu_index(_mouse)
+		for i in _menu["items"].size():
+			var row := Rect2(mr.position + Vector2(4, 4 + i * MENU_ROW), Vector2(MENU_W - 8, MENU_ROW))
+			if i == hi:
+				draw_rect(row, C_LIGHT)
+			_text(row.position + Vector2(8, 18), _menu["items"][i][0], 15, C_TEXT)
+		return
 
 	# Tooltip
 	if _drag.is_empty():
@@ -478,7 +533,7 @@ func _draw_inventory(p: Player, vs: Vector2) -> void:
 		var tip_item = inv.get_at(hover) if not hover.is_empty() else null
 		if tip_item != null:
 			var d: Dictionary = tip_item
-			var tip := Items.name_of(d["id"])
+			var tip := Items.display_name(d)
 			if Items.is_clothing(d["id"]):
 				var f := Items.cond_factor(d)
 				tip += "   %s" % _cond_text(d)

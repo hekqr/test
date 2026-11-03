@@ -120,7 +120,10 @@ func _draw() -> void:
 	var col := C_DIM
 	if not _save.is_empty():
 		var st := int(_save.get("survived", 0.0))
-		if _save.get("dead", false):
+		if int(_save.get("version", 0)) != SaveGame.VERSION:
+			info = "Old save from an earlier version - start a New Game"
+			col = Color(1, 0.75, 0.4)
+		elif _save.get("dead", false):
 			info = "Your survivor died on day %d  (survived %d:%02d, %d kills)" % [int(_save["day"]), st / 60, st % 60, int(_save["kills"])]
 			col = Color(1, 0.55, 0.5)
 		else:

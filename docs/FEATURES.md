@@ -65,6 +65,32 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - 🔜 Building interiors: furniture, doors that open/close
 - 🔜 Sound + music (after saving)
 
+## Milestone 2.5 — Content & world
+- ✅ **All pack weapons**: knife, baseball bat, fire axe (melee); pistol, shotgun, assault rifle, hunting rifle
+- ✅ **Separate ammo**: 9mm (pistol), 12ga (shotgun), 5.56 (assault rifle), .308 (hunting rifle) — different
+  types never stack together and a gun only loads its own ammo
+- ✅ **Food & drink**: canned food (hunger only), canned soup (hunger + thirst), salted / cheese chips, raw meat
+  (35% chance of food poisoning), water bottle, soda can
+- ✅ **Medical**: bandage only stops bleeding; first aid kit cures bleeding + poisoning and heals a little
+- ✅ **Food poisoning** status: slowly hurts, drains thirst faster, stops healing (90 s)
+- ✅ **Tear** a T-shirt (2) or flannel shirt (3) into bandages (right-click menu)
+- ✅ **Right-click menu** in the inventory: Eat / Drink / Use / Wear / Equip / Take off / Tear / Take / Drop
+- ✅ **Random clothing colours** (basic colours per item type); icons and the **character sprite** are recoloured
+  (shirt, coat/sleeves, hat over the hair, backpack on the back). Pants & boots are too small on the sprite to show
+- ✅ **Hand-made buildings** with real rooms, interior doors, windows (see-through), tiled / wooden / concrete floors
+  and furniture: small house, family house, grocery shop, police station, garage, clinic. Placed facing the roads
+- ✅ **Street props**: street lights, stop signs, hydrants, benches, garbage bins (searchable), trash bags, barrels,
+  manholes, traffic cones, shopping carts outside shops
+- ✅ **Cars** parked on roads (cars, vans, buses, scrap cars, motorcycles) — each can be searched once, max one item
+- ✅ **Wilderness**: rocks, stumps, logs, sticks, flowers, mushrooms, dead trees, rare item finds
+- ✅ **Loot depends on location**: fridges = drinks/meat, cupboards = canned food, wardrobes = clothes,
+  medicine cabinets = bandages/first aid, police lockers = guns/ammo/vests, garages = tools/melee/hunting rifle,
+  shops = food & drinks, clinics = medical, bins/cars = little, wilderness = rare
+
+## Planned
+- 📌 **Base building** (wooden & reinforced walls and gates are in the art pack)
+- 📌 Animals to hunt & skin for meat, campfires to cook it (cooked meat = no poisoning)
+
 ## Ideas to borrow (inspired by other survival games, built our own way)
 - 💭 Show worn clothing / helmet on the character sprite
 - 💭 Character portrait in the HUD

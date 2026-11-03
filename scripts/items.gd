@@ -1,62 +1,106 @@
 class_name Items
 ## Item, clothing and weapon definitions.
 ##
-## kind    consumable | ammo | weapon | clothing
-## stack   max per stack; 1 = not stackable. Stackable items merge automatically when picked up.
+## kind    consumable | medical | ammo | weapon | clothing
+## stack   max per stack; 1 = not stackable. Only the SAME item stacks (9mm never stacks with 12ga).
 ## equip   gear slot the item is worn / carried in (weapons and clothing)
 ## cargo   storage slots a piece of clothing / backpack gives
 ## big     true = only fits in a backpack, the Hands slot or its own gear slot
 ## armour  armour points (1 point = 10% less damage; best possible gear stays well below 10)
 ## warmth  how much the item warms you
 ## sleeves takes extra wear when you're attacked
+## tear    bandages you get from tearing it up
+## colors  random colour picked when the item spawns
+## icon    "px:<name>" = drawn in code, "sheet:<tex>:<frames>:<frame>" = frame of a sprite sheet, else a texture
 
 const DEFS := {
-	"food": {"name": "Canned food", "icon": "icon_food", "stack": 1, "kind": "consumable"},
-	"water": {"name": "Water bottle", "icon": "item_water", "stack": 1, "kind": "consumable"},
-	"bandage": {"name": "Bandage", "icon": "icon_bandage", "stack": 1, "kind": "consumable"},
-	"ammo_pistol": {"name": "Pistol ammo", "icon": "icon_ammo_pistol", "stack": 30, "kind": "ammo"},
-	"ammo_shotgun": {"name": "Shotgun shells", "icon": "icon_ammo_shotgun", "stack": 12, "kind": "ammo"},
+	# --- food & drink
+	"food": {"name": "Canned food", "icon": "icon_food", "stack": 1, "kind": "consumable", "hunger": 35.0},
+	"soup": {"name": "Canned soup", "icon": "icon_soup", "stack": 1, "kind": "consumable", "hunger": 20.0, "thirst": 20.0},
+	"chips_salted": {"name": "Salted chips", "icon": "item_chips_red", "stack": 1, "kind": "consumable", "hunger": 15.0, "thirst": -5.0},
+	"chips_cheese": {"name": "Cheese chips", "icon": "item_chips_yellow", "stack": 1, "kind": "consumable", "hunger": 15.0, "thirst": -5.0},
+	"meat": {"name": "Raw meat", "icon": "px:meat", "stack": 1, "kind": "consumable", "hunger": 20.0, "poison": 0.35},
+	"water": {"name": "Water bottle", "icon": "item_water", "stack": 1, "kind": "consumable", "thirst": 40.0},
+	"soda": {"name": "Soda can", "icon": "px:soda", "stack": 1, "kind": "consumable", "thirst": 25.0, "hunger": 5.0,
+		"colors": ["red", "blue", "green", "orange", "purple", "yellow", "black"]},
 
-	"pistol": {"name": "Pistol", "icon": "icon_pistol", "stack": 1, "kind": "weapon", "equip": "secondary", "big": true},
+	# --- medical
+	"bandage": {"name": "Bandage", "icon": "icon_bandage", "stack": 1, "kind": "medical", "cures": ["bleeding"]},
+	"firstaid": {"name": "First aid kit", "icon": "icon_firstaid", "stack": 1, "kind": "medical", "cures": ["bleeding", "poison"], "heal": 20.0},
+
+	# --- ammo (each gun takes exactly one type)
+	"ammo_9mm": {"name": "9mm rounds", "icon": "icon_ammo_pistol", "stack": 30, "kind": "ammo"},
+	"ammo_12ga": {"name": "12ga shells", "icon": "icon_ammo_shotgun", "stack": 12, "kind": "ammo"},
+	"ammo_556": {"name": "5.56 rounds", "icon": "icon_ammo_rifle", "stack": 30, "kind": "ammo"},
+	"ammo_308": {"name": ".308 rounds", "icon": "icon_ammo_308", "stack": 10, "kind": "ammo"},
+
+	# --- weapons
+	"knife": {"name": "Knife", "icon": "icon_knife", "stack": 1, "kind": "weapon", "equip": "melee", "big": false},
 	"bat": {"name": "Baseball bat", "icon": "icon_bat", "stack": 1, "kind": "weapon", "equip": "melee", "big": true},
+	"axe": {"name": "Fire axe", "icon": "sheet:axe_sheet:9:0", "stack": 1, "kind": "weapon", "equip": "melee", "big": true},
+	"pistol": {"name": "Pistol", "icon": "icon_pistol", "stack": 1, "kind": "weapon", "equip": "secondary", "big": true},
 	"shotgun": {"name": "Shotgun", "icon": "icon_shotgun", "stack": 1, "kind": "weapon", "equip": "primary", "big": true},
+	"rifle": {"name": "Assault rifle", "icon": "icon_rifle", "stack": 1, "kind": "weapon", "equip": "primary", "big": true},
+	"hunting_rifle": {"name": "Hunting rifle", "icon": "icon_hunting_rifle", "stack": 1, "kind": "weapon", "equip": "primary", "big": true},
 
-	"cap": {"name": "Baseball cap", "icon": "px:cap", "stack": 1, "kind": "clothing", "equip": "head", "cargo": 0, "big": true, "warmth": 2.0},
-	"beanie": {"name": "Beanie", "icon": "px:beanie", "stack": 1, "kind": "clothing", "equip": "head", "cargo": 0, "big": true, "warmth": 10.0},
-	"helmet": {"name": "Helmet", "icon": "px:helmet", "stack": 1, "kind": "clothing", "equip": "head", "cargo": 0, "big": true, "warmth": 3.0, "armour": 2.0},
-	"tshirt": {"name": "T-shirt", "icon": "px:tshirt", "stack": 1, "kind": "clothing", "equip": "shirt", "cargo": 1, "big": true, "warmth": 3.0},
-	"flannel": {"name": "Flannel shirt", "icon": "px:flannel", "stack": 1, "kind": "clothing", "equip": "shirt", "cargo": 2, "big": true, "warmth": 8.0, "armour": 0.2, "sleeves": true},
-	"hoodie": {"name": "Hoodie", "icon": "px:hoodie", "stack": 1, "kind": "clothing", "equip": "coat", "cargo": 2, "big": true, "warmth": 14.0, "armour": 0.3, "sleeves": true},
-	"jacket": {"name": "Leather jacket", "icon": "px:jacket", "stack": 1, "kind": "clothing", "equip": "coat", "cargo": 4, "big": true, "warmth": 20.0, "armour": 0.8, "sleeves": true},
-	"jeans": {"name": "Jeans", "icon": "px:jeans", "stack": 1, "kind": "clothing", "equip": "pants", "cargo": 2, "big": true, "warmth": 7.0, "armour": 0.3},
-	"cargo_pants": {"name": "Cargo pants", "icon": "px:cargo_pants", "stack": 1, "kind": "clothing", "equip": "pants", "cargo": 4, "big": true, "warmth": 8.0, "armour": 0.4},
-	"boots": {"name": "Work boots", "icon": "px:boots", "stack": 1, "kind": "clothing", "equip": "boots", "cargo": 0, "big": true, "warmth": 6.0, "armour": 0.3},
-	"vest": {"name": "Tactical vest", "icon": "px:vest", "stack": 1, "kind": "clothing", "equip": "armour", "cargo": 2, "big": true, "warmth": 4.0, "armour": 3.0},
-	"backpack_small": {"name": "Small backpack", "icon": "px:backpack_small", "stack": 1, "kind": "clothing", "equip": "back", "cargo": 6, "big": true, "warmth": 2.0},
-	"backpack_large": {"name": "Hiking backpack", "icon": "px:backpack_large", "stack": 1, "kind": "clothing", "equip": "back", "cargo": 10, "big": true, "warmth": 3.0},
+	# --- clothing
+	"cap": {"name": "Baseball cap", "icon": "px:cap", "stack": 1, "kind": "clothing", "equip": "head", "cargo": 0, "big": true, "warmth": 2.0,
+		"colors": ["red", "blue", "black", "green", "yellow", "white", "grey"]},
+	"beanie": {"name": "Beanie", "icon": "px:beanie", "stack": 1, "kind": "clothing", "equip": "head", "cargo": 0, "big": true, "warmth": 10.0,
+		"colors": ["grey", "black", "red", "blue", "green", "orange", "purple"]},
+	"helmet": {"name": "Helmet", "icon": "px:helmet", "stack": 1, "kind": "clothing", "equip": "head", "cargo": 0, "big": true, "warmth": 3.0, "armour": 2.0,
+		"colors": ["olive", "black", "tan"]},
+	"tshirt": {"name": "T-shirt", "icon": "px:tshirt", "stack": 1, "kind": "clothing", "equip": "shirt", "cargo": 1, "big": true, "warmth": 3.0, "tear": 2,
+		"colors": ["white", "black", "grey", "red", "blue", "green", "yellow", "orange", "purple", "pink"]},
+	"flannel": {"name": "Flannel shirt", "icon": "px:flannel", "stack": 1, "kind": "clothing", "equip": "shirt", "cargo": 2, "big": true, "warmth": 8.0, "armour": 0.2, "sleeves": true, "tear": 3,
+		"colors": ["red", "blue", "green", "brown", "black", "grey"]},
+	"hoodie": {"name": "Hoodie", "icon": "px:hoodie", "stack": 1, "kind": "clothing", "equip": "coat", "cargo": 2, "big": true, "warmth": 14.0, "armour": 0.3, "sleeves": true,
+		"colors": ["black", "grey", "red", "blue", "green", "yellow", "purple", "orange", "white"]},
+	"jacket": {"name": "Leather jacket", "icon": "px:jacket", "stack": 1, "kind": "clothing", "equip": "coat", "cargo": 4, "big": true, "warmth": 20.0, "armour": 0.8, "sleeves": true,
+		"colors": ["black", "brown", "darkbrown"]},
+	"jeans": {"name": "Jeans", "icon": "px:jeans", "stack": 1, "kind": "clothing", "equip": "pants", "cargo": 2, "big": true, "warmth": 7.0, "armour": 0.3,
+		"colors": ["blue", "navy", "lightblue", "black", "grey"]},
+	"cargo_pants": {"name": "Cargo pants", "icon": "px:cargo_pants", "stack": 1, "kind": "clothing", "equip": "pants", "cargo": 4, "big": true, "warmth": 8.0, "armour": 0.4,
+		"colors": ["olive", "tan", "black", "grey", "brown"]},
+	"boots": {"name": "Work boots", "icon": "px:boots", "stack": 1, "kind": "clothing", "equip": "boots", "cargo": 0, "big": true, "warmth": 6.0, "armour": 0.3,
+		"colors": ["brown", "black", "darkbrown"]},
+	"vest": {"name": "Tactical vest", "icon": "px:vest", "stack": 1, "kind": "clothing", "equip": "armour", "cargo": 2, "big": true, "warmth": 4.0, "armour": 3.0,
+		"colors": ["olive", "black", "tan"]},
+	"backpack_small": {"name": "Small backpack", "icon": "px:backpack_small", "stack": 1, "kind": "clothing", "equip": "back", "cargo": 6, "big": true, "warmth": 2.0,
+		"colors": ["olive", "black", "blue", "red", "grey", "brown"]},
+	"backpack_large": {"name": "Hiking backpack", "icon": "px:backpack_large", "stack": 1, "kind": "clothing", "equip": "back", "cargo": 10, "big": true, "warmth": 3.0,
+		"colors": ["brown", "olive", "orange", "blue", "red", "black"]},
+}
+
+## Default colours for items without a random colour (matches their icons).
+const ICON_DEFAULTS := {"tshirt": "6b7a4a", "jeans": "3b5a8c"}
+
+## Basic colours used for clothing / cans.
+const COLORS := {
+	"white": "d8d4cc", "black": "2e2a30", "grey": "7a7a80", "red": "a83838", "blue": "3a5a9c",
+	"green": "4a7a44", "yellow": "c8a838", "orange": "c8702e", "purple": "6e4a8c", "pink": "c87a98",
+	"brown": "6e4a32", "darkbrown": "4a3020", "navy": "2a3e63", "lightblue": "6a8cc0",
+	"olive": "5a6438", "tan": "a08a60",
 }
 
 const WEAPONS := {
 	"fists": {"name": "Fists", "melee": true, "damage": 18.0, "range": 34.0, "cooldown": 0.55, "noise": 90.0, "held": ""},
+	"knife": {"name": "Knife", "melee": true, "damage": 28.0, "range": 34.0, "cooldown": 0.38, "noise": 70.0, "held": "icon_knife"},
 	"bat": {"name": "Baseball bat", "melee": true, "damage": 42.0, "range": 48.0, "cooldown": 0.75, "noise": 140.0, "held": "item_bat"},
-	"pistol": {"name": "Pistol", "melee": false, "damage": 45.0, "mag": 8, "ammo": "ammo_pistol",
+	"axe": {"name": "Fire axe", "melee": true, "damage": 60.0, "range": 50.0, "cooldown": 1.0, "noise": 150.0, "held": "sheet:axe_sheet:9:0"},
+	"pistol": {"name": "Pistol", "melee": false, "damage": 45.0, "mag": 8, "ammo": "ammo_9mm",
 		"cooldown": 0.32, "reload": 1.4, "pellets": 1, "spread": 0.03, "range": 750.0, "noise": 750.0,
 		"held": "item_pistol", "bullet_ui": "ui_bullet_pistol"},
-	"shotgun": {"name": "Shotgun", "melee": false, "damage": 24.0, "mag": 5, "ammo": "ammo_shotgun",
+	"shotgun": {"name": "Shotgun", "melee": false, "damage": 24.0, "mag": 5, "ammo": "ammo_12ga",
 		"cooldown": 0.8, "reload": 2.4, "pellets": 6, "spread": 0.32, "range": 380.0, "noise": 1000.0,
 		"held": "item_shotgun", "bullet_ui": "ui_bullet_shotgun"},
+	"rifle": {"name": "Assault rifle", "melee": false, "damage": 32.0, "mag": 30, "ammo": "ammo_556",
+		"cooldown": 0.11, "reload": 2.2, "pellets": 1, "spread": 0.06, "range": 850.0, "noise": 950.0,
+		"held": "item_rifle", "bullet_ui": "ui_bullet_rifle"},
+	"hunting_rifle": {"name": "Hunting rifle", "melee": false, "damage": 120.0, "mag": 5, "ammo": "ammo_308",
+		"cooldown": 1.1, "reload": 2.6, "pellets": 1, "spread": 0.0, "range": 1200.0, "noise": 1100.0,
+		"held": "icon_hunting_rifle", "bullet_ui": "ui_bullet_rifle"},
 }
-
-## Weighted container loot: [id, weight, min, max]
-const LOOT_TABLE := [
-	["food", 22, 1, 1], ["water", 22, 1, 1], ["bandage", 14, 1, 1],
-	["ammo_pistol", 14, 4, 10], ["ammo_shotgun", 8, 2, 6],
-	["bat", 5, 1, 1], ["pistol", 4, 1, 1], ["shotgun", 2, 1, 1],
-	["tshirt", 4, 1, 1], ["flannel", 4, 1, 1], ["hoodie", 4, 1, 1], ["jacket", 2, 1, 1],
-	["jeans", 4, 1, 1], ["cargo_pants", 3, 1, 1], ["boots", 3, 1, 1],
-	["vest", 1, 1, 1], ["helmet", 2, 1, 1], ["backpack_small", 3, 1, 1], ["backpack_large", 1, 1, 1],
-	["cap", 4, 1, 1], ["beanie", 3, 1, 1],
-]
 
 
 static func def(id: String) -> Dictionary:
@@ -67,9 +111,30 @@ static func name_of(id: String) -> String:
 	return DEFS[id]["name"]
 
 
+## Name including colour, e.g. "T-shirt (red)".
+static func display_name(it: Dictionary) -> String:
+	var n := name_of(it["id"])
+	if it.has("color_name"):
+		n += " (%s)" % it["color_name"]
+	return n
+
+
+static func icon_of(icon_spec: String, color := "") -> Texture2D:
+	if icon_spec.begins_with("px:"):
+		return Game.pixel_icon(icon_spec.substr(3), color)
+	if icon_spec.begins_with("sheet:"):
+		var p := icon_spec.split(":")
+		return Game.sheet_frame(p[1], int(p[2]), int(p[3]))
+	return Game.tex(icon_spec)
+
+
 static func icon(id: String) -> Texture2D:
-	var ic: String = DEFS[id]["icon"]
-	return Game.pixel_icon(ic.substr(3)) if ic.begins_with("px:") else Game.tex(ic)
+	return icon_of(DEFS[id]["icon"])
+
+
+## Icon for a specific item (uses its colour).
+static func item_icon(it: Dictionary) -> Texture2D:
+	return icon_of(DEFS[it["id"]]["icon"], it.get("color", ""))
 
 
 static func kind(id: String) -> String:
@@ -82,6 +147,10 @@ static func is_weapon(id: String) -> bool:
 
 static func is_clothing(id: String) -> bool:
 	return DEFS[id]["kind"] == "clothing"
+
+
+static func is_usable(id: String) -> bool:
+	return DEFS[id]["kind"] in ["consumable", "medical"]
 
 
 ## Gear slot the item belongs in ("" if none).
@@ -121,8 +190,13 @@ static func max_stack(id: String) -> int:
 	return DEFS[id]["stack"]
 
 
+## Two stacks can merge only if they're the same item (and same colour).
+static func can_stack(a: Dictionary, b: Dictionary) -> bool:
+	return a["id"] == b["id"] and max_stack(a["id"]) > 1 and a.get("color", "") == b.get("color", "")
+
+
 ## Returns a new item, e.g. {"id": "pistol", "count": 1, "mag": 3} or
-## {"id": "jeans", "count": 1, "cond": 100, "cargo": [null, null]}
+## {"id": "jeans", "count": 1, "cond": 100, "cargo": [null, null], "color": "3a5a9c", "color_name": "blue"}
 static func make(id: String, count := 1) -> Dictionary:
 	var it := {"id": id, "count": count}
 	if WEAPONS.has(id) and not WEAPONS[id]["melee"]:
@@ -132,19 +206,25 @@ static func make(id: String, count := 1) -> Dictionary:
 		var c := []
 		c.resize(cargo_of(id))
 		it["cargo"] = c
+	if DEFS[id].has("colors"):
+		var cols: Array = DEFS[id]["colors"]
+		var cn: String = cols[randi() % cols.size()]
+		it["color_name"] = cn
+		it["color"] = COLORS[cn]
 	return it
 
 
-static func roll_loot() -> Array:
+## Rolls items from a weighted table: [[id, weight, min, max], ...]. `rolls` = [min, max] attempts.
+static func roll(table: Array, rolls: Vector2i, empty_chance := 0.15) -> Array:
 	var out := []
 	var total := 0
-	for row in LOOT_TABLE:
+	for row in table:
 		total += int(row[1])
-	for i in randi_range(1, 3):
-		if randf() < 0.12:
+	for i in randi_range(rolls.x, rolls.y):
+		if randf() < empty_chance:
 			continue
 		var r := randi() % total
-		for row in LOOT_TABLE:
+		for row in table:
 			r -= int(row[1])
 			if r < 0:
 				out.append(make(row[0], randi_range(row[2], row[3])))

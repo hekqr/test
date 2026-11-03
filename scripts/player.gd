@@ -14,6 +14,7 @@ var health := 100.0
 var hunger := 100.0
 var thirst := 100.0
 var bleeding := false
+var poison_t := 0.0 # seconds of food poisoning left
 var body_temp := 60.0 # 0 freezing .. 100 hot
 var dead := false
 
@@ -45,6 +46,7 @@ var _noise_t := 0.0
 var _sprite: AnimatedSprite2D
 var _held: Sprite2D
 var _moving := false
+var _pack: Node2D # draws the backpack on the character
 var _melee_dir := Vector2.RIGHT
 
 
@@ -70,7 +72,14 @@ func _ready() -> void:
 	_sprite.scale = Vector2(2, 2)
 	_sprite.offset = Vector2(0, -7)
 	_sprite.play("idle_down")
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/outfit.gdshader")
+	_sprite.material = mat
 	add_child(_sprite)
+	_pack = Node2D.new()
+	_pack.draw.connect(_draw_pack)
+	add_child(_pack)
+	inv.changed.connect(update_outfit)
 	_held = Sprite2D.new()
 	_held.scale = Vector2(2, 2)
 	_held.visible = false
@@ -90,6 +99,7 @@ func _ready() -> void:
 
 	inv.pickup(Items.make("tshirt"))
 	inv.pickup(Items.make("jeans"))
+	update_outfit()
 	inv.add("food")
 	inv.add("water")
 	inv.add("bandage")
@@ -146,28 +156,94 @@ func holster() -> void:
 	say("Fists")
 
 
-## Inventory right-click: consumables are used, clothing / weapons are worn / equipped,
-## items nearby are picked up.
-func quick_use(loc: Dictionary) -> void:
+## Right-click menu: what can be done with the item at `loc`. [[label, action], ...]
+func actions_for(loc: Dictionary) -> Array:
+	var it = inv.get_at(loc)
+	if it == null:
+		return []
+	var id: String = it["id"]
+	var out := []
+	var d := Items.def(id)
+	if Items.is_usable(id):
+		var verb := "Use"
+		if Items.kind(id) == "consumable":
+			verb = "Drink" if d.get("thirst", 0.0) > d.get("hunger", 0.0) else "Eat"
+		out.append([verb, "use"])
+	var slot := Items.equip_of(id)
+	if slot != "":
+		var worn: bool = loc["t"] == "gear" and loc["s"] == slot
+		if Items.is_weapon(id):
+			if worn:
+				out.append(["Lower weapon" if inv.active == slot else "Select", "select"])
+			else:
+				out.append(["Equip", "equip"])
+		elif not worn and not Items.is_ruined(it):
+			out.append(["Wear", "equip"])
+		if worn:
+			out.append(["Take off" if Items.is_clothing(id) else "Put away", "unequip"])
+	if d.has("tear"):
+		out.append(["Tear into bandages", "tear"])
+	if loc["t"] == "near":
+		out.append(["Take", "take"])
+	else:
+		out.append(["Drop", "drop"])
+	return out
+
+
+func do_action(loc: Dictionary, action: String) -> void:
 	var it = inv.get_at(loc)
 	if it == null:
 		return
 	var id: String = it["id"]
-	if Items.kind(id) == "consumable":
-		_consume(loc, id)
-	elif Items.equip_of(id) != "" and not (loc["t"] == "gear" and loc["s"] == Items.equip_of(id)):
-		var err := inv.equip(loc)
-		say(err if err != "" else ("Wearing " if Items.is_clothing(id) else "Equipped ") + Items.name_of(id).to_lower())
-	elif loc["t"] == "near":
-		var left := inv.pickup(it)
-		var taken: Dictionary = inv.take(loc)
-		if left > 0:
-			taken["count"] = left
-			inv.near.contents.append(taken)
-			inv.near.refresh()
-			say("No free slots")
-	elif loc["t"] == "gear" and loc["s"] in Inventory.WEAPON_SLOTS:
-		switch_weapon(loc["s"])
+	match action:
+		"use":
+			_consume(loc, id)
+		"equip":
+			var err := inv.equip(loc)
+			say(err if err != "" else ("Wearing " if Items.is_clothing(id) else "Equipped ") + Items.display_name(it).to_lower())
+		"select":
+			switch_weapon(loc["s"])
+		"unequip":
+			var taken = inv.take(loc)
+			if inv.pickup_to_storage(taken) > 0:
+				inv.put(loc, taken)
+				say("No room to put it away")
+		"tear":
+			tear(loc)
+		"take":
+			var left := inv.pickup(it)
+			var taken: Dictionary = inv.take(loc)
+			if left > 0:
+				taken["count"] = left
+				inv.near.contents.append(taken)
+				inv.near.refresh()
+				say("No free slots")
+		"drop":
+			drop(loc)
+
+
+## Old one-click behaviour, still used for quick right-click without a menu (tests).
+func quick_use(loc: Dictionary) -> void:
+	var acts := actions_for(loc)
+	if not acts.is_empty():
+		do_action(loc, acts[0][1])
+
+
+## Tear a shirt into bandages. Anything stored in it drops to the ground.
+func tear(loc: Dictionary) -> void:
+	var it: Dictionary = inv.take(loc)
+	var n: int = Items.def(it["id"])["tear"]
+	if Items.is_ruined(it):
+		n = 1
+	for x in it.get("cargo", []):
+		if x != null:
+			drop_item(x)
+	var left := 0
+	for i in n:
+		left += inv.pickup(Items.make("bandage"))
+	for i in left:
+		drop_item(Items.make("bandage"))
+	say("Tore the %s into %d bandage%s" % [Items.name_of(it["id"]).to_lower(), n, "" if n == 1 else "s"])
 
 
 func _consume(loc: Dictionary, id: String) -> void:
@@ -243,7 +319,12 @@ func _needs(delta: float) -> void:
 	hunger = maxf(hunger - delta * 100.0 / 900.0, 0.0) # full -> empty in 15 min
 	thirst = maxf(thirst - delta * 100.0 / 600.0, 0.0) # full -> empty in 10 min
 	body_temp = move_toward(body_temp, target_temp(), TEMP_RATE * delta)
+	if poison_t > 0.0:
+		poison_t -= delta
+		thirst = maxf(thirst - delta * 100.0 / 600.0, 0.0) # sick: thirst drains twice as fast
 	var dmg := 0.0
+	if poison_t > 0.0:
+		dmg += 0.25
 	if hunger <= 0.0:
 		dmg += 1.0
 	if thirst <= 0.0:
@@ -272,7 +353,7 @@ func target_temp() -> float:
 
 ## Healing needs: warm enough, hunger & thirst at least 75%, not bleeding.
 func can_heal() -> bool:
-	return body_temp >= TEMP_WARM and hunger >= 75.0 and thirst >= 75.0 and not bleeding
+	return body_temp >= TEMP_WARM and hunger >= 75.0 and thirst >= 75.0 and not bleeding and poison_t <= 0.0
 
 
 func temp_status() -> String:
@@ -310,11 +391,11 @@ func _actions() -> void:
 	if Input.is_action_just_pressed("interact"):
 		interact()
 	if Input.is_action_just_pressed("eat"):
-		use_item("food")
+		quick_eat()
 	if Input.is_action_just_pressed("drink"):
-		use_item("water")
+		quick_drink()
 	if Input.is_action_just_pressed("bandage"):
-		use_item("bandage")
+		quick_heal()
 
 
 ## E / action button: search the nearby container or pick up the nearby item.
@@ -413,28 +494,60 @@ func use_item(item: String) -> void:
 		inv.remove(item, 1)
 
 
-## Applies a consumable's effect. Returns false if it wasn't needed.
+## F / G / H quick keys: pick the best item you carry for the job.
+func quick_eat() -> void:
+	for id in ["food", "soup", "chips_salted", "chips_cheese", "meat"]:
+		if inv.count_of(id) > 0:
+			use_item(id)
+			return
+	say("Nothing to eat")
+
+
+func quick_drink() -> void:
+	for id in ["water", "soda", "soup"]:
+		if inv.count_of(id) > 0:
+			use_item(id)
+			return
+	say("Nothing to drink")
+
+
+func quick_heal() -> void:
+	var order := ["bandage", "firstaid"] if bleeding and poison_t <= 0.0 else ["firstaid", "bandage"]
+	for id in order:
+		if inv.count_of(id) > 0:
+			use_item(id)
+			return
+	say("No bandages or first aid kits")
+
+
+## Applies a consumable / medical item. Returns false if it wasn't needed.
 func _apply_consumable(item: String) -> bool:
-	match item:
-		"food":
-			if hunger > 95.0:
-				say("Not hungry")
-				return false
-			hunger = minf(hunger + 35.0, 100.0)
-			say("Ate canned food")
-		"water":
-			if thirst > 95.0:
-				say("Not thirsty")
-				return false
-			thirst = minf(thirst + 40.0, 100.0)
-			say("Drank water")
-		"bandage":
-			if not bleeding and health > 90.0:
-				say("No need for a bandage")
-				return false
+	var d := Items.def(item)
+	if Items.kind(item) == "medical":
+		var cures: Array = d.get("cures", [])
+		var needed: bool = (bleeding and "bleeding" in cures) or (poison_t > 0.0 and "poison" in cures) or (d.get("heal", 0.0) > 0.0 and health < 100.0)
+		if not needed:
+			say("You don't need that")
+			return false
+		if "bleeding" in cures:
 			bleeding = false
-			health = minf(health + 15.0, 100.0)
-			say("Bandaged wounds")
+		if "poison" in cures:
+			poison_t = 0.0
+		health = minf(health + d.get("heal", 0.0), 100.0)
+		say("Used " + Items.name_of(item).to_lower())
+		return true
+	var h: float = d.get("hunger", 0.0)
+	var t: float = d.get("thirst", 0.0)
+	if (h <= 0.0 or hunger > 97.0) and (t <= 0.0 or thirst > 97.0):
+		say("Not hungry" if h > t else "Not thirsty")
+		return false
+	hunger = clampf(hunger + h, 0.0, 100.0)
+	thirst = clampf(thirst + t, 0.0, 100.0)
+	if randf() < d.get("poison", 0.0):
+		poison_t = 90.0
+		say("That tasted wrong... you feel sick")
+	else:
+		say(("Drank " if t > h else "Ate ") + Items.name_of(item).to_lower())
 	return true
 
 
@@ -498,19 +611,73 @@ func take_damage(amount: float, can_bleed := true) -> void:
 
 func _find_loot() -> void:
 	nearest_loot = null
-	var best := 44.0
+	var best := INF
 	for n in get_tree().get_nodes_in_group("loot"):
 		var l := n as LootSpot
 		if l.is_queued_for_deletion():
 			continue
 		var d := l.global_position.distance_to(global_position)
-		if d < best:
-			best = d
+		if d < l.reach and d - l.reach < best:
+			best = d - l.reach
 			nearest_loot = l
 	inv.near = nearest_loot
 
 
 # ---------------------------------------------------------------- visuals
+
+const SKIN := Color("e6c2b0")
+const HAIR_DARK := Color("452c34")
+const HAIR_LIGHT := Color("704f48")
+
+
+func _cloth_color(slot: String) -> Variant:
+	var g = inv.gear[slot]
+	if g == null:
+		return null
+	return Color(g.get("color", Items.ICON_DEFAULTS.get(g["id"], "7a7a80")))
+
+
+## Recolours the character to match what's worn: shirt in the middle, coat as the jacket/sleeves,
+## head items over the hair. (Pants/boots are too small on the sprite to show.)
+func update_outfit() -> void:
+	if _sprite == null:
+		return
+	var mat := _sprite.material as ShaderMaterial
+	var shirt = _cloth_color("shirt")
+	var coat = _cloth_color("coat")
+	var inner: Color = shirt if shirt != null else (coat if coat != null else SKIN)
+	var outer: Color = coat if coat != null else (shirt if shirt != null else SKIN)
+	mat.set_shader_parameter("shirt_col", inner)
+	mat.set_shader_parameter("coat_col", outer.darkened(0.12) if coat != null else outer)
+	mat.set_shader_parameter("coat_hi", outer.lightened(0.25))
+	mat.set_shader_parameter("zip_col", Color("9eafad") if coat != null else inner.lightened(0.15))
+	var hat = _cloth_color("head")
+	mat.set_shader_parameter("hair_dark", hat.darkened(0.2) if hat != null else HAIR_DARK)
+	mat.set_shader_parameter("hair_light", hat.lightened(0.1) if hat != null else HAIR_LIGHT)
+	if _pack:
+		_pack.queue_redraw()
+
+
+## Backpack on the character's back (drawn over the body when facing away / sideways).
+func _draw_pack() -> void:
+	var col = _cloth_color("back")
+	if col == null or dead:
+		return
+	var d := Game.dir_name(facing)
+	var c: Color = col
+	var r: Rect2
+	match d:
+		"up":
+			r = Rect2(-7, -15, 14, 12)
+		"side":
+			r = Rect2(-11, -15, 6, 11)
+		"side-left":
+			r = Rect2(5, -15, 6, 11)
+		_:
+			return # facing the camera: only the straps would show
+	_pack.draw_rect(r.grow(1), Color("1a1016"))
+	_pack.draw_rect(r, c)
+	_pack.draw_rect(Rect2(r.position.x, r.position.y + r.size.y * 0.45, r.size.x, 2), c.darkened(0.3))
 
 func _animate() -> void:
 	facing = _melee_dir if (weapon()["melee"] and _swing_t > -0.15) else aim
@@ -518,6 +685,9 @@ func _animate() -> void:
 	var anim := ("run_" if _moving else "idle_") + d
 	if _swing_t > -0.05 and weapon_id() == "fists":
 		anim = "punch_" + d
+	if _pack:
+		_pack.z_index = 0
+		_pack.queue_redraw()
 	if _sprite.animation != anim:
 		var keep := _sprite.animation.begins_with("run") and anim.begins_with("run")
 		var f := _sprite.frame
@@ -531,7 +701,7 @@ func _animate() -> void:
 	_held.visible = held != ""
 	if not _held.visible:
 		return
-	_held.texture = Game.tex(held)
+	_held.texture = Items.icon_of(held)
 	_held.z_index = -1 if d == "up" else 0
 	if weapon()["melee"]:
 		# Bat: rest over the shoulder, swing through an arc when attacking.

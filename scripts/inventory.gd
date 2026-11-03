@@ -135,7 +135,7 @@ func move(from: Dictionary, to: Dictionary) -> String:
 	if err != "":
 		return err
 	var stack := Items.max_stack(item["id"])
-	if target != null and target["id"] == item["id"] and stack > 1:
+	if target != null and Items.can_stack(target, item):
 		var n := mini(stack - int(target["count"]), int(item["count"]))
 		target["count"] += n
 		item["count"] -= n
@@ -194,7 +194,7 @@ func add_stack(item: Dictionary) -> int:
 	if max_stack > 1:
 		for loc in _holders():
 			var s = get_at(loc)
-			if s != null and s["id"] == id and int(s["count"]) < max_stack:
+			if s != null and Items.can_stack(s, item) and int(s["count"]) < max_stack:
 				var n := mini(max_stack - int(s["count"]), count)
 				s["count"] += n
 				count -= n
@@ -211,6 +211,17 @@ func add_stack(item: Dictionary) -> int:
 					break
 	_after_change()
 	return count
+
+
+## Puts an item somewhere in storage only (not hands / gear). Returns leftover count.
+func pickup_to_storage(item: Dictionary) -> int:
+	return add_stack(item)
+
+
+## Puts an item back at a location (used to undo).
+func put(loc: Dictionary, item) -> void:
+	_set_at(loc, item)
+	_after_change()
 
 
 func add(id: String, count := 1) -> int:

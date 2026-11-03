@@ -88,19 +88,31 @@ func _ready() -> void:
 
 
 func _spawn_loot() -> void:
-	for c in world.loot_cells:
+	# Furniture, garbage bins and cars (each with its own loot table)
+	for c in world.containers:
 		var l := LootSpot.new()
-		l.position = world.center_of(c)
+		l.kind = c["kind"]
+		l.tex_name = c["tex"]
+		l.flip = c["flip"]
+		l.reach = c["reach"]
+		l.position = c["pos"]
 		entities.add_child(l)
-	# Loose items lying on floors.
-	for b in world.buildings:
-		if randf() < 0.6:
-			var c := Vector2i(randi_range(b.position.x + 1, b.end.x - 2), randi_range(b.position.y + 1, b.end.y - 2))
-			if world.get_tile(c) == World.FLOOR:
-				var g := LootSpot.new()
-				g.is_bag = true
-				g.position = world.center_of(c) + Vector2(randf_range(-8, 8), randf_range(-8, 8))
-				entities.add_child(g)
+	# Loose items lying on building floors
+	for i in world.buildings.size():
+		var floors: Array = world.building_floors[i]
+		if floors.is_empty() or randf() > 0.5:
+			continue
+		var g := LootSpot.new()
+		g.is_bag = true
+		g.position = world.center_of(floors[randi() % floors.size()]) + Vector2(randf_range(-8, 8), randf_range(-8, 8))
+		entities.add_child(g)
+	# Rare finds out in the wild
+	for c in world.wild_spots:
+		var g := LootSpot.new()
+		g.is_bag = true
+		g.contents = Loot.roll("wild")
+		g.position = world.center_of(c)
+		entities.add_child(g)
 
 
 # ---------------------------------------------------------------- saving
@@ -120,7 +132,7 @@ func to_save() -> Dictionary:
 		"survived": survived, "kills": kills,
 		"player": {
 			"pos": [p.position.x, p.position.y], "health": p.health, "hunger": p.hunger,
-			"thirst": p.thirst, "bleeding": p.bleeding, "temp": p.body_temp,
+			"thirst": p.thirst, "bleeding": p.bleeding, "temp": p.body_temp, "poison": p.poison_t,
 			"inv": p.inv.to_save(),
 		},
 		"loot": loot, "zombies": zs,
@@ -143,6 +155,8 @@ func _apply_save(s: Dictionary) -> void:
 	player.thirst = ps["thirst"]
 	player.bleeding = ps["bleeding"]
 	player.body_temp = ps.get("temp", 60.0)
+	player.poison_t = ps.get("poison", 0.0)
+	player.update_outfit()
 	if ps.has("inv"):
 		player.inv.load_save(ps["inv"])
 	for zd in s["zombies"]:

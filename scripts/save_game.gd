@@ -2,7 +2,7 @@ class_name SaveGame
 ## One automatic save file. When the survivor dies the file is kept but marked dead,
 ## so it can't be continued (a dev "revive" may be added later).
 
-const VERSION := 1
+const VERSION := 2 # bumped when the world/item format changes; older saves cannot be continued
 
 
 static func path() -> String:
@@ -38,7 +38,7 @@ static func write(data: Dictionary) -> void:
 
 static func can_continue() -> bool:
 	var d := read()
-	return not d.is_empty() and not d.get("dead", false)
+	return not d.is_empty() and not d.get("dead", false) and int(d.get("version", 0)) == VERSION
 
 
 ## JSON turns ints into floats; fix item stacks back up.

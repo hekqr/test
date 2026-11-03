@@ -47,7 +47,29 @@ func _physics_process(_delta: float) -> void:
 			check(get_tree().get_nodes_in_group("zombies").size() >= 50, "zombies spawned")
 			check(w.is_walkable(w.cell_of(p.global_position)), "player spawns on walkable tile")
 			check(SaveGame.can_continue(), "new game is saved straight away")
-			check(w.find_path(p.global_position, w.center_of(w.loot_cells[0])).size() > 1, "pathfinding works")
+			check(w.find_path(p.global_position, w.center_of(w.building_floors[0][0])).size() > 1, "pathfinding into a building works")
+			print("Buildings / street / nature")
+			_check_templates()
+			var types := {}
+			for t in w.building_types:
+				types[t] = true
+			check(types.size() >= 4, "several building types placed (%s)" % ", ".join(types.keys()))
+			var kinds := {}
+			for c in w.containers:
+				kinds[c["kind"]] = kinds.get(c["kind"], 0) + 1
+			check(kinds.has("fridge") and kinds.has("wardrobe") and kinds.has("cupboard"), "houses have kitchens and bedrooms")
+			check(kinds.get("car", 0) >= 5, "cars on the roads (%d)" % kinds.get("car", 0))
+			check(kinds.get("bin", 0) >= 3, "garbage bins on sidewalks (%d)" % kinds.get("bin", 0))
+			var lights := w.props.filter(func(pr): return String(pr["tex"]).begins_with("prop_light")).size()
+			var nature := w.props.filter(func(pr): return String(pr["tex"]).begins_with("nat_")).size()
+			check(lights >= 10 and nature >= 50, "street lights (%d) and wilderness nature (%d)" % [lights, nature])
+			check(w.wild_spots.size() >= 3, "rare wilderness finds (%d)" % w.wild_spots.size())
+			var win := 0
+			for t in w.tiles:
+				if t == World.WINDOW:
+					win += 1
+			check(win > 20, "buildings have windows (%d)" % win)
+			check(w.has_los(Vector2.ZERO, Vector2.ZERO) and _window_see_through(w), "you can see through windows but not walls")
 			check(not ("stamina" in p), "stamina removed")
 			_clear_zombies()
 			pos_before = p.global_position
@@ -69,9 +91,9 @@ func _physics_process(_delta: float) -> void:
 			print("Clothing")
 			check(inv.pickup(Items.make("backpack_small")) == 0 and inv.gear["back"] != null, "backpack goes on your back")
 			check(inv.free_slots() == 6, "backpack adds 6 slots")
-			inv.add("ammo_pistol", 20)
-			inv.add("ammo_pistol", 15)
-			check(inv.count_of("ammo_pistol") == 35 and inv.free_slots() == 4, "ammo stacks (30 + 5 = 2 slots)")
+			inv.add("ammo_9mm", 20)
+			inv.add("ammo_9mm", 15)
+			check(inv.count_of("ammo_9mm") == 35 and inv.free_slots() == 4, "ammo stacks (30 + 5 = 2 slots)")
 			check(inv.pickup(Items.make("flannel")) == 0, "spare shirt picked up")
 			var flannel_loc := {}
 			for loc in inv.storage_cells():
@@ -202,6 +224,73 @@ func _physics_process(_delta: float) -> void:
 			p._needs(1.0)
 			check(p.health < hp_cold, "freezing hurts")
 			p.body_temp = 60.0
+			print("Ammo types")
+			var t9 := Inventory.new()
+			t9.pickup(Items.make("backpack_small"))
+			t9.add("ammo_9mm", 10)
+			t9.add("ammo_12ga", 5)
+			t9.add("ammo_556", 20)
+			t9.add("ammo_308", 4)
+			check(t9.free_slots() == 2, "different ammo types never share a stack")
+			check(Items.WEAPONS["pistol"]["ammo"] == "ammo_9mm" and Items.WEAPONS["rifle"]["ammo"] == "ammo_556" and Items.WEAPONS["hunting_rifle"]["ammo"] == "ammo_308" and Items.WEAPONS["shotgun"]["ammo"] == "ammo_12ga", "each gun takes its own ammo")
+			check(t9.move(Inventory.cargo_loc("back", 0), Inventory.cargo_loc("back", 1)) == "No room to swap" or t9.get_at(Inventory.cargo_loc("back", 1))["id"] == "ammo_9mm", "dragging 9mm onto 12ga swaps instead of merging")
+			print("Food & medicine")
+			var h0 := 50.0
+			p.hunger = h0
+			p.thirst = h0
+			p._apply_consumable("food")
+			check(p.hunger > h0 and p.thirst == h0, "canned food: hunger only")
+			p.hunger = h0
+			p._apply_consumable("soup")
+			check(p.hunger > h0 and p.thirst > h0, "canned soup: hunger and thirst")
+			p.thirst = h0
+			p._apply_consumable("soda")
+			check(p.thirst > h0, "soda quenches thirst")
+			p.bleeding = true
+			p.health = 50.0
+			p._apply_consumable("bandage")
+			check(not p.bleeding and p.health == 50.0, "bandage only stops bleeding")
+			p.poison_t = 60.0
+			p.bleeding = true
+			p._apply_consumable("firstaid")
+			check(p.poison_t <= 0.0 and not p.bleeding and p.health > 50.0, "first aid kit cures bleeding + poisoning and heals a bit")
+			check(not p._apply_consumable("bandage"), "bandage not needed when not bleeding")
+			p.poison_t = 10.0
+			check(not p.can_heal(), "no healing while sick")
+			p.poison_t = 0.0
+			p.health = 100.0
+			print("Tearing")
+			var shirt := Items.make("tshirt")
+			inv.gear["hands"] = shirt
+			var b0 := inv.count_of("bandage")
+			p.tear(Inventory.gear_loc("hands"))
+			check(inv.gear["hands"] == null or inv.gear["hands"]["id"] == "bandage", "shirt is gone after tearing")
+			check(inv.count_of("bandage") + _pile_count("bandage") >= b0 + 2, "t-shirt tears into 2 bandages")
+			check(not p.actions_for(Inventory.gear_loc("pants")).any(func(a): return a[1] == "tear"), "jeans can't be torn")
+			print("Colours")
+			var cols := {}
+			for i in 30:
+				cols[Items.make("tshirt")["color_name"]] = true
+			check(cols.size() >= 4, "clothing comes in random colours (%d seen)" % cols.size())
+			check(Items.item_icon(Items.make("hoodie")) != null, "coloured icons render")
+			print("Location loot")
+			var guns := 0
+			var food := 0
+			for i in 60:
+				for it in Loot.roll("locker"):
+					if Items.is_weapon(it["id"]) or Items.kind(it["id"]) == "ammo":
+						guns += 1
+				for it in Loot.roll("fridge"):
+					if Items.is_weapon(it["id"]):
+						food -= 100
+					else:
+						food += 1
+			check(guns > 40, "police lockers have guns & ammo (%d)" % guns)
+			check(food > 40, "fridges have food & drink only")
+			var car_max := 0
+			for i in 100:
+				car_max = maxi(car_max, Loot.roll("car").size())
+			check(car_max == 1, "cars drop at most one item")
 			print("Auto melee")
 			var shotgun = inv.take(Inventory.gear_loc("primary"))
 			check(shotgun != null, "shotgun removed")
@@ -227,9 +316,9 @@ func _physics_process(_delta: float) -> void:
 			p.health = 100.0
 			p.bleeding = false
 			print("Pistol")
-			inv.remove("ammo_pistol", 999)
+			inv.remove("ammo_9mm", 999)
 			inv.pickup({"id": "pistol", "count": 1, "mag": 8})
-			inv.add("ammo_pistol", 10)
+			inv.add("ammo_9mm", 10)
 			p.switch_weapon("secondary")
 			check(p.weapon_id() == "pistol" and inv.gear["melee"] != null, "switching to pistol keeps bat in its slot")
 			z_test = main.add_zombie(p.global_position + Vector2(0, -60))
@@ -244,9 +333,9 @@ func _physics_process(_delta: float) -> void:
 			p.start_reload()
 			check(p.reloading, "reload starts")
 		280:
-			check(int(p.gun()["mag"]) == 8 and inv.count_of("ammo_pistol") == 2, "reload fills magazine from storage")
+			check(int(p.gun()["mag"]) == 8 and inv.count_of("ammo_9mm") == 2, "reload fills magazine from storage")
 			print("Shotgun")
-			inv.add("ammo_shotgun", 10)
+			inv.add("ammo_12ga", 10)
 			inv.pickup({"id": "shotgun", "count": 1, "mag": 5})
 			p.cycle_weapon(-1)
 			check(p.weapon_id() == "shotgun", "mouse wheel cycles to shotgun")
@@ -256,12 +345,12 @@ func _physics_process(_delta: float) -> void:
 			check(p._shots.size() == 6, "shotgun fires 6 pellets")
 			check(z_test.health < 70.0 - 24.0 or z_test.dead, "multiple pellets hit (hp %.0f)" % z_test.health)
 			print("Drop")
-			var bags_before := get_tree().get_nodes_in_group("loot").size()
 			p.drop(Inventory.gear_loc("primary"))
 			check(p.weapon_id() == "fists", "dropping the selected gun -> fists")
-			check(get_tree().get_nodes_in_group("loot").size() == bags_before + 1, "ground pile spawned")
+			var pile := _pile_with("shotgun")
+			check(pile != null, "ground pile with the shotgun spawned")
 			p.drop(Inventory.gear_loc("back"))
-			check(get_tree().get_nodes_in_group("loot").size() == bags_before + 1, "second drop joins the same pile")
+			check(pile != null and pile.contents.any(func(it): return it["id"] == "backpack_small"), "second drop joins the same pile")
 		282:
 			print("Noise")
 			var z2: Zombie = main.add_zombie(p.global_position + Vector2(400, 0))
@@ -331,3 +420,72 @@ func _physics_process(_delta: float) -> void:
 			else:
 				print("SMOKE TEST FAILED: ", failures)
 				get_tree().quit(1)
+
+
+func _pile_with(id: String) -> LootSpot:
+	for n in get_tree().get_nodes_in_group("loot"):
+		if n.is_bag and n.contents.any(func(it): return it["id"] == id):
+			return n
+	return null
+
+
+func _pile_count(id: String) -> int:
+	var n := 0
+	for l in get_tree().get_nodes_in_group("loot"):
+		if l.is_bag:
+			for it in l.contents:
+				if it["id"] == id:
+					n += int(it["count"])
+	return n
+
+
+## Every plan: equal row widths, doors on the outside, every searchable container reachable from the front door.
+func _check_templates() -> void:
+	for k in Buildings.TEMPLATES:
+		var rows: Array = Buildings.TEMPLATES[k]["rows"]
+		var w: int = String(rows[0]).length()
+		var ok := rows.all(func(r): return String(r).length() == w)
+		check(ok, "%s: all rows %d wide" % [k, w])
+		if not ok:
+			continue
+		var h := rows.size()
+		var start := -1
+		for x in w:
+			if String(rows[h - 1])[x] == "D":
+				start = x
+		check(start >= 0, "%s: front door on the bottom row" % k)
+		var seen := {}
+		var todo := [Vector2i(start, h - 1)]
+		while not todo.is_empty():
+			var c: Vector2i = todo.pop_back()
+			if seen.has(c):
+				continue
+			seen[c] = true
+			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var n: Vector2i = c + d
+				if n.x >= 0 and n.y >= 0 and n.x < w and n.y < h and String(rows[n.y])[n.x] in ["w", "t", "c", "D"]:
+					todo.append(n)
+		var unreachable := 0
+		for y in h:
+			for x in w:
+				var ch := String(rows[y])[x]
+				if Buildings.CONTAINER_CHARS.has(ch):
+					var reach := false
+					for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+						if seen.has(Vector2i(x, y) + d):
+							reach = true
+					if not reach:
+						unreachable += 1
+		check(unreachable == 0, "%s: every container reachable from the front door" % k)
+	# Rotations keep the plan intact
+	var r: Array = Buildings.oriented(Buildings.TEMPLATES["house_small"]["rows"], "E", true)
+	check(r.size() == String(Buildings.TEMPLATES["house_small"]["rows"][0]).length(), "rotated plan has swapped size")
+
+
+func _window_see_through(w: World) -> bool:
+	for y in range(1, World.H - 1):
+		for x in range(1, World.W - 1):
+			var c := Vector2i(x, y)
+			if w.get_tile(c) == World.WINDOW:
+				return not w.blocks_sight(c)
+	return false

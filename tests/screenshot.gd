@@ -39,9 +39,12 @@ func _process(_delta: float) -> void:
 		p.inv.pickup(Items.make("hoodie"))
 		p.inv.pickup(Items.make("vest"))
 		p.inv.pickup(Items.make("boots"))
-		p.inv.add("ammo_pistol", 14)
-		p.inv.add("ammo_shotgun", 6)
+		p.inv.add("ammo_9mm", 14)
+		p.inv.add("ammo_12ga", 6)
 		p.inv.add("food", 1)
+		p.inv.add("soda")
+		p.inv.add("firstaid")
+		p.inv.pickup({"id": "rifle", "count": 1, "mag": 22})
 		p.inv.add("cargo_pants")
 		p.switch_weapon("primary")
 		p.hunger = 62.0
@@ -53,14 +56,16 @@ func _process(_delta: float) -> void:
 		_shot("outside")
 		var l: LootSpot = null
 		for n in get_tree().get_nodes_in_group("loot"):
-			if not n.is_bag:
+			if n.kind == "fridge":
 				l = n
 				break
-		l.contents = [Items.make("water"), Items.make("helmet"), Items.make("ammo_pistol", 8)]
-		p.global_position = l.global_position + Vector2(10, 0)
+		l.contents = [Items.make("water"), Items.make("soda"), Items.make("meat"), Items.make("soup")]
+		p.global_position = l.global_position + Vector2(0, 32)
 	if frame == 100:
 		_shot("inside")
 		main.hud.set_inventory_open(true)
+		var sl := Inventory.gear_loc("shirt")
+		main.hud._menu = {"loc": sl, "pos": main.hud.gear_cell("shirt").get_center() + Vector2(-150, 20), "items": p.actions_for(sl)}
 	if frame == 104:
 		_shot("inventory")
 		main.hud.set_inventory_open(false)
