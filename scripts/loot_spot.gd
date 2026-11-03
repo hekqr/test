@@ -8,12 +8,15 @@ var looted := false
 var is_bag := false
 var contents: Array = [] # item stacks
 var kind := 0
+var loaded := false # restored from a save: don't roll new contents
 var _sprite: Sprite2D
 
 
 func _ready() -> void:
 	add_to_group("loot")
-	if is_bag:
+	if loaded:
+		pass
+	elif is_bag:
 		if contents.is_empty():
 			var r := Items.roll_loot()
 			contents = [r[0]] if not r.is_empty() else [Items.make("food")]
@@ -21,6 +24,9 @@ func _ready() -> void:
 		kind = randi() % KINDS.size()
 		if contents.is_empty():
 			contents = Items.roll_loot()
+	if is_bag and contents.is_empty():
+		queue_free()
+		return
 	if is_bag:
 		# Items on the ground show their own icon.
 		_sprite = Sprite2D.new()
@@ -31,6 +37,22 @@ func _ready() -> void:
 		_sprite = Game.make_sprite(KINDS[kind])
 		_sprite.offset = Vector2(0, -_sprite.texture.get_height() / 2.0 + 3.0)
 	add_child(_sprite)
+
+
+func to_save() -> Dictionary:
+	return {"pos": [position.x, position.y], "bag": is_bag, "kind": kind, "looted": looted, "contents": contents}
+
+
+static func from_save(d: Dictionary) -> LootSpot:
+	var l := LootSpot.new()
+	l.loaded = true
+	l.position = SaveGame.vec(d["pos"])
+	l.is_bag = d["bag"]
+	l.kind = int(d["kind"])
+	l.looted = d["looted"]
+	for it in d["contents"]:
+		l.contents.append(SaveGame.fix_item(it))
+	return l
 
 
 func label() -> String:

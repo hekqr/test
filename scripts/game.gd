@@ -11,6 +11,11 @@ signal noise_made(pos: Vector2, radius: float)
 var night := 0.0
 ## True while a full-screen UI (inventory) is open: blocks attacking/moving.
 var ui_open := false
+## Save file location (tests point this somewhere else).
+var save_path := "user://save.json"
+## Save data to load when the game scene starts; empty = new game.
+var pending_load := {}
+
 ## Set when a click was used by a UI button, so it doesn't also fire a gun. Cleared on release.
 var click_used := false
 

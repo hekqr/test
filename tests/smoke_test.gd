@@ -18,7 +18,12 @@ func check(cond: bool, what: String) -> void:
 		failures.append(what)
 
 
+var saved_alive := {}
+var main2: Node
+
+
 func _ready() -> void:
+	Game.save_path = "user://test_save.json"
 	main = load("res://scenes/main.tscn").instantiate()
 	add_child(main)
 
@@ -41,6 +46,7 @@ func _physics_process(_delta: float) -> void:
 			check(get_tree().get_nodes_in_group("loot").size() > 30, "loot containers placed")
 			check(get_tree().get_nodes_in_group("zombies").size() >= 50, "zombies spawned")
 			check(w.is_walkable(w.cell_of(p.global_position)), "player spawns on walkable tile")
+			check(SaveGame.can_continue(), "new game is saved straight away")
 			check(w.find_path(p.global_position, w.center_of(w.loot_cells[0])).size() > 1, "pathfinding works")
 			check(not ("stamina" in p), "stamina removed")
 			_clear_zombies()
@@ -171,13 +177,53 @@ func _physics_process(_delta: float) -> void:
 			main.time_of_day = 0.0
 		284:
 			check(Game.night > 0.9, "midnight is dark")
+			print("Save / load")
+			p.health = 61.0
+			p.hunger = 33.0
+			main.kills = 7
+			main.save_game()
+			saved_alive = SaveGame.read()
+			check(not saved_alive.is_empty() and not saved_alive["dead"], "save written (alive)")
+			check(SaveGame.can_continue(), "alive save can be continued")
 			print("Death")
 			var zk: Zombie = main.add_zombie(p.global_position + Vector2(0, 300), true)
 			zk.take_damage(999.0, Vector2.RIGHT)
 			check(zk.dead and not zk.is_in_group("zombies"), "zombie dies and leaves a corpse")
 			p.take_damage(999.0)
 			check(p.dead, "player dies")
-		287:
+		286:
+			var d := SaveGame.read()
+			check(d.get("dead", false), "death keeps the save but marks it dead")
+			check(not SaveGame.can_continue(), "dead save can't be continued")
+			# Load the alive save into a fresh game scene.
+			main.queue_free()
+			Game.pending_load = saved_alive
+			main2 = load("res://scenes/main.tscn").instantiate()
+			add_child(main2)
+			main = main2
+		290:
+			var p2: Player = main2.player
+			var sp: Dictionary = saved_alive["player"]
+			check(main2.world_seed == int(saved_alive["seed"]), "same world seed")
+			check(p2.global_position.distance_to(SaveGame.vec(sp["pos"])) < 2.0, "player position restored")
+			check(absf(p2.health - 61.0) < 0.5 and absf(p2.hunger - 33.0) < 0.5, "health / hunger restored")
+			check(main2.kills == 7, "kills restored")
+			check(p2.inv.count_of("ammo_pistol") == int(saved_alive["player"]["pockets"].reduce(func(a, it): return a + (int(it["count"]) if it["id"] == "ammo_pistol" else 0), 0)), "pockets restored")
+			check(p2.inv.weapons["melee"] != null and p2.inv.weapons["melee"]["id"] == "bat", "weapon slots restored")
+			var looted_before := 0
+			for l in saved_alive["loot"]:
+				if l["looted"]:
+					looted_before += 1
+			var looted_after := 0
+			for n in get_tree().get_nodes_in_group("loot"):
+				if n.looted:
+					looted_after += 1
+			check(looted_before > 0 and looted_after == looted_before, "searched containers stay searched (%d)" % looted_after)
+			var zn := get_tree().get_nodes_in_group("zombies").size()
+			var zs: int = saved_alive["zombies"].size()
+			check(zn >= zs and zn <= zs + 2, "zombies restored (%d saved, %d now)" % [zs, zn])
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(Game.save_path))
+		292:
 			if failures.is_empty():
 				print("SMOKE TEST PASSED")
 				get_tree().quit(0)

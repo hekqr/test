@@ -38,7 +38,10 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ Roofs over buildings that fade when you walk inside
 - ✅ Pixel-art stat bars (health / hunger / thirst) and bullet indicators
 - ✅ Stamina removed (sprint is unlimited but loud)
-- 🔜 **Save & load** (next)
+- ✅ **Auto-save** every 20 s, on quit/close and on death (one save file)
+- ✅ Death keeps the save but marks it dead — it can't be continued
+- ✅ Title menu: Continue / New Game (confirms before replacing a living survivor) / Quit
+- 💭 Dev "revive" for dead saves
 - 🔜 Item variety: medkit, painkillers, **backpacks** (more pocket space)
 - 📌 **Stacking rule:** only items that make sense to stack get a max-stack value (ammo now: pistol 30, shells 12).
   Every new stackable item (e.g. nails, rags, matches) gets its own max stack when it's added; it then merges

@@ -7,6 +7,9 @@ Top-down 2D zombie survival game for PC, made with [Godot 4.7](https://godotengi
 ## Play
 Download `Ashfall.exe` (Windows) and double-click it. No install needed.
 
+The game saves automatically (every 20 s, when you quit, and when you die) to
+`%APPDATA%\Godot\app_userdata\Ashfall\save.json`. A dead survivor's save is kept but can't be continued.
+
 ## Controls
 | Key | Action |
 |---|---|
@@ -19,7 +22,7 @@ Download `Ashfall.exe` (Windows) and double-click it. No install needed.
 | X | Put hands item away |
 | Tab or I | Inventory: hands + pockets (right-click use/hold, drag to move, drag outside to drop) |
 | F / G / H | Eat / Drink / Bandage |
-| Esc | Pause (Q to quit) |
+| Esc | Pause (Q = save & quit to menu) |
 | F11 | Fullscreen |
 | F1 | Toggle help |
 

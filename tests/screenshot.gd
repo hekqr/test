@@ -10,6 +10,7 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		out = args[0]
+	Game.save_path = "user://shot_save.json"
 	main = load("res://scenes/main.tscn").instantiate()
 	add_child(main)
 
@@ -20,6 +21,11 @@ func _shot(name: String) -> void:
 
 func _process(_delta: float) -> void:
 	frame += 1
+	if frame > 130:
+		if frame == 140:
+			_shot("menu")
+			get_tree().quit()
+		return
 	var p: Player = main.player
 	var w: World = main.world
 	if frame == 5:
@@ -55,4 +61,6 @@ func _process(_delta: float) -> void:
 		main.time_of_day = 0.02
 	if frame == 130:
 		_shot("night")
-		get_tree().quit()
+		main.save_game()
+		main.queue_free()
+		add_child(load("res://scenes/menu.tscn").instantiate())

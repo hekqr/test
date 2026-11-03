@@ -205,7 +205,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("pause") and not p.dead:
 		get_tree().paused = not get_tree().paused
 	elif get_tree().paused and event.is_action_pressed("quit"):
-		get_tree().quit()
+		main.quit_to_menu()
+	elif p.dead and event.is_action_pressed("pause"):
+		main.quit_to_menu()
 
 
 # ---------------------------------------------------------------- drawing helpers
@@ -362,14 +364,15 @@ func _draw() -> void:
 	if get_tree().paused:
 		draw_rect(Rect2(Vector2.ZERO, vs), Color(0, 0, 0, 0.55))
 		_text(Vector2(0, vs.y * 0.45), "PAUSED", 48, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
-		_text(Vector2(0, vs.y * 0.45 + 40), "Esc resume   Q quit", 18, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		_text(Vector2(0, vs.y * 0.45 + 40), "Esc resume   Q save & quit to menu", 18, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		_text(Vector2(0, vs.y * 0.45 + 66), "The game saves automatically", 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 
 	# Death
 	if p.dead:
 		draw_rect(Rect2(Vector2.ZERO, vs), Color(0.25, 0, 0, 0.6))
 		_text(Vector2(0, vs.y * 0.42), "YOU DIED", 56, Color(1, 0.85, 0.85), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 		_text(Vector2(0, vs.y * 0.42 + 44), "Survived %d:%02d   Day %d   Kills %d" % [st / 60, st % 60, main.day, main.kills], 20, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
-		_text(Vector2(0, vs.y * 0.42 + 80), "Press R to try again", 18, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		_text(Vector2(0, vs.y * 0.42 + 80), "R  new survivor (new world)      Esc  main menu", 18, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 
 
 func _draw_inventory(p: Player, vs: Vector2) -> void:
