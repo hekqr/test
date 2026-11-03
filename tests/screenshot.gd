@@ -19,10 +19,13 @@ func _process(_delta: float) -> void:
 	var p: Player = main.player
 	if frame == 5:
 		# Stand next to a building with loot so there's something to see.
-		var l := main.world.get_children().filter(func(n): return n is LootSpot)[0] as LootSpot
+		var l := get_tree().get_nodes_in_group("loot")[0] as LootSpot
 		p.global_position = l.global_position + Vector2(10, 0)
 		main.add_zombie(p.global_position + Vector2(120, 60))
-		main.add_zombie(p.global_position + Vector2(-140, -40))
+		main.add_zombie(p.global_position + Vector2(-140, -40), true)
+		p.has_pistol = true
+		p.weapon = 1
+		p.mag = 8
 	if frame == 60:
 		get_viewport().get_texture().get_image().save_png(out + "/day.png")
 		main.time_of_day = 0.02

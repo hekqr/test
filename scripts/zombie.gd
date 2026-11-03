@@ -11,8 +11,12 @@ const THINK_INTERVAL := 0.25
 
 var world: World
 var player: Player
+var big := false
+var dead := false
 var state := State.WANDER
 var health := 70.0
+var damage_min := 8.0
+var damage_max := 14.0
 var walk_speed := randf_range(28.0, 48.0)
 var chase_speed := randf_range(100.0, 125.0)
 var facing := Vector2.RIGHT
@@ -28,7 +32,8 @@ var _attack_cd := 0.0
 var _flash_t := 0.0
 var _knock := Vector2.ZERO
 var _sees_player := false
-var _skin := Color(0.36, 0.52, 0.30)
+var _sprite: AnimatedSprite2D
+var _attack_anim_t := 0.0
 
 
 func _ready() -> void:
@@ -36,22 +41,39 @@ func _ready() -> void:
 	collision_layer = Game.LAYER_ZOMBIE
 	collision_mask = Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_ZOMBIE
 	var circle := CircleShape2D.new()
-	circle.radius = RADIUS
+	circle.radius = RADIUS + (3.0 if big else 0.0)
 	var cs := CollisionShape2D.new()
 	cs.shape = circle
 	add_child(cs)
-	_skin = _skin.lerp(Color(0.55, 0.56, 0.42), randf())
+	if big:
+		health = 180.0
+		walk_speed *= 0.8
+		chase_speed *= 0.78
+		damage_min = 18.0
+		damage_max = 26.0
+	var key := "zbig" if big else "zsmall"
+	var spec := {}
+	for d in Game.DIRS:
+		spec["idle_" + d] = [key + "_idle_" + d, 6, 6.0, true]
+		spec["walk_" + d] = [key + "_walk_" + d, 8 if big else 6, 8.0, true]
+		spec["attack_" + d] = [key + "_attack_" + d, 8 if big else 4, 14.0, false]
+	for d in ["side", "side-left"]:
+		spec["death_" + d] = [key + "_death_" + d, 7 if big else 6, 10.0, false]
+	_sprite = AnimatedSprite2D.new()
+	_sprite.sprite_frames = Game.frames(key, spec)
+	_sprite.scale = Vector2(2, 2)
+	_sprite.offset = Vector2(0, -11 if big else -7)
+	_sprite.play("idle_down")
+	_sprite.frame = randi() % 4
+	add_child(_sprite)
 	target = global_position
 	facing = Vector2.from_angle(randf() * TAU)
-	rotation = facing.angle()
 
 
 func _physics_process(delta: float) -> void:
 	_attack_cd -= delta
-	if _flash_t > 0.0:
-		_flash_t -= delta
-		if _flash_t <= 0.0:
-			queue_redraw()
+	_attack_anim_t -= delta
+	_flash_t -= delta
 	_think_t -= delta
 	if _think_t <= 0.0:
 		_think_t = THINK_INTERVAL
@@ -77,12 +99,22 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 	if move_dir != Vector2.ZERO:
 		facing = facing.lerp(move_dir, 0.15).normalized()
-		rotation = facing.angle()
 	_try_attack()
+	_animate(move_dir != Vector2.ZERO)
+
+
+func _animate(moving: bool) -> void:
+	var d := Game.dir_name(facing)
+	var anim := ("walk_" if moving else "idle_") + d
+	if _attack_anim_t > 0.0:
+		anim = "attack_" + d
+	if _sprite.animation != anim:
+		_sprite.play(anim)
+	_sprite.speed_scale = 1.6 if state == State.CHASE and anim.begins_with("walk") else 1.0
+	_sprite.modulate = Color(1, 0.45, 0.45) if _flash_t > 0.0 else Color.WHITE
 
 
 func _think() -> void:
-	queue_redraw()
 	if player == null or player.dead:
 		_sees_player = false
 		if state == State.CHASE:
@@ -146,31 +178,38 @@ func hear(pos: Vector2) -> void:
 func _try_attack() -> void:
 	if _attack_cd > 0.0 or player == null or player.dead:
 		return
-	if global_position.distance_to(player.global_position) < RADIUS + Player.RADIUS + 8.0:
-		_attack_cd = 1.1
-		player.take_damage(randf_range(8.0, 14.0))
+	if global_position.distance_to(player.global_position) < RADIUS + Player.RADIUS + (12.0 if big else 8.0):
+		_attack_cd = 1.4 if big else 1.1
+		_attack_anim_t = 0.35
+		facing = (player.global_position - global_position).normalized()
+		player.take_damage(randf_range(damage_min, damage_max))
 
 
 func take_damage(amount: float, dir: Vector2) -> void:
+	if dead:
+		return
 	health -= amount
 	_flash_t = 0.12
-	_knock = dir * 220.0
+	_knock = dir * (90.0 if big else 220.0)
 	state = State.CHASE
 	_lose_t = 5.0
-	queue_redraw()
 	if health <= 0.0:
-		died.emit(self)
-		queue_free()
+		_die(dir)
 
 
-func _draw() -> void:
-	# Drawn facing +X; node rotation turns it.
-	var c := Color(1, 1, 1) if _flash_t > 0.0 else _skin
-	draw_circle(Vector2(3, 4).rotated(-rotation), RADIUS, Color(0, 0, 0, 0.3))
-	draw_line(Vector2(2, -8), Vector2(19, -7), c.darkened(0.15), 4.0)
-	draw_line(Vector2(2, 8), Vector2(19, 7), c.darkened(0.15), 4.0)
-	draw_circle(Vector2.ZERO, RADIUS, c.darkened(0.4))
-	draw_circle(Vector2(3, 0), 7.0, c)
-	if state == State.CHASE:
-		draw_circle(Vector2(7, -3), 1.6, Color(1, 0.15, 0.1))
-		draw_circle(Vector2(7, 3), 1.6, Color(1, 0.15, 0.1))
+func _die(dir: Vector2) -> void:
+	dead = true
+	remove_from_group("zombies")
+	set_physics_process(false)
+	collision_layer = 0
+	collision_mask = 0
+	z_index = -5
+	_sprite.modulate = Color.WHITE
+	_sprite.speed_scale = 1.0
+	_sprite.play("death_side" if dir.x >= 0.0 else "death_side-left")
+	var blood := Game.make_sprite("blood_%d" % randi_range(1, 5))
+	blood.show_behind_parent = true
+	blood.position = Vector2(randf_range(-4, 4), 2)
+	add_child(blood)
+	died.emit(self)
+	get_tree().create_timer(45.0).timeout.connect(queue_free)

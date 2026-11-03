@@ -37,6 +37,9 @@ var _shot_end := Vector2.ZERO
 var _hurt_t := 0.0
 var _noise_t := 0.0
 var _light: PointLight2D
+var _sprite: AnimatedSprite2D
+var _gun: Sprite2D
+var _moving := false
 
 
 func _ready() -> void:
@@ -49,8 +52,25 @@ func _ready() -> void:
 	cs.shape = circle
 	add_child(cs)
 
+	var spec := {}
+	for d in Game.DIRS:
+		spec["idle_" + d] = ["player_idle_" + d, 6, 8.0, true]
+		spec["run_" + d] = ["player_run_" + d, 6, 12.0, true]
+		spec["punch_" + d] = ["player_punch_" + d, 4, 20.0, false]
+	for d in ["side", "side-left"]:
+		spec["death_" + d] = ["player_death_" + d, 6, 10.0, false]
+	_sprite = AnimatedSprite2D.new()
+	_sprite.sprite_frames = Game.frames("player", spec)
+	_sprite.scale = Vector2(2, 2)
+	_sprite.offset = Vector2(0, -7)
+	_sprite.play("idle_down")
+	add_child(_sprite)
+	_gun = Game.make_sprite("item_pistol")
+	_gun.visible = false
+	add_child(_gun)
+
 	var cam := Camera2D.new()
-	cam.zoom = Vector2(1.25, 1.25)
+	cam.zoom = Vector2(1.5, 1.5)
 	cam.position_smoothing_enabled = true
 	cam.position_smoothing_speed = 8.0
 	if world:
@@ -97,7 +117,30 @@ func _physics_process(delta: float) -> void:
 	_needs(delta)
 	_actions()
 	_find_loot()
+	_animate()
 	queue_redraw()
+
+
+func _animate() -> void:
+	var d := Game.dir_name(aim)
+	var anim := ("run_" if _moving else "idle_") + d
+	if _swing_t > -0.05 and weapon == 0:
+		anim = "punch_" + d
+	if _sprite.animation != anim:
+		var keep := _sprite.animation.begins_with("run") and anim.begins_with("run")
+		var f := _sprite.frame
+		_sprite.play(anim)
+		if keep:
+			_sprite.frame = f
+	_sprite.modulate = Color(1, 0.55, 0.55) if _hurt_t > 0.0 else Color.WHITE
+	# Pistol held in front of the body, pointing at the mouse.
+	_gun.visible = weapon == 1
+	if _gun.visible:
+		_gun.position = Vector2(0, -8) + aim * 9.0
+		_gun.rotation = aim.angle()
+		_gun.flip_v = aim.x < 0.0
+		_gun.z_index = -1 if d == "up" else 0
+		_gun.show_behind_parent = false
 
 
 func _timers(delta: float) -> void:
@@ -128,6 +171,7 @@ func _move(delta: float) -> void:
 		stamina = minf(stamina + (14.0 if hunger > 20.0 else 6.0) * delta, 100.0)
 	velocity = dir * speed
 	move_and_slide()
+	_moving = dir != Vector2.ZERO
 
 	var m := get_global_mouse_position() - global_position
 	if m.length() > 2.0:
@@ -160,7 +204,7 @@ func _actions() -> void:
 	if Input.is_action_just_pressed("weapon_1"):
 		weapon = 0
 		reloading = false
-		say("Knife")
+		say("Fists")
 	if Input.is_action_just_pressed("weapon_2"):
 		if has_pistol:
 			weapon = 1
@@ -186,7 +230,7 @@ func _actions() -> void:
 
 func melee() -> void:
 	_attack_cd = 0.45
-	_swing_t = 0.15
+	_swing_t = 0.2
 	stamina = maxf(stamina - 6.0, 0.0)
 	for n in get_tree().get_nodes_in_group("zombies"):
 		var z := n as Zombie
@@ -271,6 +315,9 @@ func take_damage(amount: float, can_bleed := true) -> void:
 		health = 0.0
 		dead = true
 		velocity = Vector2.ZERO
+		_gun.visible = false
+		_sprite.modulate = Color.WHITE
+		_sprite.play("death_side" if aim.x >= 0.0 else "death_side-left")
 		queue_redraw()
 		died.emit()
 
@@ -289,21 +336,14 @@ func _find_loot() -> void:
 
 
 func _draw() -> void:
+	draw_set_transform(Vector2(0, 1), 0.0, Vector2(1.0, 0.45))
+	draw_circle(Vector2.ZERO, RADIUS, Color(0, 0, 0, 0.35))
+	draw_set_transform(Vector2.ZERO)
 	if dead:
-		draw_circle(Vector2.ZERO, RADIUS + 4.0, Color(0.35, 0.05, 0.05, 0.8))
-		draw_circle(Vector2.ZERO, RADIUS, Color(0.2, 0.3, 0.45))
 		return
-	var side := aim.orthogonal()
-	draw_circle(Vector2(3, 4), RADIUS, Color(0, 0, 0, 0.3))
-	if weapon == 1:
-		draw_line(aim * 6.0, aim * 25.0, Color(0.12, 0.12, 0.12), 5.0)
-	else:
-		draw_line(aim * 6.0 + side * 8.0, aim * 21.0 + side * 8.0, Color(0.78, 0.78, 0.82), 3.0)
-	var body := Color(1, 0.45, 0.45) if _hurt_t > 0.0 else Color(0.25, 0.42, 0.68)
-	draw_circle(Vector2.ZERO, RADIUS, body)
-	draw_circle(aim * 3.0, 6.5, Color(0.86, 0.71, 0.56))
 	if _swing_t > 0.0:
-		draw_arc(Vector2.ZERO, 40.0, aim.angle() - 1.1, aim.angle() + 1.1, 14, Color(1, 1, 1, 0.55), 3.0)
+		draw_arc(Vector2(0, -8), 34.0, aim.angle() - 1.0, aim.angle() + 1.0, 12, Color(1, 1, 1, 0.45), 2.0)
 	if _shot_t > 0.0:
-		draw_line(aim * (RADIUS + 14.0), to_local(_shot_end), Color(1, 0.9, 0.5, 0.9), 2.0)
-		draw_circle(aim * 27.0, 5.0, Color(1, 0.85, 0.4))
+		var muzzle := Vector2(0, -8) + aim * 20.0
+		draw_line(muzzle, to_local(_shot_end), Color(1, 0.9, 0.5, 0.9), 2.0)
+		draw_circle(muzzle, 4.0, Color(1, 0.85, 0.4))

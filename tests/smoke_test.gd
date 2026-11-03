@@ -36,7 +36,7 @@ func _physics_process(_delta: float) -> void:
 			print("World / spawn")
 			check(w.buildings.size() > 20, "buildings generated (%d)" % w.buildings.size())
 			check(w.loot_cells.size() > 30, "loot spots generated (%d)" % w.loot_cells.size())
-			check(main.zombies.get_child_count() >= 50, "zombies spawned (%d)" % main.zombies.get_child_count())
+			check(get_tree().get_nodes_in_group("zombies").size() >= 50, "zombies spawned (%d)" % get_tree().get_nodes_in_group("zombies").size())
 			check(w.is_walkable(w.cell_of(p.global_position)), "player spawns on walkable tile")
 			var far := w.find_path(p.global_position, w.center_of(w.loot_cells[0]))
 			check(far.size() > 1, "pathfinding to a building works")
@@ -49,7 +49,7 @@ func _physics_process(_delta: float) -> void:
 			Input.action_release("move_down")
 			check(p.global_position.distance_to(pos_before) > 20.0, "player moves with input")
 			print("Loot")
-			var l := w.get_children().filter(func(n): return n is LootSpot)[0] as LootSpot
+			var l := get_tree().get_nodes_in_group("loot")[0] as LootSpot
 			p.global_position = l.global_position + Vector2(5, 0)
 		62:
 			check(p.nearest_loot != null, "loot detected nearby")
@@ -73,7 +73,7 @@ func _physics_process(_delta: float) -> void:
 			p.aim = (z_test.global_position - p.global_position).normalized()
 			hp_before = z_test.health
 			p.melee()
-			check(z_test.health < hp_before, "knife damages zombie")
+			check(z_test.health < hp_before, "melee damages zombie")
 			print("Zombie attacks")
 			hp_before = p.health
 		150:
@@ -110,6 +110,9 @@ func _physics_process(_delta: float) -> void:
 			print("Death")
 			p.take_damage(999.0)
 			check(p.dead, "player dies")
+			var zk: Zombie = main.add_zombie(p.global_position + Vector2(0, 300), true)
+			zk.take_damage(999.0, Vector2.RIGHT)
+			check(zk.dead and not zk.is_in_group("zombies") and main.kills >= 1, "zombie dies and leaves a corpse")
 		255:
 			if failures.is_empty():
 				print("SMOKE TEST PASSED")

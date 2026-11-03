@@ -47,3 +47,56 @@ func _key(action: String, keys: Array) -> void:
 
 func make_noise(pos: Vector2, radius: float) -> void:
 	noise_made.emit(pos, radius)
+
+
+# ---------------------------------------------------------------- art helpers
+
+const ART := "res://assets/thirdparty/"
+const DIRS := ["down", "up", "side", "side-left"]
+
+var _tex_cache := {}
+var _frames_cache := {}
+
+
+func tex(name: String) -> Texture2D:
+	if not _tex_cache.has(name):
+		_tex_cache[name] = load(ART + name + ".png")
+	return _tex_cache[name]
+
+
+## Builds SpriteFrames from horizontal sprite sheets.
+## spec: { anim_name: [file_name, frame_count, fps, loop] }
+func frames(key: String, spec: Dictionary) -> SpriteFrames:
+	if _frames_cache.has(key):
+		return _frames_cache[key]
+	var sf := SpriteFrames.new()
+	sf.remove_animation("default")
+	for anim in spec:
+		var s: Array = spec[anim]
+		var t := tex(s[0])
+		var n: int = s[1]
+		var w := t.get_width() / n
+		sf.add_animation(anim)
+		sf.set_animation_speed(anim, s[2])
+		sf.set_animation_loop(anim, s[3])
+		for i in n:
+			var at := AtlasTexture.new()
+			at.atlas = t
+			at.region = Rect2(i * w, 0, w, t.get_height())
+			sf.add_frame(anim, at)
+	_frames_cache[key] = sf
+	return sf
+
+
+## Picks one of the 4 sprite directions for a facing vector.
+func dir_name(v: Vector2) -> String:
+	if absf(v.x) >= absf(v.y) * 0.8:
+		return "side" if v.x >= 0.0 else "side-left"
+	return "down" if v.y >= 0.0 else "up"
+
+
+func make_sprite(name: String, scale_px := 2.0) -> Sprite2D:
+	var s := Sprite2D.new()
+	s.texture = tex(name)
+	s.scale = Vector2(scale_px, scale_px)
+	return s

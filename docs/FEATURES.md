@@ -15,9 +15,17 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ HUD, help, pause, death screen + restart
 - ✅ Windows .exe build, automated smoke test
 
+## Milestone 1.5 — Pixel art pass ✅
+- ✅ Pixel-art tiles: grass, asphalt roads, wooden floors, brick walls
+- ✅ Animated player (idle / run / punch / death, 4 directions)
+- ✅ Animated zombies (walk / attack / death) + **big zombie** variant (slow, tanky, hits hard)
+- ✅ Trees, bushes, blood stains, corpses that stay for a while
+- ✅ Item icons in HUD, container sprites
+- ✅ Deep-colour grading + vignette shader
+
 ## Milestone 2 — Core survival loop 🔜
 - 🔜 Real inventory screen (grid, weight/slots, drop/equip items)
-- 🔜 More weapons: bat, axe, shotgun, rifle; weapon durability
+- 🔜 More weapons: bat, axe, shotgun, rifle; weapon durability (bat & shotgun sprites already in the art packs)
 - 🔜 Item variety: canned food, soda, medkit, painkillers, backpacks
 - 🔜 Vision cone / fog of war (can't see behind walls or inside buildings)
 - 🔜 Building interiors: furniture, doors that open/close
@@ -41,5 +49,5 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 ## Open questions (decide these)
 1. **Multiplayer?** Co-op or PvP changes a lot of the code — best decided early.
 2. **Permadeath** (one life, new map) or **persistent world** with saves?
-3. **Art style:** pixel art, simple shapes, or hand-drawn?
-4. **Real name** for the game.
+3. **Real name** for the game.
+4. **Commercial release?** Current art packs are non-commercial only — buy licenses or replace art before selling.

@@ -8,6 +8,7 @@ const DAY_LENGTH := 480.0 # seconds for a full day/night cycle
 var world: World
 var player: Player
 var zombies: Node2D
+var entities: Node2D
 var hud: Hud
 var night_tint: CanvasModulate
 var time_of_day := 0.3 # 0 = midnight, 0.5 = noon
@@ -21,20 +22,25 @@ func _ready() -> void:
 	randomize()
 	world = World.new()
 	add_child(world)
-	world.generate(randi())
+	entities = Node2D.new()
+	entities.name = "Entities"
+	entities.y_sort_enabled = true
+	add_child(entities)
+	world.generate(randi(), entities)
 	for c in world.loot_cells:
 		var l := LootSpot.new()
 		l.position = world.center_of(c)
-		world.add_child(l)
+		entities.add_child(l)
 
 	zombies = Node2D.new()
 	zombies.name = "Zombies"
-	add_child(zombies)
+	zombies.y_sort_enabled = true
+	entities.add_child(zombies)
 
 	player = Player.new()
 	player.world = world
 	player.position = world.center_of(world.spawn_cell)
-	add_child(player)
+	entities.add_child(player)
 	player.died.connect(_on_player_died)
 
 	for i in MAX_ZOMBIES_DAY:
@@ -43,7 +49,19 @@ func _ready() -> void:
 	night_tint = CanvasModulate.new()
 	add_child(night_tint)
 
+	var grade_layer := CanvasLayer.new()
+	grade_layer.layer = 1
+	add_child(grade_layer)
+	var grade := ColorRect.new()
+	grade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	grade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/color_grade.gdshader")
+	grade.material = mat
+	grade_layer.add_child(grade)
+
 	var layer := CanvasLayer.new()
+	layer.layer = 2
 	layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(layer)
 	hud = Hud.new()
@@ -71,7 +89,7 @@ func _process(delta: float) -> void:
 	if _spawn_t <= 0.0:
 		_spawn_t = 3.0
 		var cap := int(lerpf(MAX_ZOMBIES_DAY, MAX_ZOMBIES_NIGHT, 1.0 - light))
-		if zombies.get_child_count() < cap:
+		if get_tree().get_nodes_in_group("zombies").size() < cap:
 			spawn_zombie(900.0)
 
 
@@ -93,12 +111,13 @@ func spawn_zombie(min_dist: float) -> Zombie:
 		var p := world.center_of(c)
 		if p.distance_to(player.position) < min_dist:
 			continue
-		return add_zombie(p)
+		return add_zombie(p, randf() < 0.12)
 	return null
 
 
-func add_zombie(p: Vector2) -> Zombie:
+func add_zombie(p: Vector2, big := false) -> Zombie:
 	var z := Zombie.new()
+	z.big = big
 	z.world = world
 	z.player = player
 	z.position = p
@@ -108,7 +127,7 @@ func add_zombie(p: Vector2) -> Zombie:
 
 
 func _on_noise(pos: Vector2, radius: float) -> void:
-	for n in zombies.get_children():
+	for n in get_tree().get_nodes_in_group("zombies"):
 		var z := n as Zombie
 		if z.position.distance_to(pos) <= radius:
 			z.hear(pos)

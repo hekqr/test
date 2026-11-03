@@ -15,7 +15,17 @@ var buildings: Array[Rect2i] = []
 var loot_cells: Array[Vector2i] = []
 var tree_cells: Array[Vector2i] = []
 var spawn_cell := Vector2i(W / 2, H / 2)
-var _ground_tex: ImageTexture
+var road_v: Array[int] = [] # x of vertical roads (3 wide)
+var road_h: Array[int] = [] # y of horizontal roads (3 wide)
+
+# Atlas coords in tiles_ground.png / tiles_building.png (16x16 tiles)
+const GRASS_TILES := [Vector2i(0, 0), Vector2i(2, 0), Vector2i(5, 0), Vector2i(14, 0), Vector2i(16, 0),
+	Vector2i(0, 2), Vector2i(2, 2), Vector2i(14, 2), Vector2i(16, 2)]
+const GRASS_DECOR_TILES := [Vector2i(3, 1), Vector2i(3, 2), Vector2i(4, 2), Vector2i(4, 1), Vector2i(5, 1)]
+const FLOOR_TILES := [Vector2i(3, 11), Vector2i(4, 11), Vector2i(5, 11)]
+const WALL_H_TILES := [Vector2i(7, 4), Vector2i(7, 4), Vector2i(6, 1), Vector2i(8, 4)]
+const WALL_V_TILES := [Vector2i(1, 2), Vector2i(1, 3)]
+const TREES := ["tree_1", "tree_2", "tree_3", "tree_4", "tree_5", "tree_6", "tree_7", "tree_8", "tree_9"]
 
 
 func idx(c: Vector2i) -> int:
@@ -54,7 +64,7 @@ func size_px() -> Vector2:
 	return Vector2(W * T, H * T)
 
 
-func generate(seed_value: int) -> void:
+func generate(seed_value: int, entities: Node2D) -> void:
 	rng.seed = seed_value
 	tiles.resize(W * H)
 	tiles.fill(GROUND)
@@ -65,9 +75,9 @@ func generate(seed_value: int) -> void:
 	_find_spawn()
 	_build_collision()
 	_build_astar()
-	_build_texture()
-	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	queue_redraw()
+	_build_tilemaps()
+	_place_trees(entities)
+	_scatter_decor()
 
 
 # ---------------------------------------------------------------- generation
@@ -75,10 +85,12 @@ func generate(seed_value: int) -> void:
 func _make_roads() -> void:
 	var x := rng.randi_range(10, 25)
 	while x < W - 8:
+		road_v.append(x)
 		_road_line(true, x)
 		x += rng.randi_range(28, 42)
 	var y := rng.randi_range(10, 25)
 	while y < H - 8:
+		road_h.append(y)
 		_road_line(false, y)
 		y += rng.randi_range(28, 42)
 
@@ -231,11 +243,11 @@ func _build_collision() -> void:
 	trees.collision_mask = 0
 	add_child(trees)
 	var circle := CircleShape2D.new()
-	circle.radius = 12.0
+	circle.radius = 10.0
 	for c in tree_cells:
 		var cs := CollisionShape2D.new()
 		cs.shape = circle
-		cs.position = center_of(c)
+		cs.position = center_of(c) + Vector2(0, 6)
 		trees.add_child(cs)
 
 
@@ -252,32 +264,146 @@ func _build_astar() -> void:
 				astar.set_point_solid(c, true)
 
 
-func _build_texture() -> void:
-	var img := Image.create_empty(W, H, false, Image.FORMAT_RGB8)
+func _build_tilemaps() -> void:
+	var ts := TileSet.new()
+	ts.tile_size = Vector2i(16, 16)
+	var ground_src := _atlas(Game.tex("tiles_ground"), GRASS_TILES + GRASS_DECOR_TILES + FLOOR_TILES)
+	var ground_id := ts.add_source(ground_src)
+	var wall_src := _atlas(Game.tex("tiles_building"), WALL_H_TILES + WALL_V_TILES)
+	var wall_id := ts.add_source(wall_src)
+	var road_src := _atlas(_make_asphalt(), [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)])
+	var road_id := ts.add_source(road_src)
+
+	var ground := TileMapLayer.new()
+	ground.tile_set = ts
+	ground.scale = Vector2(2, 2)
+	ground.z_index = -10
+	add_child(ground)
+	var walls := TileMapLayer.new()
+	walls.tile_set = ts
+	walls.scale = Vector2(2, 2)
+	walls.z_index = -9
+	add_child(walls)
+
 	for y in H:
 		for x in W:
-			var col: Color
+			var c := Vector2i(x, y)
 			match tiles[y * W + x]:
 				ROAD:
-					col = Color(0.27, 0.27, 0.29)
+					ground.set_cell(c, road_id, _road_tile(c))
 				FLOOR:
-					col = Color(0.46, 0.37, 0.27)
+					ground.set_cell(c, ground_id, FLOOR_TILES[rng.randi() % FLOOR_TILES.size()])
 				WALL:
-					col = Color(0.58, 0.55, 0.50)
+					ground.set_cell(c, ground_id, FLOOR_TILES[0])
+					var vertical := get_tile(c + Vector2i(0, -1)) == WALL and get_tile(c + Vector2i(0, 1)) == WALL \
+						and get_tile(c + Vector2i(-1, 0)) != WALL and get_tile(c + Vector2i(1, 0)) != WALL
+					var arr: Array = WALL_V_TILES if vertical else WALL_H_TILES
+					walls.set_cell(c, wall_id, arr[rng.randi() % arr.size()])
 				_:
-					col = Color(0.29, 0.40, 0.21)
-			var v := rng.randf_range(-0.025, 0.025)
-			img.set_pixel(x, y, Color(col.r + v, col.g + v, col.b + v))
-	_ground_tex = ImageTexture.create_from_image(img)
+					var g: Array = GRASS_DECOR_TILES if rng.randf() < 0.06 else GRASS_TILES
+					ground.set_cell(c, ground_id, g[rng.randi() % g.size()])
+	# dark outline around walls
+	var outline := Line2DOutline.new()
+	outline.world = self
+	outline.z_index = -8
+	add_child(outline)
 
 
-func _draw() -> void:
-	draw_texture_rect(_ground_tex, Rect2(Vector2.ZERO, size_px()), false)
+func _atlas(t: Texture2D, coords: Array) -> TileSetAtlasSource:
+	var src := TileSetAtlasSource.new()
+	src.texture = t
+	src.texture_region_size = Vector2i(16, 16)
+	for c in coords:
+		if not src.has_tile(c):
+			src.create_tile(c)
+	return src
+
+
+func _road_tile(c: Vector2i) -> Vector2i:
+	var on_v := false
+	var on_h := false
+	for rx in road_v:
+		if c.x >= rx and c.x < rx + 3:
+			on_v = true
+			if c.x == rx + 1 and not _in_h_road(c.y) and c.y % 3 != 0:
+				return Vector2i(3, 0)
+	for ry in road_h:
+		if c.y >= ry and c.y < ry + 3:
+			on_h = true
+			if c.y == ry + 1 and not on_v and c.x % 3 != 0:
+				return Vector2i(2, 0)
+	return Vector2i(rng.randi() % 2, 0)
+
+
+func _in_h_road(y: int) -> bool:
+	for ry in road_h:
+		if y >= ry and y < ry + 3:
+			return true
+	return false
+
+
+## Seamless asphalt tiles generated from the ground tileset's asphalt colours.
+## Tiles: 0,1 plain; 2 horizontal centre dash; 3 vertical centre dash.
+func _make_asphalt() -> Texture2D:
+	var src := Game.tex("tiles_ground").get_image()
+	var palette: Array[Color] = []
+	for y in range(8 * 16 + 2, 8 * 16 + 14):
+		for x in range(5 * 16 + 2, 5 * 16 + 12):
+			var col := src.get_pixel(x, y)
+			if col.a > 0.9 and col.get_luminance() < 0.5:
+				palette.append(col)
+	if palette.is_empty():
+		palette.append(Color(0.35, 0.33, 0.4))
+	var img := Image.create_empty(64, 16, false, Image.FORMAT_RGBA8)
+	for t in 4:
+		for y in 16:
+			var streak := palette[rng.randi() % palette.size()]
+			for x in 16:
+				var col := streak if rng.randf() < 0.35 else palette[rng.randi() % palette.size()]
+				img.set_pixel(t * 16 + x, y, col)
+	var paint := Color(0.78, 0.76, 0.70)
+	for i in range(3, 13):
+		img.set_pixel(2 * 16 + i, 7, paint)
+		img.set_pixel(2 * 16 + i, 8, paint)
+		img.set_pixel(3 * 16 + 7, i, paint)
+		img.set_pixel(3 * 16 + 8, i, paint)
+	return ImageTexture.create_from_image(img)
+
+
+func _place_trees(entities: Node2D) -> void:
+	var holder := Node2D.new()
+	holder.name = "Trees"
+	holder.y_sort_enabled = true
+	entities.add_child(holder)
 	for c in tree_cells:
-		var p := center_of(c)
-		draw_circle(p + Vector2(4, 5), 16.0, Color(0, 0, 0, 0.25))
-		draw_circle(p, 16.0, Color(0.12, 0.28, 0.13))
-		draw_circle(p + Vector2(-4, -4), 9.0, Color(0.17, 0.36, 0.17))
+		var s := Game.make_sprite(TREES[rng.randi() % TREES.size()])
+		s.centered = false
+		var sz := s.texture.get_size()
+		s.offset = Vector2(-floorf(sz.x / 2.0), -sz.y + 2.0)
+		s.position = center_of(c) + Vector2(0, 10)
+		s.flip_h = rng.randf() < 0.5
+		holder.add_child(s)
+
+
+func _scatter_decor() -> void:
+	var decor := Node2D.new()
+	decor.z_index = -7
+	add_child(decor)
+	for i in 900:
+		var c := Vector2i(rng.randi_range(1, W - 2), rng.randi_range(1, H - 2))
+		var t := get_tile(c)
+		var s: Sprite2D
+		if t == GROUND and not _near_type(c, WALL, 1):
+			var bush := rng.randf() < 0.25
+			s = Game.make_sprite(("bush_%d" % rng.randi_range(1, 2)) if bush else ("grass_%d" % rng.randi_range(1, 5)))
+		elif (t == ROAD or t == FLOOR) and rng.randf() < 0.25:
+			s = Game.make_sprite("blood_%d" % rng.randi_range(1, 5))
+			s.modulate.a = 0.7
+		else:
+			continue
+		s.position = center_of(c) + Vector2(rng.randf_range(-8, 8), rng.randf_range(-8, 8))
+		s.flip_h = rng.randf() < 0.5
+		decor.add_child(s)
 
 
 # ---------------------------------------------------------------- queries

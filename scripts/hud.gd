@@ -68,13 +68,22 @@ func _draw() -> void:
 	# Weapon + inventory
 	var inv: Dictionary = p.inventory
 	var wx := vs.x - 290.0
-	var wname := "Pistol  %d / %d" % [p.mag, inv["ammo"]] if p.weapon == 1 else "Knife"
+	var wname := "Pistol  %d / %d" % [p.mag, inv["ammo"]] if p.weapon == 1 else "Fists"
 	if p.reloading:
 		wname += "  (reloading)"
-	_text(Vector2(wx, vs.y - 86), wname, 20)
-	_text(Vector2(wx, vs.y - 60), "Food %d [F]   Water %d [G]" % [inv["food"], inv["water"]], 15)
-	_text(Vector2(wx, vs.y - 38), "Bandages %d [H]   Ammo %d" % [inv["bandage"], inv["ammo"]], 15)
-	_text(Vector2(wx, vs.y - 16), "[1] Knife   [2] Pistol%s" % ("" if p.has_pistol else " (not found)"), 13, Color(0.8, 0.8, 0.8))
+	_text(Vector2(wx, vs.y - 84), wname, 20)
+	var items := [["item_food", "food", "F"], ["item_water", "water", "G"], ["item_bandage", "bandage", "H"], ["item_ammo", "ammo", ""]]
+	for i in items.size():
+		var it: Array = items[i]
+		var ix := wx + i * 66.0
+		var t := Game.tex(it[0])
+		var sz := t.get_size() * 3.0
+		draw_rect(Rect2(ix, vs.y - 74, 56, 40), Color(0, 0, 0, 0.45))
+		draw_texture_rect(t, Rect2(Vector2(ix + 14 - sz.x / 2.0, vs.y - 54 - sz.y / 2.0), sz), false)
+		_text(Vector2(ix + 30, vs.y - 46), str(inv[it[1]]), 16)
+		if it[2] != "":
+			_text(Vector2(ix + 3, vs.y - 62), it[2], 10, Color(0.8, 0.8, 0.8))
+	_text(Vector2(wx, vs.y - 16), "[1] Fists   [2] Pistol%s" % ("" if p.has_pistol else " (not found)"), 13, Color(0.8, 0.8, 0.8))
 
 	# Clock / stats
 	var st := int(main.survived)

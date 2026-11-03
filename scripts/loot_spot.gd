@@ -2,15 +2,19 @@ class_name LootSpot
 extends Node2D
 ## A searchable container (cabinet / fridge / crate) inside buildings.
 
-const COLORS := [Color(0.52, 0.36, 0.20), Color(0.75, 0.78, 0.80), Color(0.40, 0.32, 0.22)]
+const KINDS := ["loot_box_1", "loot_box_2", "loot_trash_1", "loot_trash_2"]
 
 var looted := false
 var kind := 0
+var _sprite: Sprite2D
 
 
 func _ready() -> void:
 	add_to_group("loot")
-	kind = randi() % COLORS.size()
+	kind = randi() % KINDS.size()
+	_sprite = Game.make_sprite(KINDS[kind])
+	_sprite.offset = Vector2(0, -_sprite.texture.get_height() / 2.0 + 3.0)
+	add_child(_sprite)
 
 
 func search(p: Player) -> String:
@@ -46,11 +50,18 @@ func search(p: Player) -> String:
 
 
 func _draw() -> void:
-	var c: Color = COLORS[kind]
-	if looted:
-		c = c.darkened(0.55)
-	draw_rect(Rect2(-11, -8, 22, 16), Color(0, 0, 0, 0.35))
-	draw_rect(Rect2(-10, -9, 20, 16), c)
-	draw_rect(Rect2(-10, -9, 20, 16), c.darkened(0.4), false, 1.5)
+	draw_set_transform(Vector2(0, 5), 0.0, Vector2(1.0, 0.4))
+	draw_circle(Vector2.ZERO, 12.0, Color(0, 0, 0, 0.35))
+	draw_set_transform(Vector2.ZERO)
+	if _sprite:
+		_sprite.modulate = Color(0.45, 0.42, 0.45) if looted else Color.WHITE
 	if not looted:
-		draw_circle(Vector2(0, -1), 2.0, Color(1, 0.9, 0.4))
+		# small glint so searchable containers stand out
+		var t := Time.get_ticks_msec() / 400.0 + position.x
+		if fmod(t, 6.0) < 0.6:
+			draw_circle(Vector2(6, -16), 2.0, Color(1, 0.95, 0.6, 0.9))
+
+
+func _process(_delta: float) -> void:
+	if not looted:
+		queue_redraw()
