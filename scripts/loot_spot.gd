@@ -35,6 +35,12 @@ func search(p: Player) -> String:
 	for it in contents:
 		var before: int = it["count"]
 		var rest := p.inv.add_stack(it)
+		if rest > 0 and p.inv.hands == null:
+			# Doesn't fit in pockets: take it in hands if they're free.
+			var h: Dictionary = it.duplicate()
+			h["count"] = rest
+			p.inv.hands = h
+			rest = 0
 		var took := before - rest
 		if took > 0:
 			found.append(Items.name_of(it["id"]) + ("" if took == 1 else " x%d" % took))
@@ -51,7 +57,7 @@ func search(p: Player) -> String:
 	queue_redraw()
 	var msg := "Nothing useful here" if not had_items else ("Found: " + ", ".join(found) if not found.is_empty() else "")
 	if not left.is_empty():
-		msg = (msg + "  -  " if msg != "" else "") + "Inventory full!"
+		msg = (msg + "  -  " if msg != "" else "") + "No room in pockets!"
 	return msg
 
 

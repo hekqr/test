@@ -1,20 +1,22 @@
 class_name Items
 ## Item and weapon definitions.
 
+## size  = pocket space the item (or one stack of it) takes
+## stack = max per stack; 1 = not stackable. Stackable items merge automatically when picked up.
 const DEFS := {
-	"food": {"name": "Canned food", "icon": "icon_food", "stack": 5, "kind": "consumable"},
-	"water": {"name": "Water bottle", "icon": "item_water", "stack": 5, "kind": "consumable"},
-	"bandage": {"name": "Bandage", "icon": "icon_bandage", "stack": 5, "kind": "consumable"},
-	"ammo_pistol": {"name": "Pistol ammo", "icon": "icon_ammo_pistol", "stack": 40, "kind": "ammo"},
-	"ammo_shotgun": {"name": "Shotgun shells", "icon": "icon_ammo_shotgun", "stack": 20, "kind": "ammo"},
-	"bat": {"name": "Baseball bat", "icon": "icon_bat", "stack": 1, "kind": "weapon"},
-	"pistol": {"name": "Pistol", "icon": "icon_pistol", "stack": 1, "kind": "weapon"},
-	"shotgun": {"name": "Shotgun", "icon": "icon_shotgun", "stack": 1, "kind": "weapon"},
+	"food": {"name": "Canned food", "icon": "icon_food", "size": 1, "stack": 1, "kind": "consumable"},
+	"water": {"name": "Water bottle", "icon": "item_water", "size": 1, "stack": 1, "kind": "consumable"},
+	"bandage": {"name": "Bandage", "icon": "icon_bandage", "size": 1, "stack": 1, "kind": "consumable"},
+	"ammo_pistol": {"name": "Pistol ammo", "icon": "icon_ammo_pistol", "size": 1, "stack": 30, "kind": "ammo"},
+	"ammo_shotgun": {"name": "Shotgun shells", "icon": "icon_ammo_shotgun", "size": 1, "stack": 12, "kind": "ammo"},
+	"pistol": {"name": "Pistol", "icon": "icon_pistol", "size": 3, "stack": 1, "kind": "weapon"},
+	"bat": {"name": "Baseball bat", "icon": "icon_bat", "size": 5, "stack": 1, "kind": "weapon"},
+	"shotgun": {"name": "Shotgun", "icon": "icon_shotgun", "size": 6, "stack": 1, "kind": "weapon"},
 }
 
 const WEAPONS := {
-	"fists": {"name": "Fists", "melee": true, "damage": 18.0, "range": 40.0, "cooldown": 0.4, "noise": 90.0, "held": ""},
-	"bat": {"name": "Baseball bat", "melee": true, "damage": 42.0, "range": 56.0, "cooldown": 0.6, "noise": 140.0, "held": "item_bat"},
+	"fists": {"name": "Fists", "melee": true, "damage": 18.0, "range": 34.0, "cooldown": 0.55, "noise": 90.0, "held": ""},
+	"bat": {"name": "Baseball bat", "melee": true, "damage": 42.0, "range": 48.0, "cooldown": 0.75, "noise": 140.0, "held": "item_bat"},
 	"pistol": {"name": "Pistol", "melee": false, "damage": 45.0, "mag": 8, "ammo": "ammo_pistol",
 		"cooldown": 0.32, "reload": 1.4, "pellets": 1, "spread": 0.03, "range": 750.0, "noise": 750.0,
 		"held": "item_pistol", "bullet_ui": "ui_bullet_pistol"},
@@ -41,6 +43,14 @@ static func icon(id: String) -> Texture2D:
 
 static func is_weapon(id: String) -> bool:
 	return DEFS[id]["kind"] == "weapon"
+
+
+static func size_of(id: String) -> int:
+	return DEFS[id]["size"]
+
+
+static func max_stack(id: String) -> int:
+	return DEFS[id]["stack"]
 
 
 ## Returns a new item stack, e.g. {"id": "pistol", "count": 1, "mag": 3}

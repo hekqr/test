@@ -16,8 +16,8 @@ var thirst := 100.0
 var bleeding := false
 var dead := false
 var inv := Inventory.new()
-var equipped: Dictionary = {} # an inventory slot dict, or {} for fists
-var aim := Vector2.RIGHT
+var aim := Vector2.RIGHT # mouse aim (guns)
+var facing := Vector2.RIGHT # where the body looks (aim, or the melee target)
 var nearest_loot: LootSpot = null
 var message := ""
 var message_t := 0.0
@@ -36,6 +36,7 @@ var _light: PointLight2D
 var _sprite: AnimatedSprite2D
 var _held: Sprite2D
 var _moving := false
+var _melee_dir := Vector2.RIGHT
 
 
 func _ready() -> void:
@@ -111,37 +112,44 @@ func set_night(n: float) -> void:
 
 # ---------------------------------------------------------------- weapons
 
+## Weapon in hands, or "fists" if the hands are empty / holding a non-weapon.
 func weapon_id() -> String:
-	return "fists" if equipped.is_empty() else String(equipped["id"])
+	if inv.hands != null and Items.is_weapon(inv.hands["id"]):
+		return inv.hands["id"]
+	return "fists"
 
 
 func weapon() -> Dictionary:
 	return Items.WEAPONS[weapon_id()]
 
 
-func equip(item: Dictionary) -> void:
+func gun() -> Dictionary:
+	return inv.hands if not weapon()["melee"] else {}
+
+
+## Inventory: put pocket item i into the hands.
+func hold_pocket(i: int) -> void:
 	reloading = false
-	if item.is_empty() or is_same(item, equipped):
-		equipped = {}
-		say("Fists")
-	else:
-		equipped = item
-		say(Items.name_of(item["id"]))
+	var err := inv.to_hands(i)
+	say(err if err != "" else "Holding " + Items.name_of(inv.hands["id"]).to_lower())
 
 
-## Hotbar key / right-click in inventory.
-func use_slot(i: int) -> void:
-	var s = inv.slots[i]
-	if s == null:
-		if i < Inventory.HOTBAR:
-			equip({})
+## Inventory: put the hands item away.
+func holster() -> void:
+	if inv.hands == null:
 		return
-	if Items.is_weapon(s["id"]):
-		equip(s)
-	elif Items.DEFS[s["id"]]["kind"] == "consumable":
+	reloading = false
+	var err := inv.holster()
+	say(err if err != "" else "Hands empty")
+
+
+## Right-click a pocket item: consumables are used, anything else goes into the hands.
+func use_pocket(i: int) -> void:
+	var s: Dictionary = inv.pockets[i]
+	if Items.DEFS[s["id"]]["kind"] == "consumable":
 		use_item(s["id"])
 	else:
-		say(Items.name_of(s["id"]))
+		hold_pocket(i)
 
 
 # ---------------------------------------------------------------- loop
@@ -149,9 +157,6 @@ func use_slot(i: int) -> void:
 func _physics_process(delta: float) -> void:
 	if dead:
 		return
-	if not equipped.is_empty() and not inv.contains(equipped):
-		equipped = {}
-		reloading = false
 	_timers(delta)
 	_move(delta)
 	_needs(delta)
@@ -175,9 +180,10 @@ func _timers(delta: float) -> void:
 			reloading = false
 			var w := weapon()
 			if not w["melee"]:
-				var need := int(w["mag"]) - int(equipped["mag"])
+				var g := gun()
+				var need := int(w["mag"]) - int(g["mag"])
 				var got := inv.remove(w["ammo"], need)
-				equipped["mag"] += got
+				g["mag"] += got
 				say("Reloaded")
 
 
@@ -222,13 +228,18 @@ func _needs(delta: float) -> void:
 
 
 func _actions() -> void:
-	for i in Inventory.HOTBAR:
-		if Input.is_action_just_pressed("slot_%d" % (i + 1)):
-			use_slot(i)
 	if Input.is_action_just_pressed("reload"):
 		start_reload()
-	if Input.is_action_pressed("attack") and _attack_cd <= 0.0 and not reloading:
-		attack()
+	if Input.is_action_just_pressed("holster"):
+		holster()
+	var w := weapon()
+	if w["melee"]:
+		_auto_melee()
+		# Left click with food / water / bandage in hands uses it.
+		if Input.is_action_just_pressed("attack") and inv.hands != null and Items.DEFS[inv.hands["id"]]["kind"] == "consumable":
+			use_item(inv.hands["id"])
+	elif Input.is_action_pressed("attack") and _attack_cd <= 0.0 and not reloading:
+		shoot()
 	if Input.is_action_just_pressed("interact") and nearest_loot:
 		say(nearest_loot.search(self))
 	if Input.is_action_just_pressed("eat"):
@@ -239,36 +250,48 @@ func _actions() -> void:
 		use_item("bandage")
 
 
-func attack() -> void:
-	if weapon()["melee"]:
-		melee()
-	else:
-		shoot()
+## Melee fights for you: swing at the nearest zombie in reach.
+func _auto_melee() -> void:
+	if _attack_cd > 0.0:
+		return
+	var reach: float = weapon()["range"] + Zombie.RADIUS + 4.0
+	var best: Zombie = null
+	var best_d := reach
+	for n in get_tree().get_nodes_in_group("zombies"):
+		var z := n as Zombie
+		var d := z.global_position.distance_to(global_position)
+		if d < best_d and world.has_los(global_position, z.global_position):
+			best_d = d
+			best = z
+	if best:
+		melee((best.global_position - global_position).normalized())
 
 
-func melee() -> void:
+func melee(dir: Vector2) -> void:
 	var w := weapon()
 	_attack_cd = w["cooldown"]
 	_swing_t = 0.22
+	_melee_dir = dir
 	var reach: float = w["range"]
 	for n in get_tree().get_nodes_in_group("zombies"):
 		var z := n as Zombie
 		var d := z.global_position - global_position
-		if d.length() <= reach + Zombie.RADIUS and absf(aim.angle_to(d)) < deg_to_rad(65.0):
+		if d.length() <= reach + Zombie.RADIUS + 4.0 and absf(dir.angle_to(d)) < deg_to_rad(65.0):
 			z.take_damage(w["damage"], d.normalized())
 	Game.make_noise(global_position, w["noise"])
 
 
 func shoot() -> void:
 	var w := weapon()
-	if int(equipped["mag"]) <= 0:
+	var g := gun()
+	if int(g["mag"]) <= 0:
 		_attack_cd = 0.3
 		if inv.count_of(w["ammo"]) > 0:
 			start_reload()
 		else:
 			say("Out of ammo")
 		return
-	equipped["mag"] -= 1
+	g["mag"] -= 1
 	_attack_cd = w["cooldown"]
 	_shots.clear()
 	var space := get_world_2d().direct_space_state
@@ -292,7 +315,7 @@ func shoot() -> void:
 
 func start_reload() -> void:
 	var w := weapon()
-	if w["melee"] or reloading or int(equipped["mag"]) >= int(w["mag"]):
+	if w["melee"] or reloading or int(gun()["mag"]) >= int(w["mag"]):
 		return
 	if inv.count_of(w["ammo"]) <= 0:
 		say("No ammo")
@@ -331,19 +354,18 @@ func use_item(item: String) -> void:
 	inv.remove(item, 1)
 
 
-## Drops an inventory slot on the ground as a bag.
-func drop_slot(i: int) -> void:
-	var s = inv.take(i)
+## Drops an item on the ground as a bag. from_hands, or pocket index i.
+func drop(from_hands: bool, i := -1) -> void:
+	var s = inv.take_hands() if from_hands else inv.take_pocket(i)
 	if s == null:
 		return
-	if is_same(s, equipped):
-		equipped = {}
+	reloading = false
 	var bag := LootSpot.new()
 	bag.is_bag = true
 	bag.contents = [s]
 	bag.position = global_position + Vector2(randf_range(-6, 6), 8)
 	get_parent().add_child(bag)
-	say("Dropped " + Items.name_of(s["id"]))
+	say("Dropped " + Items.name_of(s["id"]).to_lower())
 
 
 func take_damage(amount: float, can_bleed := true) -> void:
@@ -361,7 +383,7 @@ func take_damage(amount: float, can_bleed := true) -> void:
 		velocity = Vector2.ZERO
 		_held.visible = false
 		_sprite.modulate = Color.WHITE
-		_sprite.play("death_side" if aim.x >= 0.0 else "death_side-left")
+		_sprite.play("death_side" if facing.x >= 0.0 else "death_side-left")
 		queue_redraw()
 		died.emit()
 
@@ -382,7 +404,8 @@ func _find_loot() -> void:
 # ---------------------------------------------------------------- visuals
 
 func _animate() -> void:
-	var d := Game.dir_name(aim)
+	facing = _melee_dir if (weapon()["melee"] and _swing_t > -0.15) else aim
+	var d := Game.dir_name(facing)
 	var anim := ("run_" if _moving else "idle_") + d
 	if _swing_t > -0.05 and weapon_id() == "fists":
 		anim = "punch_" + d
@@ -405,10 +428,10 @@ func _animate() -> void:
 		# Bat: rest over the shoulder, swing through an arc when attacking.
 		var t := clampf(_swing_t / 0.22, 0.0, 1.0)
 		var swing := lerpf(1.2, -1.2, 1.0 - t) if _swing_t > 0.0 else -0.9
-		var side := 1.0 if aim.x >= 0.0 else -1.0
+		var side := 1.0 if facing.x >= 0.0 else -1.0
 		_held.flip_h = side < 0.0
-		_held.rotation = aim.angle() + PI * 0.5 + swing * side if _swing_t > 0.0 else -0.5 * side
-		_held.position = HAND + (aim * 10.0 if _swing_t > 0.0 else Vector2(6 * side, -2))
+		_held.rotation = facing.angle() + PI * 0.5 + swing * side if _swing_t > 0.0 else -0.5 * side
+		_held.position = HAND + (facing * 10.0 if _swing_t > 0.0 else Vector2(6 * side, -2))
 	else:
 		_held.flip_h = false
 		_held.flip_v = aim.x < 0.0
@@ -424,7 +447,7 @@ func _draw() -> void:
 		return
 	if _swing_t > 0.0:
 		var r: float = weapon()["range"] - 6.0
-		draw_arc(HAND, r, aim.angle() - 1.0, aim.angle() + 1.0, 12, Color(1, 1, 1, 0.4), 2.0)
+		draw_arc(HAND, r, _melee_dir.angle() - 1.0, _melee_dir.angle() + 1.0, 12, Color(1, 1, 1, 0.4), 2.0)
 	if _shot_t > 0.0:
 		var muzzle := HAND + aim * 24.0
 		for end in _shots:

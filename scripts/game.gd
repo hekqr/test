@@ -21,8 +21,7 @@ func _ready() -> void:
 	_key("sprint", [KEY_SHIFT])
 	_key("interact", [KEY_E])
 	_key("reload", [KEY_R])
-	for i in 6:
-		_key("slot_%d" % (i + 1), [KEY_1 + i])
+	_key("holster", [KEY_X])
 	_key("inventory", [KEY_TAB, KEY_I])
 	_key("eat", [KEY_F])
 	_key("drink", [KEY_G])

@@ -52,35 +52,38 @@ func _physics_process(_delta: float) -> void:
 			Input.action_release("move_down")
 			check(p.global_position.distance_to(pos_before) > 20.0, "player moves with input")
 			print("Inventory")
-			check(inv.count_of("food") == 1 and inv.count_of("water") == 1 and inv.count_of("bandage") == 1, "starting items")
-			inv.add("food", 7)
-			check(inv.count_of("food") == 8, "food stacks (8)")
-			inv.add("ammo_pistol", 100)
-			check(inv.count_of("ammo_pistol") == 100, "ammo stacks across slots")
-			inv.remove("ammo_pistol", 100)
-			check(inv.count_of("ammo_pistol") == 0, "ammo removed")
-			var first: Dictionary = inv.slots[0]
-			inv.move(0, 10)
-			check(inv.slots[0] == null and is_same(inv.slots[10], first), "drag & drop moves item")
-			inv.move(10, 0)
-			for i in 30:
-				inv.add("bat")
-			var left := inv.add("water")
-			check(left == 0 or inv.count_of("water") > 1, "water stacks into existing slot when full")
-			check(inv.add("pistol") == 1, "full inventory rejects new item")
-			for i in Inventory.SIZE:
-				if inv.slots[i] != null and inv.slots[i]["id"] == "bat":
-					inv.slots[i] = null
+			check(inv.count_of("food") == 1 and inv.count_of("water") == 1 and inv.count_of("bandage") == 1, "starting items in pockets")
+			check(inv.hands == null and inv.space_used() == 3, "hands empty, 3 space used")
+			inv.add("food", 3)
+			check(inv.pockets.size() == 6, "food does NOT stack (separate items)")
+			inv.add("ammo_pistol", 20)
+			inv.add("ammo_pistol", 15)
+			check(inv.count_of("ammo_pistol") == 35 and inv.space_used() == 8, "ammo stacks automatically (30 + 5 = 2 space)")
+			check(inv.add("shotgun") == 1, "shotgun (size 6) doesn't fit in 4 free space")
+			check(inv.add("water") == 0 and inv.add("water") == 0, "small items still fit")
+			check(inv.space_free() == 2, "2 space left")
+			inv.remove("ammo_pistol", 35)
+			inv.remove("food", 3)
+			inv.remove("water", 2)
+			check(inv.space_used() == 3, "items removed")
+			inv.add("pistol")
+			p.hold_pocket(inv.pockets.size() - 1)
+			check(inv.hands != null and inv.hands["id"] == "pistol" and inv.space_used() == 3, "pistol moved to hands (no pocket space)")
+			p.holster()
+			check(inv.hands == null and inv.space_used() == 6, "holster puts it back in pockets")
+			inv.remove("pistol", 1)
 			print("Loot")
 			loot = get_tree().get_nodes_in_group("loot")[0] as LootSpot
-			loot.contents = [Items.make("bandage", 2), Items.make("shotgun")]
+			loot.contents = [Items.make("bandage", 1), Items.make("bat"), Items.make("shotgun")]
 			p.global_position = loot.global_position + Vector2(5, 0)
 		62:
 			check(p.nearest_loot == loot, "loot detected nearby")
 			Input.action_press("interact")
 		65:
 			Input.action_release("interact")
-			check(loot.looted and inv.count_of("shotgun") == 1 and inv.count_of("bandage") == 3, "searching moves loot into inventory")
+			check(inv.count_of("bandage") == 2 and inv.count_of("bat") == 1, "search puts loot in pockets")
+			check(inv.hands != null and inv.hands["id"] == "shotgun", "item that doesn't fit goes to free hands")
+			check(loot.looted, "container emptied")
 			print("Roofs")
 			var b: int = w.building_at(p.global_position)
 			check(b >= 0, "player is inside a building")
@@ -92,24 +95,27 @@ func _physics_process(_delta: float) -> void:
 			print("Items")
 			p.hunger = 40.0
 			p.use_item("food")
-			check(p.hunger > 70.0 and inv.count_of("food") == 7, "eating restores hunger")
-			print("Fists")
+			check(p.hunger > 70.0 and inv.count_of("food") == 0, "eating restores hunger and uses the can")
+			print("Auto melee")
+			p.holster()
+			p.drop(true)
+			check(inv.hands == null, "dropped shotgun from hands")
 			p.global_position = w.center_of(w.spawn_cell)
 			z_test = main.add_zombie(p.global_position + Vector2(30, 0))
-		98:
-			p.aim = (z_test.global_position - p.global_position).normalized()
+			z_test.set_physics_process(false)
 			hp_before = z_test.health
-			p.melee()
-			check(z_test.health < hp_before, "fists damage zombie")
-			print("Bat")
-			inv.add("bat")
-			for i in Inventory.SIZE:
-				if inv.slots[i] != null and inv.slots[i]["id"] == "bat":
-					p.use_slot(i)
-			check(p.weapon_id() == "bat", "bat equipped from inventory")
+		100:
+			check(z_test.health < hp_before, "fists attack automatically (%.0f -> %.0f)" % [hp_before, z_test.health])
+			for i in inv.pockets.size():
+				if inv.pockets[i]["id"] == "bat":
+					p.hold_pocket(i)
+					break
+			check(p.weapon_id() == "bat", "bat in hands")
+			z_test.health = 200.0
 			hp_before = z_test.health
-			p.melee()
-			check(hp_before - z_test.health >= 40.0, "bat hits harder")
+		140:
+			check(hp_before - z_test.health >= 42.0, "bat attacks automatically and hits hard")
+			z_test.set_physics_process(true)
 			print("Zombie attacks")
 			z_test.health = 999.0
 			hp_before = p.health
@@ -119,47 +125,42 @@ func _physics_process(_delta: float) -> void:
 			p.health = 100.0
 			p.bleeding = false
 			print("Pistol")
+			p.drop(true)
 			inv.add_stack({"id": "pistol", "count": 1, "mag": 8})
 			inv.add("ammo_pistol", 10)
-			for i in Inventory.SIZE:
-				if inv.slots[i] != null and inv.slots[i]["id"] == "pistol":
-					p.use_slot(i)
-			check(p.weapon_id() == "pistol", "pistol equipped")
+			for i in inv.pockets.size():
+				if inv.pockets[i]["id"] == "pistol":
+					p.hold_pocket(i)
+					break
+			check(p.weapon_id() == "pistol", "pistol in hands")
 			z_test = main.add_zombie(p.global_position + Vector2(0, -60))
 			z_test.set_physics_process(false)
 		182:
 			p.aim = (z_test.global_position + Vector2(0, -6) - (p.global_position + Player.HAND)).normalized()
 			hp_before = z_test.health
 			p.shoot()
-			check(int(p.equipped["mag"]) == 7, "shooting uses a round")
+			check(int(p.gun()["mag"]) == 7, "shooting uses a round")
 			check(z_test.health < hp_before, "bullet hits zombie")
-			p.equipped["mag"] = 0
+			p.gun()["mag"] = 0
 			p.start_reload()
 			check(p.reloading, "reload starts")
 		280:
-			check(int(p.equipped["mag"]) == 8 and inv.count_of("ammo_pistol") == 2, "reload fills magazine from inventory")
+			check(int(p.gun()["mag"]) == 8 and inv.count_of("ammo_pistol") == 2, "reload fills magazine from pockets")
 			print("Shotgun")
 			inv.add("ammo_shotgun", 10)
-			for i in Inventory.SIZE:
-				if inv.slots[i] != null and inv.slots[i]["id"] == "shotgun":
-					inv.slots[i]["mag"] = 5
-					p.use_slot(i)
-			check(p.weapon_id() == "shotgun", "shotgun equipped")
+			inv.hands = {"id": "shotgun", "count": 1, "mag": 5}
+			check(p.weapon_id() == "shotgun", "shotgun in hands")
 			z_test.health = 70.0
 			p.aim = (z_test.global_position + Vector2(0, -6) - (p.global_position + Player.HAND)).normalized()
 			p.shoot()
 			check(p._shots.size() == 6, "shotgun fires 6 pellets")
 			check(z_test.health < 70.0 - 24.0 or z_test.dead, "multiple pellets hit (hp %.0f)" % z_test.health)
 			print("Drop")
-			var n_before := get_tree().get_nodes_in_group("loot").size()
-			var slot := -1
-			for i in Inventory.SIZE:
-				if inv.slots[i] != null and inv.slots[i]["id"] == "shotgun":
-					slot = i
-			p.drop_slot(slot)
-			check(inv.count_of("shotgun") == 0 and p.weapon_id() == "fists", "dropping equipped weapon unequips it")
+			var bags_before := get_tree().get_nodes_in_group("loot").size()
+			p.drop(true)
+			check(inv.hands == null and p.weapon_id() == "fists", "dropping hands item -> fists")
+			check(get_tree().get_nodes_in_group("loot").size() == bags_before + 1, "drop bag spawned")
 		282:
-			check(get_tree().get_nodes_in_group("loot").size() == get_tree().get_nodes_in_group("loot").size() and inv.count_of("shotgun") == 0, "drop bag spawned")
 			print("Noise")
 			var z2: Zombie = main.add_zombie(p.global_position + Vector2(400, 0))
 			Game.make_noise(p.global_position, 750.0)

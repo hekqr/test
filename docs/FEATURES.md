@@ -24,14 +24,19 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ Deep-colour grading + vignette shader
 
 ## Milestone 2 — Core survival loop
-- ✅ Inventory screen: 18 slots, stacking, drag & drop, right-click use/equip, drop as bag
-- ✅ 6-slot hotbar (keys 1–6)
+- ✅ Inventory = **Hands + Pockets**. Hands hold one item (or one stack); pockets have 12 space and every item has a size
+  (can/water/bandage 1, pistol 3, bat 5, shotgun 6), so big items may not fit even when small ones do
+- ✅ Drag between hands/pockets, right-click use/hold, drag outside to drop as a bag; X empties hands
+- ✅ Melee fights for you (auto-swings at zombies in reach); guns are aimed and fired with the mouse
 - ✅ Baseball bat (melee) and shotgun (6-pellet spread, shells)
 - ✅ Roofs over buildings that fade when you walk inside
 - ✅ Pixel-art stat bars (health / hunger / thirst) and bullet indicators
 - ✅ Stamina removed (sprint is unlimited but loud)
 - 🔜 **Save & load** (next)
-- 🔜 Item variety: medkit, painkillers, backpacks (bigger inventory)
+- 🔜 Item variety: medkit, painkillers, **backpacks** (more pocket space)
+- 📌 **Stacking rule:** only items that make sense to stack get a max-stack value (ammo now: pistol 30, shells 12).
+  Every new stackable item (e.g. nails, rags, matches) gets its own max stack when it's added; it then merges
+  automatically on pickup. Food, water, bandages and weapons stay single items.
 - 🔜 Weapon durability
 - 🔜 Building interiors: furniture, doors that open/close
 - 🔜 Sound + music (after saving)

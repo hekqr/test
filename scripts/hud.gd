@@ -7,14 +7,13 @@ const INV_SCALE := 4.0
 const INV_CELL_X := [7, 29, 51, 73, 95, 117]
 const INV_CELL_Y := [12, 35, 59]
 const INV_CELL_SIZE := Vector2(19, 20)
-const HOT_CELL_STEP := 21.0
-const HOT_CELL_SIZE := Vector2(19, 19)
+const HANDS := -2 # drag source id for the hands slot
 
 var main: Node
 var show_help := true
 var inventory_open := false
 var _font: Font
-var _drag_from := -1
+var _drag_from := -1 # -1 none, HANDS, or pocket index
 var _mouse := Vector2.ZERO
 
 
@@ -47,18 +46,30 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		var slot := inv_slot_at(mb.position)
+		var on_hands := hands_cell_rect().has_point(mb.position)
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			if mb.pressed:
-				if slot >= 0 and p.inv.slots[slot] != null:
+				if on_hands and p.inv.hands != null:
+					_drag_from = HANDS
+				elif slot >= 0 and slot < p.inv.pockets.size():
 					_drag_from = slot
-			elif _drag_from >= 0:
-				if slot >= 0:
-					p.inv.move(_drag_from, slot)
-				elif not inv_rect().has_point(mb.position):
-					p.drop_slot(_drag_from)
+			elif _drag_from != -1:
+				if _drag_from == HANDS:
+					if inv_rect().has_point(mb.position):
+						p.holster()
+					elif not on_hands:
+						p.drop(true)
+				else:
+					if on_hands:
+						p.hold_pocket(_drag_from)
+					elif not inv_rect().has_point(mb.position):
+						p.drop(false, _drag_from)
 				_drag_from = -1
-		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed and slot >= 0:
-			p.use_slot(slot)
+		elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed:
+			if on_hands:
+				p.holster()
+			elif slot >= 0 and slot < p.inv.pockets.size():
+				p.use_pocket(slot)
 		get_viewport().set_input_as_handled()
 
 
@@ -86,7 +97,13 @@ func _unhandled_input(event: InputEvent) -> void:
 func inv_rect() -> Rect2:
 	var sz := Game.tex("ui_inventory").get_size() * INV_SCALE
 	var vs := get_viewport_rect().size
-	return Rect2((vs - sz) / 2.0 - Vector2(0, 20), sz)
+	return Rect2((vs - sz) / 2.0 + Vector2(70, -30), sz)
+
+
+func hands_cell_rect() -> Rect2:
+	var r := inv_rect()
+	var sz := Game.tex("ui_cell").get_size() * INV_SCALE
+	return Rect2(Vector2(r.position.x - sz.x - 60, r.position.y + 12 * INV_SCALE), sz)
 
 
 func inv_cell_rect(i: int) -> Rect2:
@@ -97,21 +114,10 @@ func inv_cell_rect(i: int) -> Rect2:
 
 
 func inv_slot_at(pos: Vector2) -> int:
-	for i in Inventory.SIZE:
+	for i in INV_CELL_X.size() * INV_CELL_Y.size():
 		if inv_cell_rect(i).has_point(pos):
 			return i
 	return -1
-
-
-func hotbar_rect() -> Rect2:
-	var sz := Game.tex("ui_hotbar").get_size() * UI_SCALE
-	var vs := get_viewport_rect().size
-	return Rect2(Vector2((vs.x - sz.x) / 2.0, vs.y - sz.y - 14), sz)
-
-
-func hot_cell_rect(i: int) -> Rect2:
-	var r := hotbar_rect()
-	return Rect2(r.position + Vector2(i * HOT_CELL_STEP, 0) * UI_SCALE, HOT_CELL_SIZE * UI_SCALE)
 
 
 # ---------------------------------------------------------------- drawing helpers
@@ -139,6 +145,23 @@ func _stat_bar(pos: Vector2, frame: Texture2D, fill: Texture2D, fill_at: Vector2
 	if src.size.x > 0:
 		draw_texture_rect_region(fill, Rect2(pos + fill_at * UI_SCALE, src.size * UI_SCALE), src, mod)
 	_tex(frame, pos, UI_SCALE)
+
+
+## Pocket space meter: one pip per unit of space, coloured per item.
+func _space_pips(p: Player, pos: Vector2, pip: float) -> void:
+	var shades := [Color("c9a46a"), Color("9c7a4a")]
+	var x := pos.x
+	var k := 0
+	for it in p.inv.pockets:
+		for j in Items.size_of(it["id"]):
+			draw_rect(Rect2(x, pos.y, pip, pip), Color(0.1, 0.05, 0.08))
+			draw_rect(Rect2(x + 2, pos.y + 2, pip - 4, pip - 4), shades[k % 2])
+			x += pip + 2
+		k += 1
+	for j in p.inv.space_free():
+		draw_rect(Rect2(x, pos.y, pip, pip), Color(0.1, 0.05, 0.08))
+		draw_rect(Rect2(x + 2, pos.y + 2, pip - 4, pip - 4), Color(0.32, 0.27, 0.3))
+		x += pip + 2
 
 
 func _item_icon(item: Dictionary, cell: Rect2, scale_px: float) -> void:
@@ -170,16 +193,15 @@ func _draw() -> void:
 		_tex(Game.tex("blood_2"), Vector2(bx + 176, by + 4), 3.0)
 		_text(Vector2(bx + 210, by + 26), "Bleeding [H]", 15, Color(1, 0.4, 0.4))
 
-	# Hotbar (bottom-centre)
-	_tex(Game.tex("ui_hotbar"), hotbar_rect().position, UI_SCALE)
-	for i in Inventory.HOTBAR:
-		var cell := hot_cell_rect(i)
-		var s = p.inv.slots[i]
-		if s != null and is_same(s, p.equipped):
-			_tex(Game.tex("ui_cell_chosen"), cell.position, UI_SCALE)
-		if s != null and not (inventory_open and _drag_from == i):
-			_item_icon(s, cell, 2.0)
-		_text(cell.position + Vector2(7, 17), str(i + 1), 12, Color(0.85, 0.8, 0.75, 0.8))
+	# Hands + pocket space (bottom-centre)
+	var cell_t := Game.tex("ui_cell")
+	var hc := Rect2(Vector2((vs.x - cell_t.get_width() * UI_SCALE) / 2.0 - 70, vs.y - cell_t.get_height() * UI_SCALE - 12), cell_t.get_size() * UI_SCALE)
+	_tex(cell_t, hc.position, UI_SCALE)
+	if p.inv.hands != null and not (inventory_open and _drag_from == HANDS):
+		_item_icon(p.inv.hands, hc, 2.0)
+	_text(hc.position + Vector2(0, -6), "HANDS", 12, Color(0.85, 0.8, 0.75))
+	_text(Vector2(hc.end.x + 14, hc.position.y + 18), "Pockets %d / %d" % [p.inv.space_used(), Inventory.CAPACITY], 13, Color(0.85, 0.8, 0.75))
+	_space_pips(p, Vector2(hc.end.x + 14, hc.position.y + 28), 12.0)
 
 	# Weapon + ammo (bottom-right)
 	var w := p.weapon()
@@ -187,7 +209,7 @@ func _draw() -> void:
 	var wy := vs.y - 40.0
 	_text(Vector2(wx, wy), w["name"], 20, Color.WHITE, HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	if not w["melee"]:
-		var mag := int(p.equipped["mag"])
+		var mag := int(p.gun()["mag"])
 		var full := Game.tex(w["bullet_ui"])
 		var empty := Game.tex(w["bullet_ui"] + "_empty")
 		var step := full.get_width() * 2.0 + 2.0
@@ -212,13 +234,14 @@ func _draw() -> void:
 
 	# Message
 	if p.message_t > 0.0:
-		_text(Vector2(0, vs.y - 170), p.message, 18, Color(1, 1, 1, clampf(p.message_t, 0, 1)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		var my := 70.0 if inventory_open else vs.y - 170.0
+		_text(Vector2(0, my), p.message, 18, Color(1, 1, 1, clampf(p.message_t, 0, 1)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 
 	# Help
 	if show_help and not inventory_open:
 		var lines := [
-			"WASD move   Shift sprint   Mouse aim   Left click attack",
-			"E search   R reload   1-6 hotbar   Tab inventory",
+			"WASD move   Shift sprint   Melee is automatic   Click to shoot",
+			"E search   R reload   X empty hands   Tab inventory",
 			"F eat   G drink   H bandage",
 			"Esc pause   F11 fullscreen   F1 hide help",
 		]
@@ -248,32 +271,45 @@ func _draw() -> void:
 func _draw_inventory(p: Player, vs: Vector2) -> void:
 	draw_rect(Rect2(Vector2.ZERO, vs), Color(0.05, 0.02, 0.05, 0.55))
 	var r := inv_rect()
+	var hr := hands_cell_rect()
 	_tex(Game.tex("ui_inventory"), r.position, INV_SCALE)
-	_text(Vector2(r.position.x, r.position.y - 14), "INVENTORY", 24, Color(0.95, 0.9, 0.82))
+	_text(Vector2(r.position.x, r.position.y - 14), "POCKETS", 24, Color(0.95, 0.9, 0.82))
 	_text(Vector2(r.end.x, r.position.y - 14), "Tab to close", 14, Color(0.8, 0.75, 0.7), HORIZONTAL_ALIGNMENT_RIGHT, 0)
-	_text(Vector2(r.position.x + 28, r.position.y + 40), "HOTBAR", 11, Color(0.8, 0.75, 0.7, 0.8))
+	_text(Vector2(hr.position.x, r.position.y - 14), "HANDS", 24, Color(0.95, 0.9, 0.82))
 
+	# Hands
+	_tex(Game.tex("ui_cell_chosen" if p.inv.hands != null else "ui_cell"), hr.position, INV_SCALE)
+	if p.inv.hands != null and _drag_from != HANDS:
+		_item_icon(p.inv.hands, hr, 3.0)
+
+	# Pockets
 	var hover := inv_slot_at(_mouse)
-	for i in Inventory.SIZE:
+	for i in Inventory.CAPACITY:
 		var cell := inv_cell_rect(i)
-		var s = p.inv.slots[i]
-		if s != null and is_same(s, p.equipped):
-			_tex(Game.tex("ui_cell_chosen"), cell.position, INV_SCALE)
-		elif i == hover:
-			draw_rect(cell.grow(-8), Color(1, 1, 1, 0.08))
-		if s != null and i != _drag_from:
-			_item_icon(s, cell, 3.0)
+		if i < p.inv.pockets.size():
+			if i == hover:
+				draw_rect(cell.grow(-8), Color(1, 1, 1, 0.08))
+			if i != _drag_from:
+				_item_icon(p.inv.pockets[i], cell, 3.0)
+	_text(Vector2(r.position.x + 4, r.end.y + 24), "Space %d / %d" % [p.inv.space_used(), Inventory.CAPACITY], 15, Color(0.95, 0.9, 0.82))
+	_space_pips(p, Vector2(r.position.x + 120, r.end.y + 8), 20.0)
 
-	_text(Vector2(0, r.end.y + 30), "Drag to move   -   Right-click to use / equip   -   Drag outside to drop", 15, Color(0.85, 0.8, 0.75), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+	_text(Vector2(0, r.end.y + 64), "Right-click: use / hold   -   Drag to hands or pockets   -   Drag outside to drop", 15, Color(0.85, 0.8, 0.75), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 
 	# Tooltip
-	if hover >= 0 and p.inv.slots[hover] != null and _drag_from < 0:
-		var s: Dictionary = p.inv.slots[hover]
-		var tip := Items.name_of(s["id"])
+	var tip_item = null
+	if _drag_from == -1:
+		if hover >= 0 and hover < p.inv.pockets.size():
+			tip_item = p.inv.pockets[hover]
+		elif hr.has_point(_mouse):
+			tip_item = p.inv.hands
+	if tip_item != null:
+		var s: Dictionary = tip_item
+		var tip := "%s   size %d" % [Items.name_of(s["id"]), Items.size_of(s["id"])]
 		if s.has("mag"):
-			tip += "  (%d loaded)" % s["mag"]
+			tip += "   %d loaded" % s["mag"]
 		elif int(s["count"]) > 1:
-			tip += "  x%d" % s["count"]
+			tip += "   x%d / %d" % [s["count"], Items.max_stack(s["id"])]
 		var tw := _font.get_string_size(tip, HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
 		var tp := _mouse + Vector2(18, 18)
 		draw_rect(Rect2(tp, Vector2(tw + 16, 26)), Color(0.12, 0.07, 0.1, 0.95))
@@ -281,5 +317,6 @@ func _draw_inventory(p: Player, vs: Vector2) -> void:
 		_text(tp + Vector2(8, 19), tip, 15)
 
 	# Dragged item follows the mouse
-	if _drag_from >= 0 and p.inv.slots[_drag_from] != null:
-		_item_icon(p.inv.slots[_drag_from], Rect2(_mouse - Vector2(30, 30), Vector2(60, 60)), 3.0)
+	var dragged = p.inv.hands if _drag_from == HANDS else (p.inv.pockets[_drag_from] if _drag_from >= 0 and _drag_from < p.inv.pockets.size() else null)
+	if dragged != null:
+		_item_icon(dragged, Rect2(_mouse - Vector2(30, 30), Vector2(60, 60)), 3.0)

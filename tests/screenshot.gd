@@ -27,12 +27,10 @@ func _process(_delta: float) -> void:
 		var b: Rect2i = w.buildings[0]
 		p.global_position = w.center_of(Vector2i(b.end.x + 1, b.position.y + b.size.y / 2))
 		p.inv.add_stack({"id": "pistol", "count": 1, "mag": 5})
-		p.inv.add_stack({"id": "shotgun", "count": 1, "mag": 3})
 		p.inv.add("bat")
 		p.inv.add("ammo_pistol", 14)
+		p.inv.hands = {"id": "shotgun", "count": 1, "mag": 3}
 		p.inv.add("ammo_shotgun", 6)
-		p.inv.add("food", 2)
-		p.use_slot(3)
 		p.hunger = 62.0
 		p.thirst = 45.0
 		p.health = 78.0
