@@ -26,7 +26,13 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 ## Milestone 2 — Core survival loop
 - ✅ Inventory = **Hands + Pockets**. Hands hold one item (or one stack); pockets have 12 space and every item has a size
   (can/water/bandage 1, pistol 3, bat 5, shotgun 6), so big items may not fit even when small ones do
-- ✅ Drag between hands/pockets, right-click use/hold, drag outside to drop as a bag; X empties hands
+- ✅ Pockets list grows with items, always one empty slot at the end + "space left" counter
+- ✅ Weapon slots: primary (shotgun), secondary (pistol), melee (bat) — don't use pocket space;
+  switch with 1 / 2 / 3 or mouse wheel (no hotbar)
+- ✅ Drag between hands / slots / pockets, right-click use/hold/equip, drag outside to drop; X empties hands
+- ✅ Action button appears automatically near containers ("Search") and ground items ("Pick up …")
+- ✅ Loose items lying on floors, dropped items show their own icon
+- ✅ Night = uniform dark-blue tint (no limited light radius)
 - ✅ Melee fights for you (auto-swings at zombies in reach); guns are aimed and fired with the mouse
 - ✅ Baseball bat (melee) and shotgun (6-pellet spread, shells)
 - ✅ Roofs over buildings that fade when you walk inside
@@ -40,6 +46,13 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - 🔜 Weapon durability
 - 🔜 Building interiors: furniture, doors that open/close
 - 🔜 Sound + music (after saving)
+
+## Ideas to borrow (inspired by other survival games, built our own way)
+- 💭 Clothing slots (helmet, vest, shirt, pants) where clothes add pocket space + condition %
+- 💭 Backpack slot for extra space
+- 💭 Character portrait in the HUD
+- 💭 Notebook menu: local map (towns/roads), guides, crafting, tasks
+- 💭 Temperature / warmth bar
 
 ## Milestone 3 — World & content
 - 💭 Hand-designed + generated towns, named locations, a world map

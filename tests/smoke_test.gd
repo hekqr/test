@@ -66,12 +66,20 @@ func _physics_process(_delta: float) -> void:
 			inv.remove("food", 3)
 			inv.remove("water", 2)
 			check(inv.space_used() == 3, "items removed")
-			inv.add("pistol")
-			p.hold_pocket(inv.pockets.size() - 1)
-			check(inv.hands != null and inv.hands["id"] == "pistol" and inv.space_used() == 3, "pistol moved to hands (no pocket space)")
-			p.holster()
-			check(inv.hands == null and inv.space_used() == 6, "holster puts it back in pockets")
+			print("Weapon slots")
+			check(inv.pickup(Items.make("pistol")) == 0 and inv.weapons["secondary"] != null and inv.space_used() == 3, "picked-up pistol goes to secondary slot (no pocket space)")
+			inv.pickup(Items.make("pistol"))
+			check(inv.space_used() == 6, "second pistol goes to pockets")
 			inv.remove("pistol", 1)
+			p.switch_weapon("secondary")
+			check(inv.hands != null and inv.hands["id"] == "pistol" and inv.weapons["secondary"] == null, "key 2 takes pistol into hands")
+			p.switch_weapon("secondary")
+			check(inv.hands == null and inv.weapons["secondary"] != null, "key 2 again puts it back (fists)")
+			p.switch_weapon("primary")
+			check(inv.hands == null, "empty primary slot -> stays fists")
+			p.switch_weapon("secondary")
+			p.drop(true)
+			check(inv.weapons["secondary"] == null and inv.hands == null, "pistol dropped")
 			print("Loot")
 			loot = get_tree().get_nodes_in_group("loot")[0] as LootSpot
 			loot.contents = [Items.make("bandage", 1), Items.make("bat"), Items.make("shotgun")]
@@ -81,8 +89,9 @@ func _physics_process(_delta: float) -> void:
 			Input.action_press("interact")
 		65:
 			Input.action_release("interact")
-			check(inv.count_of("bandage") == 2 and inv.count_of("bat") == 1, "search puts loot in pockets")
-			check(inv.hands != null and inv.hands["id"] == "shotgun", "item that doesn't fit goes to free hands")
+			check(inv.count_of("bandage") == 2, "search puts loot in pockets")
+			check(inv.weapons["melee"] != null and inv.weapons["primary"] != null, "searched weapons go to their slots")
+			check(p.nearest_loot == null or p.nearest_loot != loot, "looted container no longer offers action")
 			check(loot.looted, "container emptied")
 			print("Roofs")
 			var b: int = w.building_at(p.global_position)
@@ -97,20 +106,16 @@ func _physics_process(_delta: float) -> void:
 			p.use_item("food")
 			check(p.hunger > 70.0 and inv.count_of("food") == 0, "eating restores hunger and uses the can")
 			print("Auto melee")
-			p.holster()
-			p.drop(true)
-			check(inv.hands == null, "dropped shotgun from hands")
+			p.drop_slot("primary")
+			check(inv.weapons["primary"] == null, "dropped shotgun from slot")
 			p.global_position = w.center_of(w.spawn_cell)
 			z_test = main.add_zombie(p.global_position + Vector2(30, 0))
 			z_test.set_physics_process(false)
 			hp_before = z_test.health
 		100:
 			check(z_test.health < hp_before, "fists attack automatically (%.0f -> %.0f)" % [hp_before, z_test.health])
-			for i in inv.pockets.size():
-				if inv.pockets[i]["id"] == "bat":
-					p.hold_pocket(i)
-					break
-			check(p.weapon_id() == "bat", "bat in hands")
+			p.switch_weapon("melee")
+			check(p.weapon_id() == "bat", "key 3 takes bat into hands")
 			z_test.health = 200.0
 			hp_before = z_test.health
 		140:
@@ -125,14 +130,10 @@ func _physics_process(_delta: float) -> void:
 			p.health = 100.0
 			p.bleeding = false
 			print("Pistol")
-			p.drop(true)
-			inv.add_stack({"id": "pistol", "count": 1, "mag": 8})
+			inv.pickup({"id": "pistol", "count": 1, "mag": 8})
 			inv.add("ammo_pistol", 10)
-			for i in inv.pockets.size():
-				if inv.pockets[i]["id"] == "pistol":
-					p.hold_pocket(i)
-					break
-			check(p.weapon_id() == "pistol", "pistol in hands")
+			p.switch_weapon("secondary")
+			check(p.weapon_id() == "pistol" and inv.weapons["melee"] != null, "switching to pistol puts bat back in its slot")
 			z_test = main.add_zombie(p.global_position + Vector2(0, -60))
 			z_test.set_physics_process(false)
 		182:
@@ -148,8 +149,9 @@ func _physics_process(_delta: float) -> void:
 			check(int(p.gun()["mag"]) == 8 and inv.count_of("ammo_pistol") == 2, "reload fills magazine from pockets")
 			print("Shotgun")
 			inv.add("ammo_shotgun", 10)
-			inv.hands = {"id": "shotgun", "count": 1, "mag": 5}
-			check(p.weapon_id() == "shotgun", "shotgun in hands")
+			inv.pickup({"id": "shotgun", "count": 1, "mag": 5})
+			p.cycle_weapon(-1)
+			check(p.weapon_id() == "shotgun", "mouse wheel cycles to shotgun")
 			z_test.health = 70.0
 			p.aim = (z_test.global_position + Vector2(0, -6) - (p.global_position + Player.HAND)).normalized()
 			p.shoot()

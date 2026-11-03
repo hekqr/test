@@ -31,6 +31,15 @@ func _ready() -> void:
 		var l := LootSpot.new()
 		l.position = world.center_of(c)
 		entities.add_child(l)
+	# Loose items lying on floors.
+	for b in world.buildings:
+		if randf() < 0.6:
+			var c := Vector2i(randi_range(b.position.x + 1, b.end.x - 2), randi_range(b.position.y + 1, b.end.y - 2))
+			if world.get_tile(c) == World.FLOOR:
+				var g := LootSpot.new()
+				g.is_bag = true
+				g.position = world.center_of(c) + Vector2(randf_range(-8, 8), randf_range(-8, 8))
+				entities.add_child(g)
 
 	zombies = Node2D.new()
 	zombies.name = "Zombies"
@@ -83,7 +92,7 @@ func _process(delta: float) -> void:
 		day += 1
 	var light := daylight()
 	Game.night = 1.0 - light
-	night_tint.color = Color(0.07, 0.08, 0.18).lerp(Color.WHITE, light)
+	night_tint.color = Color(0.30, 0.36, 0.66).lerp(Color.WHITE, light)
 	player.set_night(1.0 - light)
 
 	_spawn_t -= delta

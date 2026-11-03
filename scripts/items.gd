@@ -9,9 +9,9 @@ const DEFS := {
 	"bandage": {"name": "Bandage", "icon": "icon_bandage", "size": 1, "stack": 1, "kind": "consumable"},
 	"ammo_pistol": {"name": "Pistol ammo", "icon": "icon_ammo_pistol", "size": 1, "stack": 30, "kind": "ammo"},
 	"ammo_shotgun": {"name": "Shotgun shells", "icon": "icon_ammo_shotgun", "size": 1, "stack": 12, "kind": "ammo"},
-	"pistol": {"name": "Pistol", "icon": "icon_pistol", "size": 3, "stack": 1, "kind": "weapon"},
-	"bat": {"name": "Baseball bat", "icon": "icon_bat", "size": 5, "stack": 1, "kind": "weapon"},
-	"shotgun": {"name": "Shotgun", "icon": "icon_shotgun", "size": 6, "stack": 1, "kind": "weapon"},
+	"pistol": {"name": "Pistol", "icon": "icon_pistol", "size": 3, "stack": 1, "kind": "weapon", "slot": "secondary"},
+	"bat": {"name": "Baseball bat", "icon": "icon_bat", "size": 5, "stack": 1, "kind": "weapon", "slot": "melee"},
+	"shotgun": {"name": "Shotgun", "icon": "icon_shotgun", "size": 6, "stack": 1, "kind": "weapon", "slot": "primary"},
 }
 
 const WEAPONS := {
@@ -43,6 +43,10 @@ static func icon(id: String) -> Texture2D:
 
 static func is_weapon(id: String) -> bool:
 	return DEFS[id]["kind"] == "weapon"
+
+
+static func slot_of(id: String) -> String:
+	return DEFS[id].get("slot", "")
 
 
 static func size_of(id: String) -> int:

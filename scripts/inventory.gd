@@ -5,13 +5,17 @@ extends RefCounted
 ## - Pockets have limited SPACE. Every item (or stack) takes Items.size_of(id) space,
 ##   so a big item may not fit even when several small ones would.
 ## - Stackable items (Items.max_stack > 1) merge into existing stacks automatically.
+## - Weapon slots (primary / secondary / melee) hold one weapon each, outside the pockets.
+##   Switching (1/2/3) moves that weapon into the hands; the hands item goes back where it belongs.
 
 signal changed
 
 const CAPACITY := 12
+const WEAPON_SLOTS := ["primary", "secondary", "melee"]
 
 var hands = null # null or {"id", "count", ["mag"]}
 var pockets: Array = [] # list of item stacks
+var weapons := {"primary": null, "secondary": null, "melee": null}
 
 
 func space_used() -> int:
@@ -91,24 +95,38 @@ func in_hands(item) -> bool:
 	return hands != null and item != null and is_same(hands, item)
 
 
-## Moves pocket item i into the hands; whatever was in the hands goes back to the pockets.
+## Picking something up: weapons go to their empty slot, everything else to the pockets,
+## and if it doesn't fit there, into free hands. Returns how many could NOT be taken.
+func pickup(item: Dictionary) -> int:
+	var slot := Items.slot_of(item["id"])
+	if slot != "" and weapons[slot] == null and not _hands_is_slot(slot):
+		weapons[slot] = item.duplicate()
+		changed.emit()
+		return 0
+	var left := add_stack(item)
+	if left > 0 and hands == null:
+		var h: Dictionary = item.duplicate()
+		h["count"] = left
+		hands = h
+		left = 0
+		changed.emit()
+	return left
+
+
+func _hands_is_slot(slot: String) -> bool:
+	return hands != null and Items.slot_of(hands["id"]) == slot
+
+
+## Puts the hands item away: a weapon back into its slot, anything else into the pockets.
 ## Returns "" on success, or a reason it failed.
-func to_hands(i: int) -> String:
-	var item: Dictionary = pockets[i]
-	pockets.remove_at(i)
-	if hands != null:
-		if space_free() < Items.size_of(hands["id"]):
-			pockets.insert(i, item)
-			return "No room in pockets for the " + Items.name_of(hands["id"]).to_lower()
-		pockets.append(hands)
-	hands = item
-	changed.emit()
-	return ""
-
-
-## Puts the hands item into the pockets. Returns "" on success, or a reason it failed.
 func holster() -> String:
 	if hands == null:
+		return ""
+	var slot := Items.slot_of(hands["id"])
+	if slot != "" and weapons[slot] == null:
+		weapons[slot] = hands
+		hands = null
+		changed.emit()
 		return ""
 	if not fits(hands["id"]):
 		return "No room in pockets"
@@ -120,6 +138,65 @@ func holster() -> String:
 		hands = h
 	changed.emit()
 	return ""
+
+
+## Moves pocket item i into the hands (the current hands item is put away first).
+func to_hands(i: int) -> String:
+	var item: Dictionary = pockets[i]
+	pockets.remove_at(i)
+	var err := holster()
+	if err != "":
+		pockets.insert(i, item)
+		return err
+	hands = item
+	changed.emit()
+	return ""
+
+
+## Weapon switching (1/2/3). Selecting the weapon already in hands puts it away (fists).
+func switch_to(slot: String) -> String:
+	var same := _hands_is_slot(slot) and weapons[slot] == null
+	var err := holster()
+	if err != "":
+		return err
+	if same:
+		return ""
+	if weapons[slot] == null:
+		return "No %s weapon" % slot
+	hands = weapons[slot]
+	weapons[slot] = null
+	changed.emit()
+	return ""
+
+
+## Moves a weapon from the pockets or hands into its weapon slot (drag & drop).
+func to_slot(from_hands: bool, i := -1) -> String:
+	var item: Dictionary = hands if from_hands else pockets[i]
+	var slot := Items.slot_of(item["id"])
+	if slot == "":
+		return "That doesn't go there"
+	if weapons[slot] != null:
+		var occupant: Dictionary = weapons[slot]
+		if from_hands:
+			hands = occupant
+		else:
+			pockets[i] = occupant
+		weapons[slot] = item
+	else:
+		weapons[slot] = item
+		if from_hands:
+			hands = null
+		else:
+			pockets.remove_at(i)
+	changed.emit()
+	return ""
+
+
+func take_slot(slot: String) -> Variant:
+	var s = weapons[slot]
+	weapons[slot] = null
+	changed.emit()
+	return s
 
 
 func take_pocket(i: int) -> Dictionary:

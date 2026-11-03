@@ -55,6 +55,8 @@ PA.update({
     "ui_cell_chosen.png": "UI/Inventory/Inventory-Chosen.png",
     "ui_hotbar.png": "UI/Inventory/Quick-Access-Inventory.png",
     "ui_cursor.png": "UI/Menu/Cursor.png",
+    "ui_button.png": "UI/Menu/Main Menu/Blank_Not-Pressed.png",
+    "ui_button_pressed.png": "UI/Menu/Main Menu/Blank_Pressed.png",
     "ui_bullet_pistol.png": "UI/Bullet Indicators/Small/Pistol-Bullet_Small.png",
     "ui_bullet_pistol_empty.png": "UI/Bullet Indicators/Small/Pistol-Bullet_Small_Empty.png",
     "ui_bullet_shotgun.png": "UI/Bullet Indicators/Small/Shotgun-Bullet_Small.png",

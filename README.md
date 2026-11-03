@@ -13,9 +13,10 @@ Download `Ashfall.exe` (Windows) and double-click it. No install needed.
 | WASD | Move |
 | Shift | Sprint (louder — attracts zombies) |
 | Mouse / Left click | Aim / Shoot (melee attacks automatically) |
-| E | Search container |
+| E (or the on-screen button) | Search container / pick up item |
 | R | Reload (restart when dead) |
-| X | Put hands item into pockets |
+| 1 / 2 / 3, mouse wheel | Primary / secondary / melee weapon |
+| X | Put hands item away |
 | Tab or I | Inventory: hands + pockets (right-click use/hold, drag to move, drag outside to drop) |
 | F / G / H | Eat / Drink / Bandage |
 | Esc | Pause (Q to quit) |

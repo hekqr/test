@@ -32,7 +32,6 @@ var _shots: Array = [] # [from_local, to_global] for muzzle tracers
 var _shot_t := 0.0
 var _hurt_t := 0.0
 var _noise_t := 0.0
-var _light: PointLight2D
 var _sprite: AnimatedSprite2D
 var _held: Sprite2D
 var _moving := false
@@ -78,21 +77,6 @@ func _ready() -> void:
 		cam.limit_bottom = int(world.size_px().y)
 	add_child(cam)
 
-	var g := Gradient.new()
-	g.set_color(0, Color(1, 0.95, 0.8, 1))
-	g.set_color(1, Color(1, 0.95, 0.8, 0))
-	var tex := GradientTexture2D.new()
-	tex.gradient = g
-	tex.fill = GradientTexture2D.FILL_RADIAL
-	tex.fill_from = Vector2(0.5, 0.5)
-	tex.fill_to = Vector2(1.0, 0.5)
-	tex.width = 256
-	tex.height = 256
-	_light = PointLight2D.new()
-	_light.texture = tex
-	_light.texture_scale = 2.6
-	_light.energy = 0.0
-	add_child(_light)
 
 	inv.add("food")
 	inv.add("water")
@@ -105,9 +89,8 @@ func say(text: String) -> void:
 	message_t = 3.5
 
 
-func set_night(n: float) -> void:
-	if _light:
-		_light.energy = n * 0.9
+func set_night(_n: float) -> void:
+	pass # night is a uniform tint (main.gd); no limited light radius
 
 
 # ---------------------------------------------------------------- weapons
@@ -132,6 +115,26 @@ func hold_pocket(i: int) -> void:
 	reloading = false
 	var err := inv.to_hands(i)
 	say(err if err != "" else "Holding " + Items.name_of(inv.hands["id"]).to_lower())
+
+
+## 1/2/3 and mouse wheel: switch between primary, secondary and melee.
+func switch_weapon(slot: String) -> void:
+	reloading = false
+	var err := inv.switch_to(slot)
+	if err != "":
+		say(err)
+	else:
+		say("Fists" if inv.hands == null else Items.name_of(inv.hands["id"]))
+
+
+func cycle_weapon(step: int) -> void:
+	var order := ["primary", "secondary", "melee"]
+	var cur := order.find(Items.slot_of(inv.hands["id"])) if inv.hands != null else -1
+	for k in range(1, 4):
+		var slot: String = order[posmod(cur + step * k, 3)]
+		if inv.weapons[slot] != null:
+			switch_weapon(slot)
+			return
 
 
 ## Inventory: put the hands item away.
@@ -232,22 +235,40 @@ func _actions() -> void:
 		start_reload()
 	if Input.is_action_just_pressed("holster"):
 		holster()
+	if Input.is_action_just_pressed("weapon_primary"):
+		switch_weapon("primary")
+	if Input.is_action_just_pressed("weapon_secondary"):
+		switch_weapon("secondary")
+	if Input.is_action_just_pressed("weapon_melee"):
+		switch_weapon("melee")
+	if Input.is_action_just_pressed("weapon_next"):
+		cycle_weapon(1)
+	if Input.is_action_just_pressed("weapon_prev"):
+		cycle_weapon(-1)
+	if Game.click_used and not Input.is_action_pressed("attack"):
+		Game.click_used = false
 	var w := weapon()
 	if w["melee"]:
 		_auto_melee()
 		# Left click with food / water / bandage in hands uses it.
-		if Input.is_action_just_pressed("attack") and inv.hands != null and Items.DEFS[inv.hands["id"]]["kind"] == "consumable":
+		if Input.is_action_just_pressed("attack") and not Game.click_used and inv.hands != null and Items.DEFS[inv.hands["id"]]["kind"] == "consumable":
 			use_item(inv.hands["id"])
-	elif Input.is_action_pressed("attack") and _attack_cd <= 0.0 and not reloading:
+	elif Input.is_action_pressed("attack") and not Game.click_used and _attack_cd <= 0.0 and not reloading:
 		shoot()
-	if Input.is_action_just_pressed("interact") and nearest_loot:
-		say(nearest_loot.search(self))
+	if Input.is_action_just_pressed("interact"):
+		interact()
 	if Input.is_action_just_pressed("eat"):
 		use_item("food")
 	if Input.is_action_just_pressed("drink"):
 		use_item("water")
 	if Input.is_action_just_pressed("bandage"):
 		use_item("bandage")
+
+
+## E / action button: search the nearby container or pick up the nearby item.
+func interact() -> void:
+	if nearest_loot:
+		say(nearest_loot.search(self))
 
 
 ## Melee fights for you: swing at the nearest zombie in reach.
@@ -354,9 +375,16 @@ func use_item(item: String) -> void:
 	inv.remove(item, 1)
 
 
-## Drops an item on the ground as a bag. from_hands, or pocket index i.
+func drop_slot(slot: String) -> void:
+	_drop_item(inv.take_slot(slot))
+
+
+## Drops an item on the ground. from_hands, or pocket index i.
 func drop(from_hands: bool, i := -1) -> void:
-	var s = inv.take_hands() if from_hands else inv.take_pocket(i)
+	_drop_item(inv.take_hands() if from_hands else inv.take_pocket(i))
+
+
+func _drop_item(s) -> void:
 	if s == null:
 		return
 	reloading = false

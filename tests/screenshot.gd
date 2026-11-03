@@ -26,11 +26,13 @@ func _process(_delta: float) -> void:
 		# Stand just outside a building so the roof is visible.
 		var b: Rect2i = w.buildings[0]
 		p.global_position = w.center_of(Vector2i(b.end.x + 1, b.position.y + b.size.y / 2))
-		p.inv.add_stack({"id": "pistol", "count": 1, "mag": 5})
-		p.inv.add("bat")
+		p.inv.pickup({"id": "pistol", "count": 1, "mag": 5})
+		p.inv.pickup(Items.make("bat"))
+		p.inv.pickup({"id": "shotgun", "count": 1, "mag": 3})
 		p.inv.add("ammo_pistol", 14)
-		p.inv.hands = {"id": "shotgun", "count": 1, "mag": 3}
 		p.inv.add("ammo_shotgun", 6)
+		p.inv.add("food", 1)
+		p.switch_weapon("primary")
 		p.hunger = 62.0
 		p.thirst = 45.0
 		p.health = 78.0
@@ -38,7 +40,11 @@ func _process(_delta: float) -> void:
 		main.add_zombie(p.global_position + Vector2(160, -60), true)
 	if frame == 60:
 		_shot("outside")
-		var l := get_tree().get_nodes_in_group("loot")[0] as LootSpot
+		var l: LootSpot = null
+		for n in get_tree().get_nodes_in_group("loot"):
+			if n.is_bag:
+				l = n
+				break
 		p.global_position = l.global_position + Vector2(10, 0)
 	if frame == 100:
 		_shot("inside")

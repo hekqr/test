@@ -11,6 +11,8 @@ signal noise_made(pos: Vector2, radius: float)
 var night := 0.0
 ## True while a full-screen UI (inventory) is open: blocks attacking/moving.
 var ui_open := false
+## Set when a click was used by a UI button, so it doesn't also fire a gun. Cleared on release.
+var click_used := false
 
 
 func _ready() -> void:
@@ -22,6 +24,15 @@ func _ready() -> void:
 	_key("interact", [KEY_E])
 	_key("reload", [KEY_R])
 	_key("holster", [KEY_X])
+	_key("weapon_primary", [KEY_1])
+	_key("weapon_secondary", [KEY_2])
+	_key("weapon_melee", [KEY_3])
+	for pair in [["weapon_next", MOUSE_BUTTON_WHEEL_DOWN], ["weapon_prev", MOUSE_BUTTON_WHEEL_UP]]:
+		if not InputMap.has_action(pair[0]):
+			InputMap.add_action(pair[0])
+			var wb := InputEventMouseButton.new()
+			wb.button_index = pair[1]
+			InputMap.action_add_event(pair[0], wb)
 	_key("inventory", [KEY_TAB, KEY_I])
 	_key("eat", [KEY_F])
 	_key("drink", [KEY_G])
