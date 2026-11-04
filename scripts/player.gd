@@ -70,7 +70,6 @@ const T_DRINK := 3.0
 const T_BANDAGE := 5.0
 const T_FIRSTAID := 5.0
 const T_SKIN := 3.0
-const T_CRAFT := 2.0
 const T_REPAIR := 3.0
 const T_TEAR := 2.0
 const T_FIRE := 2.0
@@ -1148,7 +1147,7 @@ func build_fire_timed() -> void:
 	start_busy("Building a fire..", T_FIRE, build_fire)
 
 
-## Crafting from the menu takes a moment.
+## Crafting from the menu is instant (a campfire still takes a moment to build).
 func craft_timed(recipe_id: String) -> void:
 	var r := Crafting.get_recipe(recipe_id)
 	if r.is_empty():
@@ -1160,7 +1159,10 @@ func craft_timed(recipe_id: String) -> void:
 	if recipe_id == "campfire":
 		build_fire_timed()
 		return
-	start_busy("Crafting %s.." % String(r["name"]).to_lower(), T_CRAFT, func(): craft(recipe_id))
+	if busy_t > 0.0:
+		say("Busy: " + busy_label.trim_suffix("..").to_lower())
+		return
+	craft(recipe_id)
 
 
 ## C / right-click sticks: build a campfire (3 sticks + 1 match) at your feet.

@@ -72,9 +72,9 @@ const DEFS := {
 
 	# --- ammo (each gun takes exactly one type)
 	"ammo_9mm": {"name": "9mm rounds", "icon": "icon_ammo_pistol", "stack": 30, "kind": "ammo"},
-	"ammo_12ga": {"name": "12ga shells", "icon": "icon_ammo_shotgun", "stack": 12, "kind": "ammo"},
+	"ammo_12ga": {"name": "12ga shells", "icon": "icon_ammo_shotgun", "stack": 30, "kind": "ammo"},
 	"ammo_556": {"name": "5.56 rounds", "icon": "icon_ammo_rifle", "stack": 30, "kind": "ammo"},
-	"ammo_308": {"name": ".308 rounds", "icon": "icon_ammo_308", "stack": 10, "kind": "ammo"},
+	"ammo_308": {"name": ".308 rounds", "icon": "icon_ammo_308", "stack": 30, "kind": "ammo"},
 
 	# --- weapons
 	"knife": {"name": "Knife", "icon": "icon_knife", "stack": 1, "kind": "weapon", "equip": "melee", "big": false},

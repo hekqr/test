@@ -247,8 +247,8 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
   walls, trees or cars), you face where you walk, the mouse cursor is hidden. **T** switches to mouse aim
   (aim with the mouse, click to shoot); the choice is remembered
 - ✅ **Timed actions** with a progress bar (you can only shuffle along meanwhile): searching bins, car trunks,
-  medicine boxes, lockers and crates 1 s (fridges, wardrobes, cupboards, shop shelves, desks and boxes are
-  instant), picking things up instant, eating / drinking 3 s, bandage / first aid 5 s, skinning 3 s, crafting 2 s, repairing 3 s, tearing
+  medicine boxes, lockers and crates 1 s (fridges, wardrobes, cupboards, shop shelves, desks, boxes and
+  vending machines are instant), picking things up and crafting instant, eating / drinking 3 s, bandage / first aid 5 s, skinning 3 s, repairing 3 s, tearing
   2 s, building a fire 2 s
 - ✅ **Searching drops the loot on the floor** in front of the container (a pile you pick up); searched
   containers aren't offered again. Skinning drops the meat and leather too
@@ -275,7 +275,7 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
   crops grow 1.5× faster
 - ✅ **Military camps** (one per region): fenced, a road gate, tents, barracks and an armoury full of military
   crates (guns, 2–4 magazines of ammo, vests, helmets, food, water, medicine). Guarded by a few armed zombies only
-- ✅ **Ammo comes in whole magazines** (at least one): 9mm 8, 12ga 5, 5.56 30, .308 5 per magazine
+- ✅ **Ammo comes in whole magazines** (at least one): 9mm 8, 12ga 5, 5.56 30, .308 5 per magazine; every kind of ammo stacks to 30
 - ✅ Unsearched containers have a white outline (like items on the ground); items on the ground lie straight
 - ✅ Benches, bins and hydrants are never placed right in front of a door
 

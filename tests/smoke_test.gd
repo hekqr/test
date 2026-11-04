@@ -335,8 +335,12 @@ func _physics_process(_delta: float) -> void:
 			p._find_loot()
 			check(inv.near == spilled, "the pile shows in the inventory's nearby list")
 			check(p.nearest_loot != loot, "a searched container isn't offered again")
-			check(["trash", "bin", "car", "medicine"].all(func(k): return Loot.search_time(k) == 1.0) and ["fridge", "wardrobe", "shelf"].all(func(k): return Loot.search_time(k) == 0.0),
-				"bins, car trunks and medicine boxes take 1 s; fridges, wardrobes and shop shelves are instant")
+			check(["trash", "bin", "car", "medicine"].all(func(k): return Loot.search_time(k) == 1.0) and ["fridge", "wardrobe", "shelf", "vending"].all(func(k): return Loot.search_time(k) == 0.0),
+				"bins, car trunks and medicine boxes take 1 s; fridges, wardrobes, shop shelves and vending machines are instant")
+			inv.add("rags", 2)
+			var bandages := inv.count_of("bandage")
+			p.craft_timed("bandage")
+			check(p.busy_t <= 0.0 and inv.count_of("bandage") == bandages + 1, "crafting is instant")
 			var quick: LootSpot = null
 			for n in get_tree().get_nodes_in_group("loot"):
 				if not n.is_bag and n.kind == "fridge" and n != loot:
@@ -1325,6 +1329,7 @@ func _base_tests() -> void:
 					mags_ok = false
 	check(mags_ok, "ammo always comes in whole magazines (at least one)")
 	check(big_ok, "big ammo finds are split into proper stacks")
+	check(["ammo_9mm", "ammo_12ga", "ammo_556", "ammo_308"].all(func(id): return Items.max_stack(id) == 30), "every kind of ammo stacks to 30")
 	print("Weather")
 	p.global_position = _open_spot(w, 3)
 	main._set_weather("clear", 100.0)
@@ -1371,7 +1376,9 @@ func _base_tests() -> void:
 	for b in get_tree().get_nodes_in_group("survivors"):
 		b.free()
 	_clear_zombies()
+	_clear_wildlife()
 	p.global_position = _open_spot(w, 5)
+	_clear_ground(p.global_position, 200.0)
 	inv.gear["back"] = Items.make("backpack_large")
 	inv.add("planks", 10)
 	inv.add("planks", 10)
@@ -1455,6 +1462,7 @@ func _base_tests() -> void:
 	check(main.time_of_day * 24.0 > 21.0, "can't sleep with zombies around")
 	zz2.free()
 	print("Crops")
+	_clear_wildlife()
 	p.global_position = _open_spot(w, 3) + Vector2(0, 32 * 2)
 	for b2 in get_tree().get_nodes_in_group("structures"):
 		if b2.global_position.distance_to(p.global_position) < 120.0 and b2.kind != "bed":
@@ -1523,6 +1531,23 @@ func _base_tests() -> void:
 		check(guns > 60 and supplies > 40, "military crates: lots of guns, ammo and supplies (%d / %d)" % [guns, supplies])
 
 
+## Animals wander into building spots: take them out of the test world.
+func _clear_wildlife() -> void:
+	for a in get_tree().get_nodes_in_group("animals"):
+		a.remove_from_group("animals")
+		a.remove_from_group("wolves")
+		a.free()
+	main._animal_t = 9999.0
+
+
+## Removes carcasses and piles lying around `pos`.
+func _clear_ground(pos: Vector2, r: float) -> void:
+	for l in get_tree().get_nodes_in_group("loot"):
+		if (l.is_bag or l.kind == "carcass") and l.global_position.distance_to(pos) < r:
+			l.remove_from_group("loot")
+			l.free()
+
+
 ## A spot of open grass (r tiles around) with nothing you built nearby.
 func _far_spot(w: World, r: int) -> Vector2:
 	var built := get_tree().get_nodes_in_group("structures")
@@ -1568,6 +1593,7 @@ func _utility_tests() -> void:
 	Game.open_inventory = false
 	print("Workbench")
 	_clear_zombies()
+	_clear_wildlife()
 	var spot := _far_spot(w, 6)
 	check(spot != Vector2.INF, "an open spot for a second base")
 	p.global_position = spot
