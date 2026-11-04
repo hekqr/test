@@ -9,6 +9,7 @@ const WARM_RADIUS := 110.0
 const WARMTH := 35.0 # extra target temperature right next to the fire
 
 var fuel := 0.0 # seconds left
+var permanent := false # a stove: never goes out, drawn by the stove itself (just the flames in its window)
 var lit: bool:
 	get:
 		return fuel > 0.0
@@ -18,6 +19,8 @@ var _t := 0.0
 
 func _ready() -> void:
 	add_to_group("fires")
+	if permanent:
+		fuel = MAX_FUEL
 	var g := Gradient.new()
 	g.set_color(0, Color(1.0, 0.7, 0.35, 1))
 	g.set_color(1, Color(1.0, 0.5, 0.2, 0))
@@ -32,13 +35,16 @@ func _ready() -> void:
 	_light.texture = tex
 	_light.texture_scale = 2.4
 	_light.position = Vector2(0, -6)
+	if permanent:
+		_light.texture_scale = 1.6
 	add_child(_light)
 
 
 func _process(delta: float) -> void:
 	_t += delta
 	if lit:
-		fuel = maxf(fuel - delta, 0.0)
+		if not permanent:
+			fuel = maxf(fuel - delta, 0.0)
 		_light.energy = (0.9 + 0.12 * sin(_t * 11.0) + 0.08 * sin(_t * 23.0)) * (1.0 if fuel > 20.0 else fuel / 20.0)
 	else:
 		_light.energy = 0.0
@@ -58,6 +64,9 @@ func warmth_at(pos: Vector2) -> float:
 
 
 func label(p: Player) -> String:
+	if permanent:
+		var raw := p.inv.count_of("meat") + p.inv.count_of("fish")
+		return "Cook on the stove (%d)" % raw if raw > 0 else "Stove (burning)"
 	if lit and p.inv.count_of("meat") > 0:
 		return "Cook meat (%d)" % p.inv.count_of("meat")
 	if lit:
@@ -70,6 +79,12 @@ func to_save() -> Dictionary:
 
 
 func _draw() -> void:
+	if permanent:
+		# Flames behind the stove's little window
+		var glow := Color("e8902a").lerp(Color("f8e070"), 0.5 + 0.5 * sin(_t * 9.0))
+		draw_rect(Rect2(-5, 1, 10, 6), Color("c84a2a"))
+		draw_rect(Rect2(-4, 3 + sin(_t * 13.0), 8, 4), glow)
+		return
 	# Stone ring
 	var stone := Color("8a8690")
 	var stone_d := Color("5a5660")

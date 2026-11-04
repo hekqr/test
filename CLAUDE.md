@@ -22,5 +22,5 @@ Top-down 2D zombie survival game for Windows. Godot 4.7.2, GDScript. The user do
 ## Design decisions (from the user)
 - Base walls/gates are unbreakable: the base is a fully safe, sustainable place. No raids on bases.
 - No food spoilage mechanic (for now).
-- Later (when asked): renewable supplies (rain collector, snares, fish trap) and utility (workbench, stove/fireplace, shelves/weapon rack).
+- Done: renewable supplies (rain collector, snares, fish trap) and utility (workbench, stove, shelves, weapon rack).
 - Rejected: fortifying/boarding up existing houses.

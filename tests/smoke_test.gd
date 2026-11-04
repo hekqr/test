@@ -892,6 +892,7 @@ func _physics_process(_delta: float) -> void:
 			check(float(ws["health"]) == 40.0 and float(ws["bite"][1]) > float(Zombie.TYPES["walker"]["dmg"][1]), "wolves: 40 hp, bite a bit harder than walkers")
 			_water_tests()
 			_base_tests()
+			_utility_tests()
 			print("Regions")
 			main.hud.set_map_open(false)
 			var pr: Player = main.player
@@ -1497,6 +1498,196 @@ func _base_tests() -> void:
 				elif Items.kind(it["id"]) in ["consumable", "medical"]:
 					supplies += 1
 		check(guns > 60 and supplies > 40, "military crates: lots of guns, ammo and supplies (%d / %d)" % [guns, supplies])
+
+
+## A spot of open grass (r tiles around) with nothing you built nearby.
+func _far_spot(w: World, r: int) -> Vector2:
+	var built := get_tree().get_nodes_in_group("structures")
+	for y in range(r + 2, World.H - r - 2, 3):
+		for x in range(r + 2, World.W - r - 2, 3):
+			var pos := w.center_of(Vector2i(x, y))
+			if built.any(func(b): return b.global_position.distance_to(pos) < 300.0):
+				continue
+			var ok := true
+			for dy in range(-r, r + 1):
+				for dx in range(-r, r + 1):
+					if w.get_tile(Vector2i(x + dx, y + dy)) != World.GROUND:
+						ok = false
+						break
+				if not ok:
+					break
+			if ok and _nothing_near(pos, 120.0):
+				return pos
+	return Vector2.INF
+
+
+## Builds a kit next to the player (stepping aside when every side is taken).
+func _build(p: Player, kit: String) -> Structure:
+	for attempt in 6:
+		p.start_placing(kit)
+		var cell := _face_free(p, [Vector2.RIGHT, Vector2.LEFT, Vector2.DOWN, Vector2.UP])
+		if p.build_problem(cell) == "":
+			p.place_kit()
+			p.finish_busy()
+			return main.structure_at(cell)
+		p.global_position += Vector2(0, 64)
+	return null
+
+
+## Workbench, stove, shelves, weapon rack, rain collector, snares, fish traps, taking things apart.
+func _utility_tests() -> void:
+	var p: Player = main.player
+	var w: World = main.world
+	var inv := p.inv
+	p.cancel_busy()
+	p.stop_placing()
+	main.hud.set_inventory_open(false)
+	Game.open_inventory = false
+	print("Workbench")
+	_clear_zombies()
+	var spot := _far_spot(w, 6)
+	check(spot != Vector2.INF, "an open spot for a second base")
+	p.global_position = spot
+	inv.gear["back"] = Items.make("backpack_large")
+	inv.gear["melee"] = null
+	inv.gear["hands"] = null
+	for loc in inv.storage_cells():
+		if inv.get_at(loc) != null:
+			inv.take(loc)
+	for i in 3:
+		inv.add("planks", 10)
+	inv.add("nails", 30)
+	for i in 3:
+		inv.add("scrap_metal", 5)
+	for i in 2:
+		inv.add("rope", 3)
+	inv.add("sticks", 10)
+	check(Crafting.missing(Crafting.get_recipe("kit_stove"), inv, false).contains("workbench") and not p.craft("kit_stove"), "the stove can only be made at a workbench")
+	check(p.craft("kit_workbench") and inv.count_of("kit_workbench") == 1, "craft a workbench kit (anywhere)")
+	var bench := _build(p, "kit_workbench")
+	check(bench != null and bench.kind == "workbench" and p.near_bench(), "workbench built")
+	p._find_loot()
+	check(p.interact_choice() == "build" and p.action_label() == "Use workbench", "Q at the workbench: Use workbench")
+	p.interact()
+	check(main.hud.inventory_open and main.hud.left_tab == "craft", "Q at the workbench opens crafting")
+	main.hud.set_inventory_open(false)
+	for k in ["kit_stove", "kit_shelf", "kit_rack", "kit_collector", "kit_snare", "kit_fishtrap"]:
+		check(p.craft(k) and inv.count_of(k) == 1, "craft " + Items.name_of(k).to_lower())
+	var knife := Items.make("knife")
+	knife["cond"] = 50.0
+	inv.gear["melee"] = knife
+	var kloc := {"t": "gear", "s": "melee"}
+	var scrap := inv.count_of("scrap_metal")
+	check(p.actions_for(kloc).any(func(a): return String(a[0]).begins_with("Repair at workbench")), "item menu: Repair at workbench")
+	check(p.repair(kloc) and float(knife["cond"]) > 85.0 and inv.count_of("scrap_metal") == scrap - 1, "repair a weapon at the workbench with scrap metal (no toolbox)")
+	var tee := Items.make("tshirt")
+	tee["cond"] = 30.0
+	inv.gear["shirt"] = tee
+	var rags := inv.count_of("rags")
+	inv.add("rags", 2)
+	check(p.repair({"t": "gear", "s": "shirt"}) and float(tee["cond"]) > 65.0 and inv.count_of("rags") == rags, "repair clothing at the workbench with 2 rags")
+	print("Stove")
+	var stove := _build(p, "kit_stove")
+	check(stove != null and stove.fire != null and stove.fire.lit and stove.fire.permanent, "stove built - it burns")
+	var fuel0 := stove.fire.fuel
+	stove.fire._process(100.0)
+	check(stove.fire.fuel == fuel0, "the stove never burns out")
+	check(p.near_fire(), "the stove keeps you warm")
+	var plain_fires := get_tree().get_nodes_in_group("fires").filter(func(f): return not f.permanent).size()
+	check(main.to_save()["fires"].size() == plain_fires, "the stove isn't saved as a campfire")
+	inv.add("meat", 1)
+	p.nearest_fire = stove.fire
+	p.use_fire(stove.fire)
+	check(p.cook_t > 0.0, "cook on the stove")
+	p._finish_cooking()
+	check(inv.count_of("cooked_meat") >= 1, "cooked meat from the stove")
+	print("Shelves / weapon rack")
+	var shelf := _build(p, "kit_shelf")
+	var shelf_cell := shelf.cell if shelf else Vector2i.ZERO
+	var shelf_pos := p.global_position
+	var shelf_face := p.facing
+	check(shelf != null and shelf.chest != null and shelf.chest.kind == "store_shelf", "shelves built")
+	p._find_loot()
+	inv.near = shelf.chest
+	inv.add("matches", 2)
+	inv.move(inv.find("matches"), Inventory.near_loc(0))
+	check(shelf.chest.contents.any(func(it): return it["id"] == "matches") and shelf.chest._display != null, "store things on the shelves (they show on it)")
+	var rack := _build(p, "kit_rack")
+	check(rack != null and rack.chest != null and rack.chest.kind == "store_rack", "weapon rack built")
+	inv.near = rack.chest
+	check(inv.can_place(Items.make("tomato"), Inventory.near_loc(0)) != "" and inv.can_place(Items.make("knife"), Inventory.near_loc(0)) == "" and inv.can_place(Items.make("ammo_9mm"), Inventory.near_loc(0)) == "",
+		"the weapon rack only takes weapons and ammo")
+	check(not main.to_save()["loot"].any(func(l): return LootSpot.is_store_kind(String(l["kind"]))), "storage is saved with your base, not as loot")
+	print("Rain collector")
+	var col := _build(p, "kit_collector")
+	check(col != null and col.kind == "collector" and col.water_units() == 0, "rain collector built (empty)")
+	col.tick(col.last_day + 1.0 / 24.0, "rain")
+	check(col.water_units() == 2, "an hour of rain: 2 drinks in it (%d)" % col.water_units())
+	col.tick(col.last_day + 1.0 / 24.0, "clear")
+	check(col.water_units() == 2, "no rain, no water")
+	col.tick(col.last_day + 1.0 / 24.0, "snow")
+	check(col.water_units() == 3, "snow fills it half as fast")
+	col.tick(col.last_day + 5.0, "clear")
+	check(col.water_units() == Structure.COLLECTOR_CAP, "fills up over days (max %d)" % Structure.COLLECTOR_CAP)
+	p.thirst = 30.0
+	p.cancel_busy()
+	p._use_structure(col)
+	p.finish_busy()
+	check(p.thirst > 60.0 and col.water_units() < Structure.COLLECTOR_CAP, "drink from the rain collector")
+	var cd: Dictionary = main.to_save()["structures"].filter(func(d): return d["kind"] == "collector")[0]
+	check(absf(Structure.from_save(cd, w).water - col.water) < 0.02, "its water is saved")
+	print("Snare")
+	var sn := _build(p, "kit_snare")
+	check(sn != null and sn.kind == "snare", "snare set on the grass")
+	sn.tick(sn.last_day + 3.0, "clear")
+	check(sn.caught == 1, "a rabbit in the snare after a few days")
+	p._find_loot()
+	var meat0 := _pile_count("meat")
+	p._use_structure(sn)
+	p.finish_busy()
+	check(sn.caught == 0 and _pile_count("meat") == meat0 + 1, "take the rabbit: raw meat")
+	print("Taking things apart")
+	p.cancel_busy()
+	p.global_position = shelf_pos
+	p.facing = shelf_face
+	p.placing = Player.NO_KIT
+	check(p.build_cell() == shelf_cell, "building mode: aiming at the shelves")
+	var planks0 := _pile_count("planks")
+	p.place_kit()
+	p.finish_busy()
+	check(main.structure_at(shelf_cell) == null and _pile_count("matches") >= 2 and _pile_count("planks") > planks0, "Q in building mode takes it apart (materials + what was on it drop)")
+	p.stop_placing()
+	print("Fish trap")
+	var bank := Vector2i(-1, -1)
+	var built := get_tree().get_nodes_in_group("structures")
+	for y in range(2, World.H - 2):
+		for x in range(2, World.W - 2):
+			if bank.x < 0 and w.get_tile(Vector2i(x, y)) == World.WATER and w.is_walkable(Vector2i(x, y + 1)) and w.get_tile(Vector2i(x, y + 2)) == World.GROUND:
+				var bp := w.center_of(Vector2i(x, y + 1))
+				if _nothing_near(bp, 60.0) and not built.any(func(b): return b.global_position.distance_to(bp) < 120.0):
+					bank = Vector2i(x, y + 1)
+	check(bank.x >= 0, "a lake shore")
+	if bank.x >= 0:
+		p.global_position = w.center_of(bank)
+		p.start_placing("kit_fishtrap")
+		p.facing = Vector2.DOWN
+		check(p.build_problem(p.build_cell()) != "", "fish traps don't go on land")
+		p.facing = Vector2.UP
+		var tc := p.build_cell()
+		check(w.get_tile(tc) == World.WATER and p.build_problem(tc) == "", "a fish trap goes in the water by the shore")
+		p.place_kit()
+		p.finish_busy()
+		var trap: Structure = main.structure_at(tc)
+		check(trap != null and trap.kind == "fishtrap", "fish trap set")
+		trap.tick(trap.last_day + 4.0, "rain")
+		check(trap.caught == Structure.TRAP_CAP, "it fills up with fish (max %d)" % Structure.TRAP_CAP)
+		p.stop_placing()
+		p._find_loot()
+		check(p.interact_choice() == "build" and p.action_label().begins_with("Take fish"), "Q at the trap takes the fish (not a drink from the lake)")
+		var fish0 := _pile_count("fish")
+		p.interact()
+		p.finish_busy()
+		check(trap.caught == 0 and _pile_count("fish") == fish0 + Structure.TRAP_CAP, "fish from the trap")
 
 
 ## Turns the player towards the first direction where the kit can be built; returns that cell.

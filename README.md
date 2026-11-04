@@ -19,7 +19,7 @@ The game saves automatically (every 20 s, when you quit, and when you die) to
 | T | Switch between auto aim (Space, no mouse needed) and mouse aim (aim with the mouse, click to shoot) |
 | Q (or the on-screen button) | Search (1 s — what you find drops on the floor) / pick up / skin / cook / drink & fill gourd / open chest / sleep / plant / harvest / chop wood (with an axe) |
 | F | Fish (at a lake or river, with a fishing rod) |
-| B | Build: place a building kit in front of you (Q to place, B for the next kit, X to stop) |
+| B | Build: place a building kit in front of you (Q to place, B for the next kit, X to stop). Q on something you built takes it apart |
 | C | Build campfire (3 sticks + 1 match) |
 | K | Crafting |
 | M | Map (scroll to zoom, drag to move) |

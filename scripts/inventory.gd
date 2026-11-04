@@ -120,6 +120,8 @@ func can_place(item: Dictionary, loc: Dictionary) -> String:
 		"near":
 			if near == null:
 				return "Nothing nearby"
+			if near.kind == "store_rack" and not LootSpot.rack_takes(id):
+				return "Only weapons and ammo go on the rack"
 	return ""
 
 

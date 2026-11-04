@@ -45,6 +45,8 @@ const CONTAINERS := {
 
 	# A chest you built (storage; never filled by itself)
 	"chest": {"name": "Chest", "sprite": "px:chest", "rolls": Vector2i(0, 0), "empty": 1.0, "table": []},
+	"store_shelf": {"name": "Shelves", "sprite": "px:storage_shelf", "rolls": Vector2i(0, 0), "empty": 1.0, "table": []},
+	"store_rack": {"name": "Weapon rack", "sprite": "px:weapon_rack", "rolls": Vector2i(0, 0), "empty": 1.0, "table": []},
 
 	# --- military camps: plenty of supplies, guns, and 2-4 magazines of ammo
 	"military": {"name": "Military crate", "sprite": "px:milcrate", "rolls": Vector2i(1, 3), "empty": 0.15, "table": [

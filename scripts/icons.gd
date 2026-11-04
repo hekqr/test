@@ -10,7 +10,8 @@ const NAMES := ["tshirt", "flannel", "hoodie", "jacket", "jeans", "cargo_pants",
 	"helmet", "cap", "beanie", "backpack_small", "backpack_large", "soda", "meat", "cooked_meat", "matches", "water",
 	"rags", "rope", "sack", "sack_backpack", "spear", "map", "sewing_kit", "toolbox", "scrap_metal", "scrap_armour", "leather", "gourd",
 	"fish", "cooked_fish", "tomato", "potato", "tomato_seeds", "planks", "nails", "fishing_rod",
-	"kit_wall", "kit_gate", "kit_chest", "kit_bed", "kit_garden"]
+	"kit_wall", "kit_gate", "kit_chest", "kit_bed", "kit_garden",
+	"kit_workbench", "kit_stove", "kit_shelf", "kit_rack", "kit_collector", "kit_snare", "kit_fishtrap"]
 
 ## Default colours for items without a random colour.
 const DEFAULT := {
@@ -23,6 +24,8 @@ const DEFAULT := {
 	"fish": "7e9aa8", "cooked_fish": "b07a44", "tomato": "c8382e", "potato": "b08a58", "tomato_seeds": "d8c8a0",
 	"planks": "a07448", "nails": "9aa0a8", "fishing_rod": "8a6a44",
 	"kit_wall": "9a6e44", "kit_gate": "8a6440", "kit_chest": "8a5a34", "kit_bed": "8a6a50", "kit_garden": "6a4a30",
+	"kit_workbench": "a07850", "kit_stove": "4a4a54", "kit_shelf": "7a5434", "kit_rack": "6e4a32", "kit_collector": "5a4a3a",
+	"kit_snare": "a08458", "kit_fishtrap": "8a6a44",
 	"sewing_kit": "5a7aa8", "toolbox": "b83a3a", "scrap_metal": "8a8e94", "scrap_armour": "767a80",
 }
 
@@ -399,7 +402,27 @@ static func _draw_item(img: Image, name: String, c: Color, silhouette: bool) -> 
 				return
 			_line(img, Vector2i(28, 3), Vector2i(28, 22), Color("d8dce4"))
 			_rect(img, 27, 22, 3, 3, Color("c83a3a"))
-		"kit_wall", "kit_gate", "kit_chest", "kit_bed", "kit_garden":
+		"kit_snare":
+			# A stick with a rope noose
+			_line(img, Vector2i(9, 4), Vector2i(13, 28), Color("7a5432"))
+			_line(img, Vector2i(10, 4), Vector2i(14, 28), Color("7a5432"))
+			if silhouette:
+				return
+			for k in 24:
+				var a := TAU * k / 24.0
+				_px(img, int(20 + cos(a) * 6.0), int(18 + sin(a) * 6.0), c)
+				_px(img, int(20 + cos(a) * 5.0), int(18 + sin(a) * 5.0), c.darkened(0.2))
+			_line(img, Vector2i(12, 10), Vector2i(17, 13), c)
+		"kit_fishtrap":
+			# A woven basket trap
+			_poly(img, [Vector2(3, 10), Vector2(24, 7), Vector2(29, 16), Vector2(24, 25), Vector2(3, 22)], c)
+			if silhouette:
+				return
+			for x in [8, 13, 18, 23]:
+				_line(img, Vector2i(x, 9), Vector2i(x, 23), dd)
+			_line(img, Vector2i(4, 16), Vector2i(28, 16), l)
+			_circle(img, Vector2(5, 16), 3.0, Color("2a2224"))
+		"kit_wall", "kit_gate", "kit_chest", "kit_bed", "kit_garden", "kit_workbench", "kit_stove", "kit_shelf", "kit_rack", "kit_collector":
 			# A bundle of planks tied with rope, with a picture of what it builds
 			_rect(img, 3, 18, 26, 10, Color("a07448"))
 			_line(img, Vector2i(3, 22), Vector2i(28, 22), Color("7a5432"))
@@ -424,6 +447,31 @@ static func _draw_item(img: Image, name: String, c: Color, silhouette: bool) -> 
 					_rect(img, 6, 7, 20, 8, Color("5a7aa8"))
 					_rect(img, 6, 7, 6, 8, Color("e8e0d0"))
 					_rect(img, 6, 14, 20, 2, c)
+				"kit_workbench":
+					_rect(img, 5, 7, 22, 4, c)
+					_rect(img, 6, 11, 3, 6, dd)
+					_rect(img, 23, 11, 3, 6, dd)
+					_rect(img, 9, 4, 7, 3, Color("b0b4bc"))
+				"kit_stove":
+					_rect(img, 9, 4, 14, 13, c)
+					_rect(img, 18, 1, 3, 4, dd)
+					_rect(img, 12, 9, 8, 5, Color("e8902a"))
+				"kit_shelf":
+					_rect(img, 7, 2, 18, 15, c)
+					_rect(img, 9, 4, 14, 4, dd)
+					_rect(img, 9, 10, 14, 5, dd)
+					_rect(img, 10, 5, 3, 3, Color("c8a838"))
+					_rect(img, 15, 11, 4, 4, Color("3a6aa8"))
+				"kit_rack":
+					_rect(img, 6, 2, 3, 15, c)
+					_rect(img, 23, 2, 3, 15, c)
+					_rect(img, 9, 6, 14, 2, Color("3a3a42"))
+					_rect(img, 9, 12, 14, 2, Color("3a3a42"))
+				"kit_collector":
+					_rect(img, 9, 3, 14, 14, c)
+					_rect(img, 10, 4, 12, 3, Color("6aa8d8"))
+					_rect(img, 9, 9, 14, 1, Color("8a8e94"))
+					_rect(img, 9, 14, 14, 1, Color("8a8e94"))
 				"kit_garden":
 					_rect(img, 6, 8, 20, 8, Color("5a3e28"))
 					for x in [10, 16, 22]:

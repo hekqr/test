@@ -15,7 +15,23 @@ var reach := 44.0 # how close the player must be
 var animal := "" # for carcasses: "rabbit" / "deer"
 var _sprite: Sprite2D
 var _outline: Node2D
+var _display: Node2D # shelves / weapon rack: what's on them
 static var _silhouette: Shader
+const STORES := ["chest", "store_shelf", "store_rack"]
+
+
+## Storage you built (chest, shelves, weapon rack): keeps what you put in, never "searched".
+static func is_store_kind(k: String) -> bool:
+	return k in STORES
+
+
+func is_store() -> bool:
+	return kind in STORES
+
+
+## Weapon racks only hold weapons and ammo.
+static func rack_takes(id: String) -> bool:
+	return Items.is_weapon(id) or Items.kind(id) == "ammo"
 
 
 static func _silhouette_shader() -> Shader:
@@ -70,7 +86,7 @@ func _ready() -> void:
 			_sprite.flip_h = flip
 			# Stand on the bottom of the tile.
 			_sprite.offset = Vector2(0, 7.5 - _sprite.texture.get_height() / 2.0)
-	if is_bag or (kind != "carcass" and not opened):
+	if is_bag or (kind != "carcass" and not opened and not is_store()):
 		# White outline around items on the ground and unsearched containers, so they're easy to spot
 		_outline = Node2D.new()
 		var om := ShaderMaterial.new()
@@ -79,8 +95,30 @@ func _ready() -> void:
 		_outline.draw.connect(_draw_outline)
 		add_child(_outline)
 	add_child(_sprite)
+	if kind == "store_shelf" or kind == "store_rack":
+		_display = Node2D.new()
+		_display.draw.connect(_draw_display)
+		add_child(_display)
 	set_process(false)
 	refresh()
+
+
+## Shelves show the first 6 things on them, a weapon rack its first 3 weapons.
+func _draw_display() -> void:
+	var slots: Array = []
+	if kind == "store_shelf":
+		for row in 2:
+			for c in 3:
+				slots.append(Rect2(-13 + c * 9, -13 + row * 14, 8, 8))
+	else:
+		for y in [-14, -4, 6]:
+			slots.append(Rect2(-10, y, 20, 7))
+	for i in mini(contents.size(), slots.size()):
+		var tex := Items.item_icon(contents[i])
+		var r: Rect2 = slots[i]
+		var k := minf(r.size.x / tex.get_width(), r.size.y / tex.get_height())
+		var sz := tex.get_size() * k
+		_display.draw_texture_rect(tex, Rect2(r.get_center() - sz / 2.0, sz), false)
 
 
 ## Call after contents change.
@@ -102,6 +140,8 @@ func refresh() -> void:
 			_sprite.scale = Vector2.ONE * clampf(22.0 / m, 0.6, 1.5)
 		if _outline:
 			_outline.queue_redraw()
+	if _display:
+		_display.queue_redraw()
 	queue_redraw()
 
 
@@ -142,6 +182,8 @@ static func from_save(d: Dictionary) -> LootSpot:
 
 
 func label() -> String:
+	if is_store():
+		return "Open " + title().to_lower()
 	if kind == "carcass":
 		return "Skin " + animal
 	if is_bag and not contents.is_empty():

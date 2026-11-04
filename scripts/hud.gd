@@ -49,6 +49,7 @@ const DRAG_START := 6.0 # pixels the mouse must move before a press turns into a
 var _menu := {} # right-click menu: {"loc", "pos", "items": [[label, action], ...]}
 var _near_scroll := 0
 var left_tab := "near" # "near" or "craft"
+var _craft_scroll := 0
 var map_open := false
 var travel_text := "" # "Travelling to ..." while the next region is built
 var _map_tex: ImageTexture # terrain: paper, forests, water (1 px = 2x2 tiles)
@@ -118,6 +119,10 @@ func tab_rect(i: int) -> Rect2:
 
 func craft_row(i: int) -> Rect2:
 	return Rect2(NEAR_RECT.position + Vector2(10, 50 + i * 58), Vector2(NEAR_RECT.size.x - 20, 54))
+
+
+func craft_visible_rows() -> int:
+	return int((NEAR_RECT.size.y - 50 - 48) / 58)
 
 
 func near_visible_rows() -> int:
@@ -318,6 +323,10 @@ func _input(event: InputEvent) -> void:
 	var inv := p.inv
 	var loc := loc_at(mb.position)
 	# Scroll the nearby list
+	if mb.pressed and mb.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN] and NEAR_RECT.has_point(mb.position) and left_tab == "craft":
+		_craft_scroll = clampi(_craft_scroll + (1 if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN else -1), 0, maxi(Crafting.RECIPES.size() - craft_visible_rows(), 0))
+		get_viewport().set_input_as_handled()
+		return
 	if mb.pressed and mb.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN] and NEAR_RECT.has_point(mb.position):
 		var n: int = inv.near.contents.size() if inv.near else 0
 		_near_scroll = clampi(_near_scroll + (1 if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN else -1), 0, maxi(n - near_visible_rows(), 0))
@@ -347,9 +356,9 @@ func _input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 				return
 		if left_tab == "craft":
-			for i in Crafting.RECIPES.size():
-				if craft_row(i).has_point(mb.position):
-					p.craft_timed(Crafting.RECIPES[i]["id"])
+			for k in craft_visible_rows():
+				if craft_row(k).has_point(mb.position) and k + _craft_scroll < Crafting.RECIPES.size():
+					p.craft_timed(Crafting.RECIPES[k + _craft_scroll]["id"])
 					get_viewport().set_input_as_handled()
 					return
 	if left_tab == "craft" and NEAR_RECT.has_point(mb.position) and _drag.is_empty():
@@ -688,7 +697,7 @@ func _draw() -> void:
 	if show_help and not inventory_open and not map_open:
 		var lines := [
 			"WASD move   Shift sprint   Melee is automatic   Space shoot (aims for you - stand still to steady)",
-			"Q search, pick up, skin, cook, drink, open chest, sleep   F fish   B build   C campfire   T auto / mouse aim",
+			"Q search, pick up, skin, cook, drink, open, sleep, use   F fish   B build (Q on built = take apart)   C campfire   T aim mode",
 			"1 / 2 / 3: main / secondary / melee   R reload   X lower weapon / stop   Mouse wheel: zoom   K crafting   M map",
 			"E inventory: click an item to eat, drink, bandage, wear, build...   Esc pause   F1 hide help",
 		]
@@ -745,10 +754,15 @@ func _draw_inventory(p: Player, vs: Vector2) -> void:
 
 
 func _draw_crafting(p: Player) -> void:
-	for i in Crafting.RECIPES.size():
+	var bench := p.near_bench()
+	_craft_scroll = clampi(_craft_scroll, 0, maxi(Crafting.RECIPES.size() - craft_visible_rows(), 0))
+	for k in craft_visible_rows():
+		var i := k + _craft_scroll
+		if i >= Crafting.RECIPES.size():
+			break
 		var r: Dictionary = Crafting.RECIPES[i]
-		var row := craft_row(i)
-		var miss := Crafting.missing(r, p.inv)
+		var row := craft_row(k)
+		var miss := Crafting.missing(r, p.inv, bench)
 		var ok := miss == ""
 		draw_rect(row, C_EDGE)
 		draw_rect(row.grow(-2), (C_LIGHT if row.has_point(_mouse) else C_CARD) if ok else C_FILL)
@@ -760,11 +774,14 @@ func _draw_crafting(p: Player) -> void:
 			parts.append("%d/%d %s" % [mini(p.inv.count_of(item), int(r["needs"][item])), int(r["needs"][item]), Items.name_of(item).to_lower()])
 		if not r["tools"].is_empty():
 			parts.append("tool: " + " / ".join(PackedStringArray(r["tools"])))
+		if r.get("station", "") == "workbench":
+			parts.append("at a workbench")
 		_text(row.position + Vector2(54, 38), ", ".join(parts), 12, Color(0.6, 0.9, 0.55) if ok else Color(0.95, 0.6, 0.5))
 		if ok:
 			_text(Vector2(row.end.x - 10, row.position.y + 20), "Click to craft", 11, C_DIM, HORIZONTAL_ALIGNMENT_RIGHT, 0)
-	_text(Vector2(NEAR_RECT.position.x, NEAR_RECT.end.y - 40), "Tear shirts into rags (right-click a shirt)", 12, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, NEAR_RECT.size.x)
-	_text(Vector2(NEAR_RECT.position.x, NEAR_RECT.end.y - 22), "Cook raw meat at a lit campfire", 12, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, NEAR_RECT.size.x)
+	var more := Crafting.RECIPES.size() - craft_visible_rows()
+	_text(Vector2(NEAR_RECT.position.x, NEAR_RECT.end.y - 40), "Scroll for more recipes (%d/%d)" % [mini(_craft_scroll + craft_visible_rows(), Crafting.RECIPES.size()), Crafting.RECIPES.size()] if more > 0 else "Tear shirts into rags (right-click a shirt)", 12, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, NEAR_RECT.size.x)
+	_text(Vector2(NEAR_RECT.position.x, NEAR_RECT.end.y - 22), "At a workbench: more kits" if not bench else "At your workbench", 12, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, NEAR_RECT.size.x)
 
 
 func _draw_nearby(p: Player, inv: Inventory) -> void:

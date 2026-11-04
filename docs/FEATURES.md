@@ -278,9 +278,24 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ Unsearched containers have a white outline (like items on the ground); items on the ground lie straight
 - ✅ Benches, bins and hydrants are never placed right in front of a door
 
+## Milestone 12 — Base utility and renewable supplies
+- ✅ **Workbench** (6 planks + 6 nails): Q opens crafting. Stove, shelves, weapon rack and rain collector kits
+  are made at a workbench. Repair there without a kit: 1 scrap metal (weapons, metal) or 2 rags (clothing), +40%
+- ✅ **Stove** (4 scrap metal + 4 nails, workbench): a fire that never goes out — warmth (indoors too) and cooking
+- ✅ **Shelves** (4 planks + 4 nails) and **weapon rack** (3 planks + 3 nails + rope, weapons and ammo only):
+  storage that shows what's on it
+- ✅ **Rain collector** (4 planks + 4 nails + 1 scrap metal, workbench): +2 drinks per hour of rain (snow half),
+  holds 10; Q to drink / fill gourds
+- ✅ **Snare** (2 sticks + rope, on grass): about a rabbit a day (raw meat); **fish trap** (4 sticks + 2 rope, in
+  the water by the shore): about 1.5 fish a day (rain 1.5×), holds 3
+- ✅ Taking things apart: B (building mode, works without kits) and Q on something you built — materials and
+  whatever was stored in it drop to the ground
+- ✅ Crafting list scrolls (mouse wheel)
+- Base walls stay unbreakable: the base is meant to be fully safe
+
 ## Ideas for endless play (next)
-- 📌 Zombies attacking walls; more base pieces (rain collector, workbench, watchtower)
-- 📌 More renewable food: snares, berries / mushrooms, slow loot respawn
+- 📌 Watchtower
+- 📌 More renewable food: berries / mushrooms, slow loot respawn
 - 📌 Region biomes (snow, plains, coast) and danger rising with distance from home
 
 ## Planned

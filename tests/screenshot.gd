@@ -184,6 +184,23 @@ func _process(_delta: float) -> void:
 		g2.plant("potato", main.world_days)
 		g2.growth = 0.5
 		g2.grow(main.world_days, false)
+		# Utility row in front of the wall
+		main.add_structure("workbench", c0 + Vector2i(-3, 1))
+		main.add_structure("stove", c0 + Vector2i(-2, 1))
+		var sh: Structure = main.add_structure("shelf", c0 + Vector2i(-1, 1))
+		for id in ["tomato", "potato", "water", "bandage", "meat"]:
+			sh.chest.contents.append(Items.make(id))
+		sh.chest.refresh()
+		var rk: Structure = main.add_structure("rack", c0 + Vector2i(0, 1))
+		for id in ["axe", "knife"]:
+			rk.chest.contents.append(Items.make(id))
+		rk.chest.refresh()
+		var cl: Structure = main.add_structure("collector", c0 + Vector2i(1, 1))
+		cl.water = 6.0
+		cl.tick(main.world_days, "clear")
+		var sn: Structure = main.add_structure("snare", c0 + Vector2i(2, 2))
+		sn.caught = 1
+		sn.tick(main.world_days + 0.001, "clear")
 		main._set_weather("rain", 500.0)
 		p.inv.gear["hands"] = Items.make("fishing_rod")
 	if frame == 140:

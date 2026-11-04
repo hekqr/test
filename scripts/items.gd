@@ -55,6 +55,13 @@ const DEFS := {
 	"kit_chest": {"name": "Chest kit", "icon": "px:kit_chest", "stack": 2, "kind": "kit", "builds": "chest"},
 	"kit_bed": {"name": "Bed kit", "icon": "px:kit_bed", "stack": 1, "kind": "kit", "builds": "bed"},
 	"kit_garden": {"name": "Garden bed kit", "icon": "px:kit_garden", "stack": 3, "kind": "kit", "builds": "garden"},
+	"kit_workbench": {"name": "Workbench kit", "icon": "px:kit_workbench", "stack": 1, "kind": "kit", "builds": "workbench"},
+	"kit_stove": {"name": "Stove kit", "icon": "px:kit_stove", "stack": 1, "kind": "kit", "builds": "stove"},
+	"kit_shelf": {"name": "Shelves kit", "icon": "px:kit_shelf", "stack": 2, "kind": "kit", "builds": "shelf"},
+	"kit_rack": {"name": "Weapon rack kit", "icon": "px:kit_rack", "stack": 2, "kind": "kit", "builds": "rack"},
+	"kit_collector": {"name": "Rain collector kit", "icon": "px:kit_collector", "stack": 2, "kind": "kit", "builds": "collector"},
+	"kit_snare": {"name": "Snare", "icon": "px:kit_snare", "stack": 5, "kind": "kit", "builds": "snare"},
+	"kit_fishtrap": {"name": "Fish trap", "icon": "px:kit_fishtrap", "stack": 3, "kind": "kit", "builds": "fishtrap"},
 	"leather": {"name": "Leather", "icon": "px:leather", "stack": 5, "kind": "material"},
 	# Refillable: holds 4 bottles' worth (one drink each). Fill it at taps, lakes and rivers.
 	"gourd": {"name": "Water gourd", "icon": "px:gourd", "stack": 1, "kind": "tool", "capacity": 4, "thirst": 40.0},

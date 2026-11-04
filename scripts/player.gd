@@ -79,6 +79,11 @@ const T_BUILD := 2.0
 const T_PLANT := 2.0
 const T_HARVEST := 2.0
 const T_DISMANTLE := 3.0
+const BENCH_REACH := 72.0
+## Building kits, in the order B cycles through them.
+const KITS := ["kit_wall", "kit_gate", "kit_chest", "kit_bed", "kit_garden", "kit_workbench", "kit_stove",
+	"kit_shelf", "kit_rack", "kit_collector", "kit_snare", "kit_fishtrap"]
+const NO_KIT := "_" # building mode without a kit: only taking things apart
 const T_CHOP := 4.0
 ## Fishing: a bite takes 3-10 s (faster in the rain), then the fish is hooked or gets away.
 const FISH_TIME := Vector2(3.0, 10.0)
@@ -239,7 +244,13 @@ func actions_for(loc: Dictionary) -> Array:
 		var c := float(it["cond"])
 		if c > 0.0 and c < 100.0:
 			var kit := "sewing_kit" if fix == "sew" else "toolbox"
-			out.append(["Repair (%s)" % Items.name_of(kit).to_lower() if inv.count_of(kit) > 0 else "Repair - needs a " + Items.name_of(kit).to_lower(), "repair"])
+			var cost := bench_repair_cost(fix)
+			if inv.count_of(kit) > 0:
+				out.append(["Repair (%s)" % Items.name_of(kit).to_lower(), "repair"])
+			elif near_bench():
+				out.append(["Repair at workbench (%d %s)" % [cost[1], Items.name_of(cost[0]).to_lower()], "repair"])
+			else:
+				out.append(["Repair - needs a %s or a workbench" % Items.name_of(kit).to_lower(), "repair"])
 	if d.has("builds") and loc["t"] != "near":
 		out.append(["Build", "build"])
 	if d.has("tear"):
@@ -277,7 +288,7 @@ func do_action(loc: Dictionary, action: String) -> void:
 				if it2 != null and it2["id"] == id:
 					tear(loc))
 		"repair":
-			if Items.is_ruined(it) or float(it.get("cond", 100.0)) >= 100.0 or inv.find("sewing_kit" if Items.repair_kind(id) == "sew" else "toolbox").is_empty():
+			if Items.is_ruined(it) or float(it.get("cond", 100.0)) >= 100.0 or _repair_source(Items.repair_kind(id)) == "":
 				repair(loc) # just says why it can't
 			else:
 				start_busy("Repairing..", T_REPAIR, func():
@@ -367,10 +378,10 @@ func drink_gourd(loc: Dictionary) -> bool:
 
 ## At a tap or a lake / river: drink your fill, then fill every gourd you carry.
 ## Taps only have a little water left; lakes and rivers never run dry.
-func use_water(tap: WaterSource = null) -> void:
-	var units: int = 1000 if tap == null else tap.water
+func use_water(tap: Node2D = null) -> void:
+	var units: int = 1000 if tap == null else int(tap.get("water"))
 	if units <= 0:
-		say("The tap is dry")
+		say("The rain collector is empty" if tap is Structure else "The tap is dry")
 		return
 	var drank := 0
 	while thirst < 90.0 and units > 0:
@@ -385,8 +396,13 @@ func use_water(tap: WaterSource = null) -> void:
 			g["water"] = int(g["water"]) + 1
 			units -= 1
 			filled += 1
-	if tap:
-		tap.water = units
+	if tap is Structure:
+		var st := tap as Structure
+		st.water = maxf(st.water - float(st.water_units() - units), 0.0)
+		if st._overlay:
+			st._overlay.queue_redraw()
+	elif tap:
+		tap.set("water", units)
 		tap.queue_redraw()
 	inv.changed.emit()
 	var parts := PackedStringArray()
@@ -417,10 +433,22 @@ func repair(loc: Dictionary) -> bool:
 		say("It's in perfect condition")
 		return false
 	var kit_id := "sewing_kit" if fix == "sew" else "toolbox"
-	var kit_loc := inv.find(kit_id)
-	if kit_loc.is_empty():
-		say("You need a " + Items.name_of(kit_id).to_lower())
+	var src := _repair_source(fix)
+	if src == "":
+		var cost := bench_repair_cost(fix)
+		if near_bench():
+			say("You need a %s, or %d %s to fix it at the workbench" % [Items.name_of(kit_id).to_lower(), cost[1], Items.name_of(cost[0]).to_lower()])
+		else:
+			say("You need a %s (or a workbench)" % Items.name_of(kit_id).to_lower())
 		return false
+	if src == "bench":
+		var cost := bench_repair_cost(fix)
+		inv.remove(cost[0], cost[1])
+		it["cond"] = minf(float(it["cond"]) + Items.REPAIR_AMOUNT, 100.0)
+		inv.changed.emit()
+		say("Repaired the %s at the workbench (%d%%)" % [Items.name_of(it["id"]).to_lower(), int(it["cond"])])
+		return true
+	var kit_loc := inv.find(kit_id)
 	var kit: Dictionary = inv.get_at(kit_loc)
 	it["cond"] = minf(float(it["cond"]) + Items.REPAIR_AMOUNT, 100.0)
 	kit["uses"] = int(kit.get("uses", 1)) - 1
@@ -431,6 +459,33 @@ func repair(loc: Dictionary) -> bool:
 	inv.changed.emit()
 	say(msg)
 	return true
+
+
+## What a repair would use: "kit" (sewing kit / toolbox you carry), "bench" (at a workbench, with
+## materials) or "" (can't).
+func _repair_source(fix: String) -> String:
+	if fix == "":
+		return ""
+	if inv.count_of("sewing_kit" if fix == "sew" else "toolbox") > 0:
+		return "kit"
+	var cost := bench_repair_cost(fix)
+	if near_bench() and inv.count_of(cost[0]) >= int(cost[1]):
+		return "bench"
+	return ""
+
+
+## At a workbench: 1 scrap metal fixes weapons and metal, 2 rags fix clothing (+40% each).
+static func bench_repair_cost(fix: String) -> Array:
+	return ["scrap_metal", 1] if fix == "tool" else ["rags", 2]
+
+
+## Standing at a workbench you built.
+func near_bench() -> bool:
+	for n in get_tree().get_nodes_in_group("structures"):
+		var st := n as Structure
+		if st.kind == "workbench" and st.global_position.distance_to(global_position) < BENCH_REACH:
+			return true
+	return false
 
 
 ## Weapons wear out with use. Returns true if it just broke.
@@ -467,7 +522,7 @@ func craft(recipe_id: String) -> bool:
 	var r := Crafting.get_recipe(recipe_id)
 	if r.is_empty():
 		return false
-	var miss := Crafting.missing(r, inv)
+	var miss := Crafting.missing(r, inv, near_bench())
 	if miss != "":
 		say("Missing: " + miss)
 		return false
@@ -777,7 +832,7 @@ func interact_choice() -> String:
 	if nearest_tap:
 		water_d = global_position.distance_to(nearest_tap.global_position)
 	elif near_lake:
-		water_d = 30.0
+		water_d = 30.0 if nearest_structure == null else 60.0
 	if water_d < best_d:
 		best = "water"
 		best_d = water_d
@@ -811,6 +866,17 @@ func _structure_label(st: Structure) -> String:
 	match st.kind:
 		"bed":
 			return "Sleep"
+		"workbench":
+			return "Use workbench"
+		"collector":
+			var w := st.water_units()
+			if w <= 0:
+				return "Rain collector (empty)"
+			return ("Drink / fill gourd" if not inv.all_of("gourd").is_empty() else "Drink") + " (%d/%d)" % [w, Structure.COLLECTOR_CAP]
+		"snare":
+			return "Take the rabbit" if st.caught > 0 else "Snare (nothing yet)"
+		"fishtrap":
+			return "Take fish (%d)" % st.caught if st.caught > 0 else "Fish trap (empty)"
 		"garden":
 			if st.crop == "":
 				var seed := _seed_to_plant()
@@ -856,7 +922,7 @@ func interact() -> void:
 		"":
 			return
 	var spot := nearest_loot
-	if spot.kind == "chest":
+	if spot.is_store():
 		spot.opened = true
 		Game.open_inventory = true # your chest's contents show in the nearby list
 		return
@@ -933,17 +999,46 @@ func _use_structure(st: Structure) -> void:
 						say("Harvested: " + ", ".join(items.map(func(it): return "%s x%d" % [Items.name_of(it["id"]).to_lower(), it["count"]]))))
 			else:
 				say("Still growing (%d%%)" % int(st.growth * 100.0))
-		_:
-			start_busy("Dismantling..", T_DISMANTLE, func():
-				if is_instance_valid(st):
-					var refund: Dictionary = Structure.KINDS[st.kind]["refund"]
-					if st.chest:
-						for it in st.chest.contents:
+		"workbench":
+			var hud := get_tree().get_first_node_in_group("hud")
+			if hud:
+				hud.left_tab = "craft"
+				hud.set_inventory_open(true)
+		"collector":
+			if st.water_units() <= 0:
+				say("The rain collector is empty - wait for rain")
+			else:
+				start_busy("Drinking..", T_DRINK, func():
+					if is_instance_valid(st):
+						use_water(st))
+		"snare", "fishtrap":
+			if st.caught <= 0:
+				say("Nothing caught yet" if st.kind == "snare" else "No fish in the trap yet")
+			else:
+				start_busy("Taking..", T_PICKUP, func():
+					if is_instance_valid(st) and st.caught > 0:
+						for it in st.take_catch():
 							drop_item(it)
-					st.remove()
-					for id in refund:
-						drop_item(Items.make(id, int(refund[id])))
-					say("Took it apart"))
+						say("A rabbit in the snare: raw meat" if st.kind == "snare" else "Took the fish from the trap"))
+		_:
+			dismantle(st)
+
+
+## Takes something you built apart: you get some of the materials back (and whatever was stored in it).
+func dismantle(st: Structure) -> void:
+	start_busy("Dismantling..", T_DISMANTLE, func():
+		if is_instance_valid(st) and not st.is_queued_for_deletion():
+			var refund: Dictionary = Structure.KINDS[st.kind]["refund"]
+			if st.chest:
+				for it in st.chest.contents:
+					drop_item(it)
+				st.chest.contents = []
+			for it in st.take_catch():
+				drop_item(it)
+			st.remove()
+			for id in refund:
+				drop_item(Items.make(id, int(refund[id])))
+			say("Took it apart"))
 
 
 # ---------------------------------------------------------------- building
@@ -951,20 +1046,21 @@ func _use_structure(st: Structure) -> void:
 ## Start placing a kit (item menu -> Build, or B for the first kit you carry).
 func start_placing(kit := "") -> void:
 	if kit == "":
-		for k in ["kit_wall", "kit_gate", "kit_chest", "kit_bed", "kit_garden"]:
+		for k in KITS:
 			if inv.count_of(k) > 0:
 				kit = k
 				break
 	if kit == "" or inv.count_of(kit) <= 0:
-		say("No building kits - craft them (K)")
+		placing = NO_KIT
+		say("Building (no kits - craft them with K): Q takes apart what you built, X to stop")
 		return
 	placing = kit
-	say("Building: %s - Q to place, B for the next kit, X to stop" % Items.name_of(kit).to_lower())
+	say("Building: %s - Q to place (or take apart), B next kit, X stop" % Items.name_of(kit).to_lower())
 
 
 ## The next kit you carry (B while building).
 func next_kit() -> void:
-	var kits := ["kit_wall", "kit_gate", "kit_chest", "kit_bed", "kit_garden"]
+	var kits: Array = KITS
 	var i := kits.find(placing)
 	for k in range(1, kits.size() + 1):
 		var cand: String = kits[(i + k) % kits.size()]
@@ -991,11 +1087,20 @@ func build_cell() -> Vector2i:
 func build_problem(cell: Vector2i) -> String:
 	if cell.x < 2 or cell.y < 2 or cell.x > World.W - 3 or cell.y > World.H - 3:
 		return "Too close to the edge"
-	if not world.is_walkable(cell) or world.is_door(cell):
+	var on_water := placing == "kit_fishtrap" and world.get_tile(cell) == World.WATER
+	if (not world.is_walkable(cell) and not on_water) or world.is_door(cell):
 		return "Not there"
 	var main := get_tree().get_first_node_in_group("main")
 	if main and main.structure_at(cell) != null:
 		return "Something's already there"
+	var builds := String(Items.def(placing).get("builds", "")) if placing.begins_with("kit_") else ""
+	if builds == "fishtrap":
+		if world.get_tile(cell) != World.WATER:
+			return "Fish traps go in the water, by the shore"
+		if not [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT].any(func(o): return world.is_walkable(cell + o)):
+			return "Too far from the shore"
+	elif builds == "snare" and (world.get_tile(cell) != World.GROUND or world.building_at(world.center_of(cell)) >= 0):
+		return "Snares go on open grass"
 	var rect := Rect2(Vector2(cell * World.T), Vector2(World.T, World.T)).grow(4)
 	for g in ["player", "zombies", "survivors", "animals", "loot"]:
 		for n in get_tree().get_nodes_in_group(g):
@@ -1005,10 +1110,18 @@ func build_problem(cell: Vector2i) -> String:
 
 
 func place_kit() -> void:
+	var cell := build_cell()
+	var main0 := get_tree().get_first_node_in_group("main")
+	var there: Structure = main0.structure_at(cell) if main0 else null
+	if there != null:
+		dismantle(there) # Q at something you built (in building mode): take it apart
+		return
+	if placing == NO_KIT:
+		say("Nothing to take apart there")
+		return
 	if placing == "" or inv.count_of(placing) <= 0:
 		stop_placing()
 		return
-	var cell := build_cell()
 	var why := build_problem(cell)
 	if why != "":
 		say(why)
@@ -1023,7 +1136,8 @@ func place_kit() -> void:
 		if inv.count_of(kit) <= 0:
 			placing = ""
 			start_placing() # carry on with another kit if you have one
-			if placing == "":
+			if placing == NO_KIT:
+				placing = ""
 				say("Out of kits"))
 
 
@@ -1040,7 +1154,7 @@ func craft_timed(recipe_id: String) -> void:
 	var r := Crafting.get_recipe(recipe_id)
 	if r.is_empty():
 		return
-	var miss := Crafting.missing(r, inv)
+	var miss := Crafting.missing(r, inv, near_bench())
 	if miss != "":
 		say("Missing: " + miss)
 		return
@@ -1080,6 +1194,9 @@ func use_fire(fire: Campfire) -> void:
 		if cook_t <= 0.0:
 			cook_t = 3.0
 			say("Cooking...")
+		return
+	if fire.permanent:
+		say("The stove keeps you warm - cook raw meat or fish on it")
 		return
 	if inv.count_of("sticks") <= 0:
 		say("You need sticks to keep the fire going")
@@ -1393,14 +1510,14 @@ func _find_loot() -> void:
 		var l := n as LootSpot
 		if l.is_queued_for_deletion():
 			continue
-		if not l.is_bag and l.kind != "carcass" and l.kind != "chest" and l.opened and l.contents.is_empty():
+		if not l.is_bag and l.kind != "carcass" and not l.is_store() and l.opened and l.contents.is_empty():
 			continue # already searched
 		var d := l.global_position.distance_to(global_position)
 		# Closest relative to its reach, so a big car doesn't beat a box right next to you.
 		if d < l.reach and d / l.reach < best:
 			best = d / l.reach
 			nearest_loot = l
-		if (l.is_bag or l.kind == "chest") and d < l.reach and (best_pile == null or d < best_pile.global_position.distance_to(global_position)):
+		if (l.is_bag or l.is_store()) and d < l.reach and (best_pile == null or d < best_pile.global_position.distance_to(global_position)):
 			best_pile = l
 	# The inventory's nearby list shows what's lying on the ground (searching a container drops its loot there).
 	inv.near = best_pile
@@ -1417,8 +1534,8 @@ func _find_loot() -> void:
 	var best_s := 44.0
 	for n in get_tree().get_nodes_in_group("structures"):
 		var st := n as Structure
-		if st.kind == "chest":
-			continue # chests are opened like loot
+		if st.chest != null or st.kind == "stove":
+			continue # storage is opened like loot, a stove is used like a fire
 		var d := st.global_position.distance_to(global_position)
 		if d < best_s:
 			best_s = d
@@ -1550,10 +1667,17 @@ func _animate() -> void:
 func _draw() -> void:
 	if placing != "" and not dead:
 		var cell := build_cell()
-		var ok := build_problem(cell) == ""
+		var main := get_tree().get_first_node_in_group("main")
+		var col := Color(0.95, 0.35, 0.3)
+		if main and main.structure_at(cell) != null:
+			col = Color(1.0, 0.65, 0.2) # Q takes it apart
+		elif placing == NO_KIT:
+			col = Color(0.7, 0.7, 0.7)
+		elif build_problem(cell) == "":
+			col = Color(0.4, 0.95, 0.4)
 		var r := Rect2(to_local(Vector2(cell * World.T)), Vector2(World.T, World.T))
-		draw_rect(r, Color(0.4, 0.95, 0.4, 0.28) if ok else Color(0.95, 0.35, 0.3, 0.28))
-		draw_rect(r, Color(0.4, 0.95, 0.4, 0.8) if ok else Color(0.95, 0.35, 0.3, 0.8), false, 2.0)
+		draw_rect(r, Color(col, 0.28))
+		draw_rect(r, Color(col, 0.8), false, 2.0)
 	draw_set_transform(Vector2(0, 1), 0.0, Vector2(1.0, 0.45))
 	draw_circle(Vector2.ZERO, RADIUS, Color(0, 0, 0, 0.35))
 	draw_set_transform(Vector2.ZERO)

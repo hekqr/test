@@ -1,5 +1,6 @@
 class_name Crafting
 ## Crafting recipes. "needs" are used up, "tools" must just be carried (any one of them).
+## "station": "workbench" = only at a workbench you built.
 
 const RECIPES := [
 	{"id": "bandage", "name": "Bandage", "makes": "bandage", "count": 1, "needs": {"rags": 2}, "tools": []},
@@ -15,6 +16,13 @@ const RECIPES := [
 	{"id": "kit_chest", "name": "Chest", "makes": "kit_chest", "count": 1, "needs": {"planks": 4, "nails": 4}, "tools": []},
 	{"id": "kit_bed", "name": "Bed", "makes": "kit_bed", "count": 1, "needs": {"planks": 3, "nails": 2, "rags": 3}, "tools": []},
 	{"id": "kit_garden", "name": "Garden bed", "makes": "kit_garden", "count": 1, "needs": {"planks": 2, "nails": 2}, "tools": []},
+	{"id": "kit_workbench", "name": "Workbench", "makes": "kit_workbench", "count": 1, "needs": {"planks": 6, "nails": 6}, "tools": []},
+	{"id": "kit_snare", "name": "Snare", "makes": "kit_snare", "count": 1, "needs": {"sticks": 2, "rope": 1}, "tools": []},
+	{"id": "kit_fishtrap", "name": "Fish trap", "makes": "kit_fishtrap", "count": 1, "needs": {"sticks": 4, "rope": 2}, "tools": []},
+	{"id": "kit_collector", "name": "Rain collector", "makes": "kit_collector", "count": 1, "needs": {"planks": 4, "nails": 4, "scrap_metal": 1}, "tools": [], "station": "workbench"},
+	{"id": "kit_stove", "name": "Stove", "makes": "kit_stove", "count": 1, "needs": {"scrap_metal": 4, "nails": 4}, "tools": [], "station": "workbench"},
+	{"id": "kit_shelf", "name": "Shelves", "makes": "kit_shelf", "count": 1, "needs": {"planks": 4, "nails": 4}, "tools": [], "station": "workbench"},
+	{"id": "kit_rack", "name": "Weapon rack", "makes": "kit_rack", "count": 1, "needs": {"planks": 3, "nails": 3, "rope": 1}, "tools": [], "station": "workbench"},
 	{"id": "scrap_armour", "name": "Improvised armour", "makes": "scrap_armour", "count": 1, "needs": {"scrap_metal": 3, "rope": 2}, "tools": []},
 ]
 
@@ -37,8 +45,10 @@ static func get_recipe(id: String) -> Dictionary:
 
 
 ## "" if the player can craft it, otherwise what's missing.
-static func missing(r: Dictionary, inv: Inventory) -> String:
+static func missing(r: Dictionary, inv: Inventory, at_bench := false) -> String:
 	var miss := PackedStringArray()
+	if r.get("station", "") == "workbench" and not at_bench:
+		miss.append("a workbench")
 	for item in r["needs"]:
 		var have := inv.count_of(item)
 		if have < int(r["needs"][item]):

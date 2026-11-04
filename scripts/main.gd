@@ -200,8 +200,7 @@ func add_structure(kind: String, cell: Vector2i) -> Structure:
 	st.world = world
 	st.kind = kind
 	st.cell = cell
-	if kind == "garden":
-		st.last_day = world_days
+	st.last_day = world_days
 	entities.add_child(st)
 	return st
 
@@ -286,13 +285,13 @@ func sleep() -> void:
 	time_of_day = fmod(t1, 1.0)
 	world_days += hours / 24.0
 	for f in get_tree().get_nodes_in_group("fires"):
-		f.fuel = maxf(f.fuel - secs, 0.0)
+		if not f.permanent:
+			f.fuel = maxf(f.fuel - secs, 0.0)
 	_weather_t -= secs
 	if _weather_t <= 0.0:
 		_change_weather()
 	for n in get_tree().get_nodes_in_group("structures"):
-		if (n as Structure).kind == "garden":
-			(n as Structure).grow(world_days, false)
+		(n as Structure).tick(world_days, weather)
 	player.body_temp = player.target_temp()
 	player.say("You slept until %s" % clock_text())
 	save_game()
@@ -427,7 +426,7 @@ func to_save() -> Dictionary:
 	# Containers you haven't opened aren't saved (they're filled again when the game loads) - keeps saves small.
 	for n in get_tree().get_nodes_in_group("loot"):
 		var l := n as LootSpot
-		if not l.is_queued_for_deletion() and l.kind != "chest" and (l.is_bag or l.opened or l.kind == "carcass"):
+		if not l.is_queued_for_deletion() and not l.is_store() and (l.is_bag or l.opened or l.kind == "carcass"):
 			loot.append(l.to_save())
 	var zs := []
 	for n in get_tree().get_nodes_in_group("zombies"):
@@ -449,7 +448,7 @@ func to_save() -> Dictionary:
 		"loot": loot, "zombies": zs, "survivors": ss,
 		"structures": get_tree().get_nodes_in_group("structures").map(func(st): return st.to_save()),
 		"taps": get_tree().get_nodes_in_group("taps").map(func(t): return t.water),
-		"fires": get_tree().get_nodes_in_group("fires").map(func(f): return f.to_save()),
+		"fires": get_tree().get_nodes_in_group("fires").filter(func(f): return not f.permanent).map(func(f): return f.to_save()),
 		"explored_raw": explored, # compressed when written (see SaveGame.write)
 	}
 
@@ -577,9 +576,7 @@ func _process(delta: float) -> void:
 	if _crop_t <= 0.0:
 		_crop_t = 1.0
 		for n in get_tree().get_nodes_in_group("structures"):
-			var st := n as Structure
-			if st.kind == "garden":
-				st.grow(world_days, weather == "rain")
+			(n as Structure).tick(world_days, weather)
 		player.in_base = in_base(player.global_position)
 		_camp_garrison()
 

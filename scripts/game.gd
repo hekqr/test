@@ -586,7 +586,8 @@ func sheet_frame(name: String, frames: int, idx: int) -> Texture2D:
 # ---------------------------------------------------------------- furniture (drawn, the packs have none)
 
 const FURNITURE := ["counter", "wardrobe", "medcabinet", "desk", "shelf", "shelf_white", "locker",
-	"bed_head", "bed_foot", "table", "sofa", "toilet", "bath", "milcrate", "chest", "garden_bed", "camp_bed"]
+	"bed_head", "bed_foot", "table", "sofa", "toilet", "bath", "milcrate", "chest", "garden_bed", "camp_bed",
+	"workbench", "stove", "storage_shelf", "weapon_rack", "rain_barrel", "snare", "fish_trap"]
 const C_OUT := Color("1a1016")
 
 
@@ -692,6 +693,58 @@ func furniture(name: String) -> Texture2D:
 			img.fill_rect(Rect2i(2, 1, 12, 14), Color("6a7a5a"))
 			_box(img, Rect2i(3, 2, 10, 4), Color("e8e0d0"))
 			img.fill_rect(Rect2i(2, 8, 12, 1), Color("54623e"))
+		"workbench":
+			_box(img, Rect2i(0, 3, 16, 9), wood_l)
+			img.fill_rect(Rect2i(1, 4, 14, 1), Color("a07850"))
+			img.fill_rect(Rect2i(1, 9, 14, 2), wood)
+			img.fill_rect(Rect2i(1, 12, 2, 4), wood_d)
+			img.fill_rect(Rect2i(13, 12, 2, 4), wood_d)
+			# a saw and a hammer on top
+			img.fill_rect(Rect2i(2, 6, 6, 2), Color("b0b4bc"))
+			img.fill_rect(Rect2i(8, 6, 2, 2), Color("8a3a2a"))
+			img.fill_rect(Rect2i(11, 5, 1, 4), Color("6e4a32"))
+			img.fill_rect(Rect2i(10, 5, 3, 1), Color("5a5a64"))
+		"stove":
+			_box(img, Rect2i(2, 2, 12, 12), Color("3e3e46"))
+			img.fill_rect(Rect2i(3, 3, 10, 3), Color("5a5a64"))
+			img.fill_rect(Rect2i(10, 0, 3, 3), Color("2a2a30"))
+			img.fill_rect(Rect2i(5, 8, 6, 4), Color("1a1016"))
+			img.fill_rect(Rect2i(3, 14, 2, 2), Color("2a2a30"))
+			img.fill_rect(Rect2i(11, 14, 2, 2), Color("2a2a30"))
+		"storage_shelf":
+			_box(img, Rect2i(0, 0, 16, 16), wood)
+			img.fill_rect(Rect2i(1, 1, 14, 14), wood_d.darkened(0.35))
+			img.fill_rect(Rect2i(1, 7, 14, 1), wood_l)
+			img.fill_rect(Rect2i(1, 14, 14, 1), wood_l)
+		"weapon_rack":
+			img.fill_rect(Rect2i(3, 1, 10, 14), wood_d.darkened(0.4))
+			_box(img, Rect2i(0, 0, 3, 16), wood)
+			_box(img, Rect2i(13, 0, 3, 16), wood)
+			for y in [5, 10, 15]:
+				img.fill_rect(Rect2i(3, y, 10, 1), wood_l)
+		"rain_barrel":
+			_box(img, Rect2i(2, 1, 12, 14), Color("5a4a3a"))
+			img.fill_rect(Rect2i(3, 2, 10, 4), Color("2a2a30"))
+			img.fill_rect(Rect2i(2, 8, 12, 1), Color("8a8e94"))
+			img.fill_rect(Rect2i(2, 12, 12, 1), Color("8a8e94"))
+			img.fill_rect(Rect2i(5, 9, 1, 3), Color("6e5a46"))
+			img.fill_rect(Rect2i(10, 9, 1, 3), Color("6e5a46"))
+		"snare":
+			img.fill_rect(Rect2i(7, 2, 2, 9), C_OUT)
+			img.fill_rect(Rect2i(7, 3, 1, 7), wood_l)
+			var rope := Color("c8a868")
+			for x in range(4, 12):
+				img.set_pixel(x, 10, rope)
+				img.set_pixel(x, 14, rope)
+			for y in range(10, 15):
+				img.set_pixel(4, y, rope)
+				img.set_pixel(11, y, rope)
+		"fish_trap":
+			_box(img, Rect2i(1, 4, 14, 9), Color("8a6a44"))
+			for x in [4, 7, 10]:
+				img.fill_rect(Rect2i(x, 5, 1, 7), Color("6a4e30"))
+			img.fill_rect(Rect2i(2, 8, 12, 1), Color("a8865a"))
+			img.fill_rect(Rect2i(12, 6, 2, 5), Color("2a2224"))
 	var t := ImageTexture.create_from_image(img)
 	_tex_cache[key] = t
 	return t
