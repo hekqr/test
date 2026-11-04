@@ -44,12 +44,7 @@ func _ready() -> void:
 	_key("weapon_primary", [KEY_1])
 	_key("weapon_secondary", [KEY_2])
 	_key("weapon_melee", [KEY_3])
-	for pair in [["weapon_next", MOUSE_BUTTON_WHEEL_DOWN], ["weapon_prev", MOUSE_BUTTON_WHEEL_UP]]:
-		if not InputMap.has_action(pair[0]):
-			InputMap.add_action(pair[0])
-			var wb := InputEventMouseButton.new()
-			wb.button_index = pair[1]
-			InputMap.action_add_event(pair[0], wb)
+	# (The mouse wheel zooms the camera / the map; weapons are on 1 / 2 / 3.)
 	_key("inventory", [KEY_TAB, KEY_I], false)
 	_key("help", [KEY_F1])
 	_key("pause", [KEY_ESCAPE])

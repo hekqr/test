@@ -2,7 +2,7 @@ class_name SaveGame
 ## One automatic save file. When the survivor dies the file is kept but marked dead,
 ## so it can't be continued (a dev "revive" may be added later).
 
-const VERSION := 5 # bumped when the world/item format changes; older saves cannot be continued
+const VERSION := 6 # bumped when the world/item format changes; older saves cannot be continued
 
 
 static func path() -> String:
@@ -23,7 +23,12 @@ static func read() -> Dictionary:
 	return data if data is Dictionary else {}
 
 
+## Writes the save. Safe to run on a worker thread (it only touches `data` and the file).
 static func write(data: Dictionary) -> void:
+	if data.has("explored_raw"):
+		var raw: PackedByteArray = data["explored_raw"]
+		data["explored"] = Marshalls.raw_to_base64(raw.compress(FileAccess.COMPRESSION_DEFLATE))
+		data.erase("explored_raw")
 	data["version"] = VERSION
 	data["saved_at"] = Time.get_datetime_string_from_system()
 	var tmp := path() + ".tmp"

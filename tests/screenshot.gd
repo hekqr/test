@@ -31,8 +31,13 @@ func _process(_delta: float) -> void:
 	var p: Player = main.player
 	var w: World = main.world
 	if frame == 5:
-		# Stand just outside a building so the roof is visible.
-		var b: Rect2i = w.buildings[0]
+		# Stand just outside a building so the roof is visible (a hut in a village if there is one).
+		var bi0 := 0
+		for i in w.buildings.size():
+			if String(w.building_types[i]).begins_with("hut") and w.settlements[w.building_town[i]]["type"] == "village":
+				bi0 = i
+				break
+		var b: Rect2i = w.buildings[bi0]
 		p.global_position = w.center_of(Vector2i(b.end.x + 1, b.position.y + b.size.y / 2))
 		p.inv.pickup({"id": "pistol", "count": 1, "mag": 5})
 		p.inv.pickup(Items.make("bat"))
@@ -66,6 +71,11 @@ func _process(_delta: float) -> void:
 		deer.set_physics_process(false)
 		rab.set_physics_process(false)
 		main.add_fire(p.global_position + Vector2(-40, 30), 200.0)
+		var pile := LootSpot.new()
+		pile.is_bag = true
+		pile.contents = [Items.make("food"), Items.make("water")]
+		pile.position = p.global_position + Vector2(70, -10)
+		main.entities.add_child(pile)
 		var c := LootSpot.new()
 		c.kind = "carcass"
 		c.animal = "rabbit"
@@ -162,6 +172,14 @@ func _process(_delta: float) -> void:
 		await get_tree().process_frame
 		await get_tree().process_frame
 		_shot("map")
+		main.hud.set_map_open(false)
+		p.inv.gear["hands"] = Items.make("map")
+		main.hud._map_zoom = 1.0
+		main.hud.set_map_open(true)
+		main.time_of_day = 0.4
+		await get_tree().process_frame
+		await get_tree().process_frame
+		_shot("map_full")
 		main.hud.set_map_open(false)
 		main.save_game()
 		main.queue_free()

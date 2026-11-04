@@ -12,6 +12,7 @@ var _confirm_new := false
 var _down := ""
 var _mouse := Vector2.ZERO
 var _bg_tiles: Array = []
+var _loading := false
 
 
 func _ready() -> void:
@@ -68,13 +69,13 @@ func _press(id: String) -> void:
 	match id:
 		"continue":
 			Game.pending_load = SaveGame.read()
-			get_tree().change_scene_to_file("res://scenes/main.tscn")
+			_load_world()
 		"new":
 			if SaveGame.can_continue() and not _confirm_new:
 				_confirm_new = true # click again to overwrite the living survivor
 				return
 			Game.pending_load = {}
-			get_tree().change_scene_to_file("res://scenes/main.tscn")
+			_load_world()
 		"quit":
 			get_tree().quit()
 
@@ -84,8 +85,24 @@ func _text(pos: Vector2, s: String, size_px: int, col: Color, width: float) -> v
 	draw_string(_font, pos, s, HORIZONTAL_ALIGNMENT_CENTER, width, size_px, col)
 
 
+## Shows "Generating the world..." for a moment, then builds the game (takes a couple of seconds).
+func _load_world() -> void:
+	if _loading:
+		return
+	_loading = true
+	queue_redraw()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	get_tree().change_scene_to_file("res://scenes/main.tscn")
+
+
 func _draw() -> void:
 	var vs := get_viewport_rect().size
+	if _loading:
+		draw_rect(Rect2(Vector2.ZERO, vs), Color("1a1016"))
+		var msg := "Generating the world..."
+		draw_string(_font, Vector2(0, vs.y / 2.0), msg, HORIZONTAL_ALIGNMENT_CENTER, vs.x, 28, Color("e8dcc0"))
+		return
 	# Background: dark grass made from the ground tiles
 	var ground := Game.tex("tiles_ground")
 	var grass := [Vector2i(0, 0), Vector2i(2, 0), Vector2i(5, 0), Vector2i(14, 0), Vector2i(16, 0), Vector2i(0, 2), Vector2i(2, 2), Vector2i(14, 2), Vector2i(16, 2)]

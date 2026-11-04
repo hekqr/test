@@ -4,6 +4,7 @@ extends Node
 func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	var w := World.new()
+	w.timing = true
 	add_child(w)
 	var ent := Node2D.new()
 	add_child(ent)

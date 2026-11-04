@@ -3,6 +3,7 @@ extends Node2D
 ## Draws a dark pixel outline where walls meet open ground, and glass panes in windows.
 
 var world: World
+var region := Rect2i(0, 0, World.W, World.H) # the part of the map this node draws
 
 
 func _ready() -> void:
@@ -19,8 +20,8 @@ func _draw() -> void:
 	var col := Color(0.12, 0.06, 0.08)
 	var glass := Color("7fa8c4")
 	var glass_hi := Color("c4dcea")
-	for y in World.H:
-		for x in World.W:
+	for y in range(region.position.y, region.end.y):
+		for x in range(region.position.x, region.end.x):
 			var c := Vector2i(x, y)
 			if not _solid(c):
 				continue

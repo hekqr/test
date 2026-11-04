@@ -320,13 +320,42 @@ func _wander(dt: float) -> void:
 	_wander_t -= dt
 	if _wander_t <= 0.0:
 		_wander_t = randf_range(3.0, 8.0)
-		_set_path(world.random_walkable_near(global_position, 6))
+		var to := world.random_walkable_near(global_position, 6)
+		var b := world.building_at(to)
+		if b >= 0 and b != world.building_at(global_position):
+			return # don't wander into houses (their doors are shut anyway)
+		_set_path(to)
 
 
+## Zombies can't open doors: if the target is inside a building they're not in, they head for the
+## outside of its front door instead (searching for a way in would comb the whole map).
 func _set_path(to: Vector2) -> void:
 	target = to
+	var b := world.building_at(to)
+	if b >= 0 and b != world.building_at(global_position) and not world.building_doors[b].is_empty():
+		var best := Vector2.INF
+		for d in world.building_doors[b]:
+			var dc: Vector2i = d
+			for off in [Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 0), Vector2i(-1, 0)]:
+				var n: Vector2i = dc + off
+				if world.is_walkable(n) and world.building_at(world.center_of(n)) < 0:
+					var p := world.center_of(n)
+					if p.distance_to(global_position) < best.distance_to(global_position):
+						best = p
+		if best != Vector2.INF:
+			if global_position.distance_to(best) < 20.0 and world.door_closed[world.idx(world.cell_of(best))] == 0:
+				pass # at the (open) door: go on in
+			elif not _door_open_for(b):
+				to = best
 	path = world.find_path(global_position, to, true)
 	_path_i = 0
+
+
+func _door_open_for(b: int) -> bool:
+	for d in world.building_doors[b]:
+		if world.door_closed[world.idx(d)] == 0:
+			return true
+	return false
 
 
 func _follow_path() -> Vector2:

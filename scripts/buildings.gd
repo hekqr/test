@@ -10,9 +10,39 @@ class_name Buildings
 ##     S shop shelf   P pharmacy shelf   V vending machine   L police locker   C tool crate
 ##   Furniture (blocks walking, can't be searched):
 ##     B bed (head)   b bed (foot)   T table   Z sofa   O toilet   A bath (with a tap)   K kitchen counter   E desk
-## Houses are small: a bedroom or two, a bathroom, a living room with a kitchen corner.
+## Most village buildings are tiny one-room huts; houses have a bedroom or two, a bathroom and a living room.
 
 const TEMPLATES := {
+	# --- one-room huts
+	"hut_bed": {"weight": 30, "rows": [
+		"##W#W##",
+		"#RBwwF#",
+		"#wbwwwW",
+		"#wwwTU#",
+		"###D###",
+	]},
+	"hut_kitchen": {"weight": 25, "rows": [
+		"##W###",
+		"#KKFM#",
+		"#wwww#",
+		"WZwwU#",
+		"##D###",
+	]},
+	"hut_bath": {"weight": 15, "rows": [
+		"##W##W#",
+		"#AwRwF#",
+		"#twwww#",
+		"#OwBbU#",
+		"##D####",
+	]},
+	"hut_shed": {"weight": 10, "rows": [
+		"######",
+		"#CccT#",
+		"#cccc#",
+		"#Eccc#",
+		"###D##",
+	]},
+	# --- houses
 	"house_small": {"weight": 40, "rows": [
 		"##W###W##",
 		"#RwB#AOM#",

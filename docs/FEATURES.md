@@ -215,6 +215,27 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
   stuck out below the sprite — no more stopping short of walls when walking down
 - 🔧 Dev tool: `tests/loot_census.tscn` counts how much food / water a new world has
 
+## Milestone 9 — Big world, settlements, performance
+- ✅ **Map 4× bigger** (512 × 512 tiles) with ~20 settlements: hamlets (4–7 buildings on one street), villages
+  (~9–12 on a main street with a side street), towns (~11–13, a small street grid with a shop and a clinic) and
+  one city (16: police, clinic, shops, garages). Far apart, linked by long roads
+- ✅ **Tiny one-room huts** make up most villages: bedroom hut (wardrobe, fridge, trash), kitchen hut (fridge,
+  medicine cabinet, trash), bathroom hut (bath with tap, wardrobe, fridge, trash), tool shed (crate)
+- ✅ **Paper map** (M): forests, lakes and the river, roads and streets, each settlement as an icon (4 blocks =
+  city, 3 = town, 2 = village, 1 = hamlet) with its name, a lettered / numbered grid, a legend and a compass.
+  **Scroll to zoom, drag to move.** Fog over places you haven't been (a Road map shows everything)
+- ✅ **Mouse wheel zooms the camera** (weapons stay on 1 / 2 / 3)
+- ✅ **White outline** around items lying on the ground
+- ✅ **Performance**
+  - World generation ~6 s → ~2 s on the 4× map ("Generating the world..." screen while it runs)
+  - Trees, props and decor only exist near you (streamed in chunks); overlays are drawn per region
+  - Zombies, animals and bandits live around you: they spawn out of sight and are removed far away
+  - Zombies after you inside a house head for its door instead of searching the whole map (was ~10–50 ms)
+  - Autosave every 30 s runs in the background (~10 ms on the game thread instead of ~140 ms), and only
+    saves containers you've opened
+  - Ground items and containers no longer redraw every frame
+- 🔧 Dev tools: `tests/perf_probe.tscn` (startup, autosave, frame spikes), `tests/loot_census.tscn`
+
 ## Planned
 - 📌 **Base building** (wooden & reinforced walls and gates are in the art pack)
 

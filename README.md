@@ -19,9 +19,10 @@ The game saves automatically (every 20 s, when you quit, and when you die) to
 | E (or the on-screen button) | Search container / pick up item / skin animal / use campfire / drink & fill gourd at water or taps |
 | C | Build campfire (3 sticks + 1 match) |
 | K | Crafting |
-| M | Map |
+| M | Map (scroll to zoom, drag to move) |
 | R | Reload (restart when dead) |
-| 1 / 2 / 3, mouse wheel | Primary / secondary / melee weapon |
+| 1 / 2 / 3 | Primary / secondary / melee weapon |
+| Mouse wheel | Zoom in / out |
 | X | Lower weapon (fists) |
 | Tab or I | Inventory: click an item to see what you can do with it (Eat, Drink, Use, Wear, Repair, Tear into rags, Drop...), double-click for its main action, drag to move, drag outside to drop |
 | Esc | Pause (Q = save & quit to menu) |

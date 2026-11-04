@@ -14,6 +14,25 @@ var flip := false
 var reach := 44.0 # how close the player must be
 var animal := "" # for carcasses: "rabbit" / "deer"
 var _sprite: Sprite2D
+var _outline: Node2D
+static var _silhouette: Shader
+
+
+static func _silhouette_shader() -> Shader:
+	if _silhouette == null:
+		_silhouette = Shader.new()
+		_silhouette.code = "shader_type canvas_item;\nvoid fragment() { COLOR = vec4(1.0, 1.0, 1.0, COLOR.a); }\n"
+	return _silhouette
+
+
+## The item's shape in white, nudged 1.5 px in 8 directions (drawn under the sprite = an outline).
+func _draw_outline() -> void:
+	if _sprite == null or _sprite.texture == null:
+		return
+	var t := _sprite.texture
+	for d in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1), Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
+		_outline.draw_set_transform(d * 1.5, _sprite.rotation, _sprite.scale)
+		_outline.draw_texture(t, -t.get_size() / 2.0)
 
 
 ## A container counts as "looted" once it's empty.
@@ -52,7 +71,16 @@ func _ready() -> void:
 			_sprite.flip_h = flip
 			# Stand on the bottom of the tile.
 			_sprite.offset = Vector2(0, 7.5 - _sprite.texture.get_height() / 2.0)
+	if is_bag:
+		# White outline around items on the ground, so they're easy to spot
+		_outline = Node2D.new()
+		var om := ShaderMaterial.new()
+		om.shader = _silhouette_shader()
+		_outline.material = om
+		_outline.draw.connect(_draw_outline)
+		add_child(_outline)
 	add_child(_sprite)
+	set_process(false) # the game redraws nearby unsearched containers for their glint (main.gd)
 	refresh()
 
 
@@ -73,6 +101,8 @@ func refresh() -> void:
 			# Same size on the ground whether it's a small pack icon or a bigger drawn one
 			var m := maxf(_sprite.texture.get_width(), _sprite.texture.get_height())
 			_sprite.scale = Vector2.ONE * clampf(22.0 / m, 0.6, 1.5)
+		if _outline:
+			_outline.queue_redraw()
 	queue_redraw()
 
 
@@ -80,9 +110,20 @@ func title() -> String:
 	return "Ground" if is_bag else Loot.title(kind)
 
 
+## Only what differs from the defaults (saves stay small and quick to write).
 func to_save() -> Dictionary:
-	return {"pos": [position.x, position.y], "bag": is_bag, "kind": kind, "opened": opened,
-		"contents": contents, "tex": tex_name, "flip": flip, "reach": reach, "animal": animal}
+	var d := {"pos": [roundf(position.x * 10.0) / 10.0, roundf(position.y * 10.0) / 10.0], "bag": is_bag, "kind": kind, "contents": contents}
+	if opened:
+		d["opened"] = true
+	if tex_name != "":
+		d["tex"] = tex_name
+	if flip:
+		d["flip"] = true
+	if reach != 44.0:
+		d["reach"] = reach
+	if animal != "":
+		d["animal"] = animal
+	return d
 
 
 static func from_save(d: Dictionary) -> LootSpot:
@@ -160,6 +201,4 @@ func _draw() -> void:
 			draw_circle(Vector2(6, -16), 2.0, Color(1, 0.95, 0.6, 0.9))
 
 
-func _process(_delta: float) -> void:
-	if not opened:
-		queue_redraw()
+

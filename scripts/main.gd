@@ -1,15 +1,20 @@
 extends Node2D
 ## Builds a run: world, loot, player, zombies, day/night, HUD.
 
-const MAX_ZOMBIES_DAY := 30
-const MAX_ZOMBIES_NIGHT := 45
+# Creatures live around the player: they spawn in a ring out of sight (SPAWN_MIN..SPAWN_MAX px away)
+# and are removed when they wander far away (DESPAWN px), so a big map costs nothing extra.
+const SPAWN_MIN := 1000.0
+const SPAWN_MAX := 2400.0
+const DESPAWN := 3200.0
+const MAX_ZOMBIES_DAY := 10 # alive at once (around you)
+const MAX_ZOMBIES_NIGHT := 15
 const ZOMBIE_SPAWN_EVERY := 12.0 # seconds between new zombies (when below the cap)
 const DAY_LENGTH := 480.0 # seconds for a full day/night cycle
-const AUTOSAVE_EVERY := 20.0
-const MAX_RABBITS := 22
-const MAX_DEER := 11
-const MAX_WOLVES := 9 # in packs of 2-3
-const MAX_SURVIVORS := 6 # hostile bandits alive at once
+const AUTOSAVE_EVERY := 30.0
+const MAX_RABBITS := 8
+const MAX_DEER := 4
+const MAX_WOLVES := 5 # in packs of 2-3
+const MAX_SURVIVORS := 3 # hostile bandits alive at once
 ## Zombie mix: [type, weight]. Runners show up more at night, armed zombies more in the city.
 const ZOMBIE_MIX := [["walker", 62.0], ["runner", 12.0], ["brute", 10.0], ["axe", 7.0], ["armed", 9.0]]
 
@@ -28,9 +33,13 @@ var _spawn_t := 0.0
 var _save_t := AUTOSAVE_EVERY
 var _animal_t := 0.0
 var _survivor_t := 0.0
+var _despawn_t := 0.0
+var _glint_t := 0.0
+var _save_task := -1
 var survivors: Node2D
 ## Map exploration: 1 = you've seen this cell (W x H)
 var explored := PackedByteArray()
+var explored_coarse := PackedByteArray() # the same at 1/4 size (for the map's fog)
 var _reveal_t := 0.0
 const REVEAL_RADIUS := 15
 
@@ -53,11 +62,20 @@ func _ready() -> void:
 	world.generate(world_seed, entities)
 	explored.resize(World.W * World.H)
 	explored.fill(0)
+	explored_coarse.resize((World.W >> 2) * (World.H >> 2))
+	explored_coarse.fill(0)
 	if save.is_empty():
 		_spawn_loot()
 	else:
+		var saved_at := {}
 		for d in save["loot"]:
-			entities.add_child(LootSpot.from_save(d))
+			var l := LootSpot.from_save(d)
+			if not l.is_bag:
+				saved_at[Vector2i(l.position.round())] = true
+			entities.add_child(l)
+		for c in world.containers:
+			if not saved_at.has(Vector2i((c["pos"] as Vector2).round())):
+				_spawn_container(c)
 	# Bathroom taps: about half still have a little water in the pipes
 	var tap_water: Array = save.get("taps", [])
 	for i in world.taps.size():
@@ -87,19 +105,18 @@ func _ready() -> void:
 
 	if save.is_empty():
 		for i in MAX_ZOMBIES_DAY:
-			spawn_zombie(500.0)
-		while get_tree().get_nodes_in_group("survivors").size() < MAX_SURVIVORS - 2:
-			if spawn_survivor_group(900.0).is_empty():
+			spawn_zombie(700.0)
+		for k in 6:
+			if not spawn_survivor_group(1300.0, 3200.0).is_empty():
 				break
 	else:
 		_apply_save(save)
 	for i in MAX_RABBITS:
-		spawn_animal("rabbit", 400.0)
+		spawn_animal("rabbit", 500.0)
 	for i in MAX_DEER:
-		spawn_animal("deer", 400.0)
-	while get_tree().get_nodes_in_group("wolves").size() < MAX_WOLVES - 2:
-		if spawn_wolf_pack(900.0).is_empty():
-			break
+		spawn_animal("deer", 500.0)
+	spawn_wolf_pack(1100.0)
+	world.update_stream(player.position, Vector2(1000, 600), -1) # trees & props around you
 
 	night_tint = CanvasModulate.new()
 	add_child(night_tint)
@@ -125,6 +142,7 @@ func _ready() -> void:
 
 	Game.noise_made.connect(_on_noise)
 	Input.set_default_cursor_shape(Input.CURSOR_CROSS)
+	hud.prepare_map() # build the paper map now, not when it's first opened
 	if save.is_empty():
 		save_game() # a new survivor replaces the old save straight away
 
@@ -139,20 +157,25 @@ func reveal_around(pos: Vector2) -> void:
 				var n := c + Vector2i(dx, dy)
 				if world.in_bounds(n):
 					explored[world.idx(n)] = 1
+					explored_coarse[(n.y >> 2) * (World.W >> 2) + (n.x >> 2)] = 1
+
+
+func _spawn_container(c: Dictionary) -> void:
+	var l := LootSpot.new()
+	l.kind = c["kind"]
+	l.tex_name = c["tex"]
+	l.flip = c["flip"]
+	l.reach = c["reach"]
+	l.position = c["pos"]
+	if randf() < float(c.get("empty_chance", 0.0)):
+		l.loaded = true # someone got here first: starts empty
+	entities.add_child(l)
 
 
 func _spawn_loot() -> void:
 	# Furniture, garbage bins and cars (each with its own loot table)
 	for c in world.containers:
-		var l := LootSpot.new()
-		l.kind = c["kind"]
-		l.tex_name = c["tex"]
-		l.flip = c["flip"]
-		l.reach = c["reach"]
-		l.position = c["pos"]
-		if randf() < float(c.get("empty_chance", 0.0)):
-			l.loaded = true # someone got here first: starts empty
-		entities.add_child(l)
+		_spawn_container(c)
 	# Loose items lying on building floors
 	for i in world.buildings.size():
 		var floors: Array = world.building_floors[i]
@@ -182,9 +205,11 @@ func _spawn_loot() -> void:
 
 func to_save() -> Dictionary:
 	var loot := []
+	# Containers you haven't opened aren't saved (they're filled again when the game loads) - keeps saves small.
 	for n in get_tree().get_nodes_in_group("loot"):
-		if not n.is_queued_for_deletion():
-			loot.append((n as LootSpot).to_save())
+		var l := n as LootSpot
+		if not l.is_queued_for_deletion() and (l.is_bag or l.opened or l.kind == "carcass"):
+			loot.append(l.to_save())
 	var zs := []
 	for n in get_tree().get_nodes_in_group("zombies"):
 		zs.append((n as Zombie).to_save())
@@ -203,12 +228,23 @@ func to_save() -> Dictionary:
 		"loot": loot, "zombies": zs, "survivors": ss,
 		"taps": get_tree().get_nodes_in_group("taps").map(func(t): return t.water),
 		"fires": get_tree().get_nodes_in_group("fires").map(func(f): return f.to_save()),
-		"explored": Marshalls.raw_to_base64(explored.compress(FileAccess.COMPRESSION_DEFLATE)),
+		"explored_raw": explored, # compressed when written (see SaveGame.write)
 	}
 
 
-func save_game() -> void:
-	SaveGame.write(to_save())
+## Saves the game. Autosaves run in the background (a worker thread turns the snapshot into JSON and
+## writes it), so the game doesn't hitch; quitting / dying saves right away.
+func save_game(background := false) -> void:
+	var data := to_save().duplicate(true) # a snapshot the game can keep changing while it's written
+	if _save_task != -1:
+		if background and not WorkerThreadPool.is_task_completed(_save_task):
+			return # still writing the last one
+		WorkerThreadPool.wait_for_task_completion(_save_task)
+		_save_task = -1
+	if background:
+		_save_task = WorkerThreadPool.add_task(SaveGame.write.bind(data))
+	else:
+		SaveGame.write(data)
 
 
 func _apply_save(s: Dictionary) -> void:
@@ -231,6 +267,9 @@ func _apply_save(s: Dictionary) -> void:
 		var raw := Marshalls.base64_to_raw(s["explored"]).decompress(World.W * World.H, FileAccess.COMPRESSION_DEFLATE)
 		if raw.size() == World.W * World.H:
 			explored = raw
+			for i in raw.size():
+				if raw[i] == 1:
+					explored_coarse[((i / World.W) >> 2) * (World.W >> 2) + ((i % World.W) >> 2)] = 1
 	for fd in s.get("fires", []):
 		add_fire(SaveGame.vec(fd["pos"]), fd["fuel"])
 	for zd in s["zombies"]:
@@ -279,33 +318,52 @@ func _process(delta: float) -> void:
 		_save_t -= delta
 		if _save_t <= 0.0:
 			_save_t = AUTOSAVE_EVERY
-			save_game()
+			save_game(true)
+
+	# Trees / props around the camera
+	var cam_zoom: float = player.camera.zoom.x if player.camera else 1.5
+	world.update_stream(player.global_position, get_viewport().get_visible_rect().size / (2.0 * cam_zoom))
+
+	# Unsearched containers near you glint now and then
+	_glint_t -= delta
+	if _glint_t <= 0.0:
+		_glint_t = 0.15
+		for n in get_tree().get_nodes_in_group("loot"):
+			var l := n as LootSpot
+			if not l.opened and not l.is_bag and l.position.distance_squared_to(player.position) < 1400.0 * 1400.0:
+				l.queue_redraw()
+
+	# Creatures far away from you are removed (new ones spawn around you)
+	_despawn_t -= delta
+	if _despawn_t <= 0.0:
+		_despawn_t = 3.0
+		_despawn_far()
 
 	_animal_t -= delta
 	if _animal_t <= 0.0:
-		_animal_t = 15.0
+		_animal_t = 10.0
 		var n := {"rabbit": 0, "deer": 0, "wolf": 0}
 		for a in get_tree().get_nodes_in_group("animals"):
 			n[a.species] += 1
 		if n["rabbit"] < MAX_RABBITS:
-			spawn_animal("rabbit", 900.0)
+			spawn_animal("rabbit", SPAWN_MIN)
 		if n["deer"] < MAX_DEER:
-			spawn_animal("deer", 900.0)
+			spawn_animal("deer", SPAWN_MIN)
 		if n["wolf"] < MAX_WOLVES - 1:
-			spawn_wolf_pack(1100.0)
+			spawn_wolf_pack(SPAWN_MIN + 200.0)
 
 	_survivor_t -= delta
 	if _survivor_t <= 0.0:
-		_survivor_t = 45.0
+		_survivor_t = 30.0
 		if get_tree().get_nodes_in_group("survivors").size() < MAX_SURVIVORS:
-			spawn_survivor_group(1300.0)
+			spawn_survivor_group(SPAWN_MIN + 300.0)
 
 	_spawn_t -= delta
 	if _spawn_t <= 0.0:
 		_spawn_t = ZOMBIE_SPAWN_EVERY
 		var cap := int(lerpf(MAX_ZOMBIES_DAY, MAX_ZOMBIES_NIGHT, 1.0 - light))
 		if get_tree().get_nodes_in_group("zombies").size() < cap:
-			spawn_zombie(900.0)
+			spawn_zombie(SPAWN_MIN)
 
 
 func daylight() -> float:
@@ -318,32 +376,69 @@ func clock_text() -> String:
 	return "%02d:%02d" % [minutes / 60, minutes % 60]
 
 
-## Zombies gather where people used to live: mostly in settlements (more in the city), some in the wild.
-func spawn_zombie(min_dist: float) -> Zombie:
-	var weights := {"city": 5.0, "town": 2.5, "village": 1.2}
-	for attempt in 40:
+## A random spot SPAWN-ring away from you that passes `ok`: in a nearby settlement (`town_chance`, bigger
+## settlements more likely) or anywhere in the ring. Vector2.INF if nothing was found.
+func _ring_point(min_d: float, max_d: float, town_chance: float, ok: Callable) -> Vector2:
+	var pp := player.global_position
+	var weights := {"city": 5.0, "town": 3.0, "village": 1.8, "hamlet": 1.0}
+	var near := []
+	var total := 0.0
+	for i in world.settlements.size():
+		var st: Dictionary = world.settlements[i]
+		var d := world.center_of(st["center"]).distance_to(pp)
+		if d > min_d - 1500.0 and d < max_d + 1500.0:
+			near.append(i)
+			total += weights.get(st["type"], 1.0)
+	for attempt in 120:
 		var c: Vector2i
-		if randf() < 0.8 and not world.settlements.is_empty():
-			var total := 0.0
-			for st in world.settlements:
-				total += weights[st["type"]]
+		if not near.is_empty() and randf() < town_chance:
 			var pick := randf() * total
-			var r: Rect2i = world.settlements[0]["rect"]
-			for st in world.settlements:
-				pick -= weights[st["type"]]
+			var r: Rect2i = world.settlements[near[0]]["rect"]
+			for i in near:
+				pick -= weights.get(world.settlements[i]["type"], 1.0)
 				if pick <= 0.0:
-					r = st["rect"]
+					r = world.settlements[i]["rect"]
 					break
 			c = Vector2i(randi_range(r.position.x, r.end.x - 1), randi_range(r.position.y, r.end.y - 1))
 		else:
-			c = Vector2i(randi_range(2, World.W - 3), randi_range(2, World.H - 3))
-		if not world.is_walkable(c) or world.is_door(c):
+			c = world.cell_of(pp + Vector2.from_angle(randf() * TAU) * randf_range(min_d, max_d))
+		if not world.in_bounds(c):
 			continue
 		var p := world.center_of(c)
-		if p.distance_to(player.position) < min_dist:
+		var d2 := p.distance_to(pp)
+		if d2 < min_d or d2 > max_d or not ok.call(c):
 			continue
-		return add_zombie(p, pick_zombie_type(world.settlement_at(c)))
-	return null
+		return p
+	return Vector2.INF
+
+
+## Zombies gather where people used to live: mostly in settlements (more in the bigger ones), some in the wild.
+func spawn_zombie(min_dist: float, max_dist := SPAWN_MAX) -> Zombie:
+	var p := _ring_point(min_dist, max_dist, 0.8, func(c: Vector2i): return world.is_walkable(c) and not world.is_door(c))
+	if p == Vector2.INF:
+		return null
+	return add_zombie(p, pick_zombie_type(world.settlement_at(world.cell_of(p))))
+
+
+## Removes zombies, animals and bandits that are far away and not busy with you.
+func _despawn_far() -> void:
+	var pp := player.global_position
+	for n in get_tree().get_nodes_in_group("zombies"):
+		var z := n as Zombie
+		if z.state != Zombie.State.CHASE and z.global_position.distance_to(pp) > DESPAWN:
+			z.remove_from_group("zombies")
+			z.queue_free()
+	for n in get_tree().get_nodes_in_group("animals"):
+		var a := n as Animal
+		if a.prey == null and a.global_position.distance_to(pp) > DESPAWN + 400.0:
+			a.remove_from_group("animals")
+			a.remove_from_group("wolves")
+			a.queue_free()
+	for n in get_tree().get_nodes_in_group("survivors"):
+		var b := n as Survivor
+		if b.state != Survivor.State.FIGHT and b.global_position.distance_to(pp) > DESPAWN + 600.0:
+			b.remove_from_group("survivors")
+			b.queue_free()
 
 
 func pick_zombie_type(town := -1) -> String:
@@ -379,31 +474,19 @@ func add_zombie(p: Vector2, type := "walker", gun := "", mag := 0) -> Zombie:
 	return z
 
 
-## Bandits travel in small groups (1-3) and camp in towns, villages or along the roads.
-func spawn_survivor_group(min_dist: float) -> Array:
+## Bandits travel in small groups (1-3) and camp in settlements or along the roads.
+func spawn_survivor_group(min_dist: float, max_dist := SPAWN_MAX + 400.0) -> Array:
 	var out := []
-	for attempt in 60:
-		var c: Vector2i
-		if randf() < 0.75 and not world.settlements.is_empty():
-			var st: Dictionary = world.settlements[randi() % world.settlements.size()]
-			var r: Rect2i = st["rect"]
-			c = Vector2i(randi_range(r.position.x, r.end.x - 1), randi_range(r.position.y, r.end.y - 1))
-		else:
-			c = Vector2i(randi_range(4, World.W - 5), randi_range(4, World.H - 5))
-			if world.get_tile(c) != World.ROAD:
-				continue
-		if not world.is_walkable(c) or world.building_at(world.center_of(c)) >= 0:
-			continue
-		var center := world.center_of(c)
-		if center.distance_to(player.position) < min_dist:
-			continue
-		var n := randi_range(1, 3)
-		for i in n:
-			var s := Survivor.new()
-			s.position = world.random_walkable_near(center, 2)
-			s.home = center
-			out.append(add_survivor(s))
+	var center := _ring_point(min_dist, max_dist, 0.6, func(c: Vector2i):
+		return world.is_walkable(c) and world.building_at(world.center_of(c)) < 0 \
+			and (world.settlement_at(c) >= 0 or world.get_tile(c) == World.ROAD))
+	if center == Vector2.INF:
 		return out
+	for i in randi_range(1, 3):
+		var s := Survivor.new()
+		s.position = world.random_walkable_near(center, 2)
+		s.home = center
+		out.append(add_survivor(s))
 	return out
 
 
@@ -421,16 +504,11 @@ func _on_survivor_died(s: Survivor) -> void:
 
 
 ## Animals live in the wilderness, away from roads and buildings.
-func spawn_animal(species: String, min_dist: float) -> Animal:
-	for attempt in 60:
-		var c := Vector2i(randi_range(3, World.W - 4), randi_range(3, World.H - 4))
-		if not world._is_wild(c):
-			continue
-		var p := world.center_of(c)
-		if p.distance_to(player.position) < min_dist:
-			continue
-		return add_animal(species, p)
-	return null
+func spawn_animal(species: String, min_dist: float, max_dist := SPAWN_MAX + 200.0) -> Animal:
+	var p := _ring_point(min_dist, max_dist, 0.0, func(c: Vector2i): return world._is_wild(c))
+	if p == Vector2.INF:
+		return null
+	return add_animal(species, p)
 
 
 ## Wolves roam the wilderness in packs of 2-3.

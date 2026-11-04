@@ -62,6 +62,10 @@ var _held: Sprite2D
 var _moving := false
 var _pack: Node2D # draws the backpack on the character
 var _melee_dir := Vector2.RIGHT
+var camera: Camera2D
+const ZOOM_MIN := 1.0 # see more
+const ZOOM_MAX := 3.0 # close up
+var _loot_t := 0.0
 
 
 func _ready() -> void:
@@ -89,6 +93,7 @@ func _ready() -> void:
 	add_child(_held)
 
 	var cam := Camera2D.new()
+	camera = cam
 	cam.zoom = Vector2(1.5, 1.5)
 	cam.position_smoothing_enabled = true
 	cam.position_smoothing_speed = 8.0
@@ -420,7 +425,10 @@ func _physics_process(delta: float) -> void:
 	_needs(delta)
 	if not Game.ui_open:
 		_actions()
-	_find_loot()
+	_loot_t -= delta
+	if _loot_t <= 0.0:
+		_loot_t = 0.1 # no need to look for nearby things every frame
+		_find_loot()
 	_animate()
 	queue_redraw()
 
@@ -569,6 +577,13 @@ func _actions() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if dead or get_tree().paused or not event.is_pressed() or event.is_echo():
 		return
+	# Mouse wheel: zoom the camera in / out
+	if event is InputEventMouseButton and (event as InputEventMouseButton).button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+		if not Game.ui_open and camera:
+			var z := camera.zoom.x * (1.12 if (event as InputEventMouseButton).button_index == MOUSE_BUTTON_WHEEL_UP else 1.0 / 1.12)
+			camera.zoom = Vector2.ONE * clampf(z, ZOOM_MIN, ZOOM_MAX)
+			get_viewport().set_input_as_handled()
+		return
 	# These also work with the inventory open. (Eating, drinking and bandaging are done from the inventory.)
 	if event.is_action_pressed("weapon_primary"):
 		switch_weapon("primary")
@@ -582,10 +597,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		holster()
 	elif Game.ui_open:
 		return
-	elif event.is_action_pressed("weapon_next"):
-		cycle_weapon(1)
-	elif event.is_action_pressed("weapon_prev"):
-		cycle_weapon(-1)
 	elif event.is_action_pressed("interact"):
 		interact()
 	elif event.is_action_pressed("build_fire"):

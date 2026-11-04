@@ -46,7 +46,9 @@ func _physics_process(_delta: float) -> void:
 			check(w.roofs.size() == w.buildings.size(), "every building has a roof")
 			check(get_tree().get_nodes_in_group("loot").size() > 30, "loot containers placed")
 			var zn0 := get_tree().get_nodes_in_group("zombies").size()
-			check(zn0 >= 20 and zn0 <= main.MAX_ZOMBIES_DAY, "zombies spawned - far fewer than before (%d)" % zn0)
+			check(zn0 >= 5 and zn0 <= main.MAX_ZOMBIES_NIGHT, "zombies spawned around you (%d)" % zn0)
+			var zfar := get_tree().get_nodes_in_group("zombies").all(func(z): return z.global_position.distance_to(p.global_position) >= 650.0)
+			check(zfar, "zombies spawn out of sight")
 			check(w.is_walkable(w.cell_of(p.global_position)), "player spawns on walkable tile")
 			check(SaveGame.can_continue(), "new game is saved straight away")
 			check(w.find_path(p.global_position, w.center_of(w.building_floors[0][0])).size() > 1, "pathfinding into a building works")
@@ -71,10 +73,59 @@ func _physics_process(_delta: float) -> void:
 				per[w.building_town[i]] = per.get(w.building_town[i], 0) + 1
 			check(not per.has(-1), "no buildings out on the roads between clusters")
 			var sizes_ok := true
+			var by_type := {}
 			for i in w.settlements.size():
-				if per.get(i, 0) < 3 or per.get(i, 0) > 7:
+				var t: String = w.settlements[i]["type"]
+				var lim: Array = {"hamlet": [3, 7], "village": [6, 12], "town": [8, 13], "city": [12, 16]}[t]
+				if per.get(i, 0) < int(lim[0]) or per.get(i, 0) > int(lim[1]):
 					sizes_ok = false
-			check(sizes_ok, "each cluster has 4-7 buildings close together (%s)" % str(per))
+				by_type[t] = by_type.get(t, 0) + 1
+			check(sizes_ok, "settlement sizes: hamlets 4-7, villages ~9-12, towns ~11-13, city 16 (%s)" % str(per))
+			check(by_type.get("hamlet", 0) >= 5 and by_type.get("village", 0) >= 3 and by_type.get("town", 0) >= 1 and by_type.get("city", 0) == 1, "hamlets, villages, towns and a city (%s)" % str(by_type))
+			var multi := 0
+			for st in w.settlements:
+				if st["streets"].size() > 1:
+					multi += 1
+			check(multi >= 4, "bigger settlements have several streets (%d)" % multi)
+			var huts := 0
+			for t in w.building_types:
+				if String(t).begins_with("hut"):
+					huts += 1
+			check(huts * 2 > w.building_types.size(), "most buildings are tiny one-room huts (%d / %d)" % [huts, w.building_types.size()])
+			check(World.W == 512 and World.H == 512, "map is 4x bigger (512 x 512)")
+			print("Performance")
+			check(w._chunk_live.size() > 0 and w._chunk_live.size() < w._chunk_specs.size() / 4, "trees / props only exist near you (%d of %d chunks)" % [w._chunk_live.size(), w._chunk_specs.size()])
+			var bi := 0
+			for i in w.buildings.size():
+				if w.buildings[i].get_center().distance_to(Vector2(w.spawn_cell)) < w.buildings[bi].get_center().distance_to(Vector2(w.spawn_cell)):
+					bi = i
+			var zz: Zombie = main.add_zombie(w.center_of(w.spawn_cell))
+			var inside: Vector2i = w.building_floors[bi][0]
+			var t0 := Time.get_ticks_usec()
+			zz._set_path(w.center_of(inside))
+			var ms := (Time.get_ticks_usec() - t0) / 1000.0
+			check(ms < 8.0, "a zombie after you inside a house heads for the door - no map-wide search (%.1f ms)" % ms)
+			zz.free()
+			var piles := get_tree().get_nodes_in_group("loot").filter(func(l): return l.is_bag)
+			check(not piles.is_empty() and piles[0]._outline != null, "items on the ground have a white outline")
+			print("Map / zoom")
+			main.hud.set_map_open(true)
+			check(main.hud._map_tex != null and main.hud._fog_tex != null, "paper map ready")
+			var z0: float = main.hud._map_zoom
+			var wheel := InputEventMouseButton.new()
+			wheel.button_index = MOUSE_BUTTON_WHEEL_UP
+			wheel.pressed = true
+			wheel.position = main.hud._map_rect(main.hud.get_viewport_rect().size).get_center()
+			get_viewport().push_input(wheel, true)
+			check(main.hud._map_zoom > z0, "scroll zooms the map (%.2f -> %.2f)" % [z0, main.hud._map_zoom])
+			main.hud.set_map_open(false)
+			var cz: float = p.camera.zoom.x
+			var wheel2 := InputEventMouseButton.new()
+			wheel2.button_index = MOUSE_BUTTON_WHEEL_DOWN
+			wheel2.pressed = true
+			get_viewport().push_input(wheel2, true)
+			check(p.camera.zoom.x < cz, "scroll zooms the camera out (%.2f -> %.2f)" % [cz, p.camera.zoom.x])
+			p.camera.zoom = Vector2(1.5, 1.5)
 			var min_gap := 9999
 			for i in w.settlements.size():
 				for j in range(i + 1, w.settlements.size()):
@@ -105,7 +156,7 @@ func _physics_process(_delta: float) -> void:
 			check(water_n > 150, "lakes / river generated (%d water tiles)" % water_n)
 			check(w.taps.size() >= 5 and get_tree().get_nodes_in_group("taps").size() == w.taps.size(), "bathroom taps in houses (%d)" % w.taps.size())
 			var packs := get_tree().get_nodes_in_group("wolves")
-			check(packs.size() >= 4 and packs.all(func(a): return a.global_position.distance_to(p.global_position) > 700.0), "wolf packs roam the wild, away from you (%d)" % packs.size())
+			check(packs.size() >= 2 and packs.all(func(a): return a.global_position.distance_to(p.global_position) > 700.0), "a wolf pack roams the wild, away from you (%d)" % packs.size())
 			var win := 0
 			for t in w.tiles:
 				if t == World.WINDOW:
@@ -153,7 +204,7 @@ func _physics_process(_delta: float) -> void:
 			check(not ("stamina" in p), "stamina removed")
 			print("Bandits (spawn)")
 			var bandits := get_tree().get_nodes_in_group("survivors")
-			check(bandits.size() >= 4, "hostile survivors spawned (%d)" % bandits.size())
+			check(bandits.size() >= 1 and bandits.size() <= main.MAX_SURVIVORS, "a group of bandits spawned (%d)" % bandits.size())
 			var dressed := bandits.all(func(b): return b.gear["shirt"] != null and b.gear["pants"] != null)
 			var armed := bandits.all(func(b): return b.weapon_id() != "fists" or b.gear["melee"] == null)
 			check(dressed and armed, "bandits wear clothes and carry weapons")
@@ -261,6 +312,7 @@ func _physics_process(_delta: float) -> void:
 			loot.contents = [Items.make("bandage", 1), Items.make("bat"), Items.make("shotgun")]
 			loot.opened = false
 			p.global_position = loot.global_position + Vector2(5, 0)
+			p._loot_t = 0.0 # look around now (it's only done every 0.1 s)
 		62:
 			check(p.nearest_loot == loot, "container detected nearby")
 			check(inv.near == loot, "container shown as NEARBY")
@@ -614,6 +666,10 @@ func _physics_process(_delta: float) -> void:
 			p.health = 61.0
 			p.hunger = 33.0
 			main.kills = 7
+			var keep := Survivor.new()
+			keep.position = p.global_position + Vector2(0, 500)
+			main.add_survivor(keep)
+			keep.set_physics_process(false)
 			main.save_game()
 			saved_alive = SaveGame.read()
 			check(not saved_alive.is_empty() and not saved_alive["dead"], "save written (alive)")
@@ -647,7 +703,7 @@ func _physics_process(_delta: float) -> void:
 			check(absf(p2.body_temp - float(saved_alive["player"]["temp"])) < 0.5, "body temperature restored")
 			var opened_before := 0
 			for l in saved_alive["loot"]:
-				if l["opened"]:
+				if l.get("opened", false):
 					opened_before += 1
 			var opened_after := 0
 			for n in get_tree().get_nodes_in_group("loot"):

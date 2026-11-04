@@ -3,6 +3,7 @@ extends Node2D
 ## Muddy banks around lakes and rivers, and railings where roads cross water (bridges).
 
 var world: World
+var region := Rect2i(0, 0, World.W, World.H) # the part of the map this node draws
 
 
 func _ready() -> void:
@@ -16,8 +17,8 @@ func _draw() -> void:
 	var rail := Color("5a4030")
 	var rail_hi := Color("8a6a4a")
 	var dirs := [Vector2i(0, -1), Vector2i(0, 1), Vector2i(-1, 0), Vector2i(1, 0)]
-	for y in World.H:
-		for x in World.W:
+	for y in range(region.position.y, region.end.y):
+		for x in range(region.position.x, region.end.x):
 			var c := Vector2i(x, y)
 			var t := world.get_tile(c)
 			var p := Vector2(x * T, y * T)

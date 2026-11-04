@@ -50,9 +50,16 @@ var _menu := {} # right-click menu: {"loc", "pos", "items": [[label, action], ..
 var _near_scroll := 0
 var left_tab := "near" # "near" or "craft"
 var map_open := false
-var _map_tex: ImageTexture
+var _map_tex: ImageTexture # terrain: paper, forests, water (1 px = 2x2 tiles)
 var _fog_img: Image
-var _fog_tex: ImageTexture
+var _fog_tex: ImageTexture # unexplored areas (1 px = 4x4 tiles)
+var _map_zoom := 2.5 # 1 = whole map
+var _map_center := Vector2.ZERO # in tiles
+var _map_dragging := false
+var _map_drag_last := Vector2.ZERO
+const MAP_ZOOM_MAX := 8.0
+const MAP_PAPER := Color("e6dec3")
+const MAP_INK := Color("2e2620")
 
 
 func _ready() -> void:
@@ -163,40 +170,113 @@ func set_map_open(open: bool) -> void:
 		_refresh_map()
 
 
-## Builds the paper map of the world once, and the fog of unexplored areas each time it opens.
-func _refresh_map() -> void:
+## Builds the terrain picture once (forests as smooth green areas, lakes and rivers) and the fog of
+## unexplored areas each time the map opens. Settlements and roads are drawn on top as icons and lines.
+func prepare_map() -> void:
+	if _map_tex != null:
+		return
 	var w: World = main.world
-	if _map_tex == null:
-		var img := Image.create_empty(World.W, World.H, false, Image.FORMAT_RGBA8)
-		var paper := Color("d8ccaa")
-		for y in World.H:
-			for x in World.W:
-				var c := paper
-				match w.get_tile(Vector2i(x, y)):
-					World.TREE:
-						c = Color("9aa47a")
-					World.ROAD:
-						c = Color("7a6a58")
-					World.FLOOR, World.FURN:
-						c = Color("a8784e") if w.floor_kind[y * World.W + x] != 0 else Color("7a6a58")
-					World.WALL, World.WINDOW:
-						c = Color("5a3a28")
-					World.WATER:
-						c = Color("6f94b0")
-				if c == paper and (x * 7 + y * 13) % 11 == 0:
-					c = paper.darkened(0.04)
-				img.set_pixel(x, y, c)
-		_map_tex = ImageTexture.create_from_image(img)
-		_fog_img = Image.create_empty(World.W, World.H, false, Image.FORMAT_RGBA8)
-		_fog_tex = ImageTexture.create_from_image(_fog_img)
-	var has_map: bool = main.player.inv.count_of("map") > 0
-	var fog := Color("cdbf9a")
+	var R := World.W / 2
+	var trees := Image.create_empty(R, R, false, Image.FORMAT_L8)
+	var water := PackedByteArray()
+	water.resize(R * R)
 	for y in World.H:
 		for x in World.W:
-			var seen: bool = has_map or main.explored[y * World.W + x] == 1
-			var hatch := (x + y) % 4 == 0
-			_fog_img.set_pixel(x, y, Color(0, 0, 0, 0) if seen else (fog.darkened(0.08) if hatch else fog))
+			var t := w.tiles[y * World.W + x]
+			var i := (y >> 1) * R + (x >> 1)
+			if t == World.TREE:
+				trees.set_pixel(x >> 1, y >> 1, Color(1, 1, 1))
+			elif t == World.WATER:
+				water[i] = 1
+	# Smooth forest density: average down, scale back up
+	var dens := trees.duplicate() as Image
+	dens.shrink_x2()
+	dens.shrink_x2()
+	dens.shrink_x2()
+	dens.resize(R, R, Image.INTERPOLATE_CUBIC)
+	var img := Image.create_empty(R, R, false, Image.FORMAT_RGBA8)
+	var forest := Color("b3c493")
+	var forest_edge := Color("97ab78")
+	var lake := Color("9ec4d8")
+	var shore := Color("6e9ab5")
+	for y in R:
+		for x in R:
+			var i := y * R + x
+			var c := MAP_PAPER
+			if (x * 7 + y * 13) % 11 == 0:
+				c = MAP_PAPER.darkened(0.035) # paper grain
+			var d := dens.get_pixel(x, y).r
+			if d > 0.2:
+				c = forest
+			elif d > 0.16:
+				c = forest_edge
+			if water[i] == 1:
+				var edge := false
+				for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+					var n: Vector2i = Vector2i(x, y) + o
+					if n.x >= 0 and n.y >= 0 and n.x < R and n.y < R and water[n.y * R + n.x] == 0:
+						edge = true
+				c = shore if edge else lake
+			img.set_pixel(x, y, c)
+	_map_tex = ImageTexture.create_from_image(img)
+	var F := World.W / 4
+	_fog_img = Image.create_empty(F, F, false, Image.FORMAT_RGBA8)
+	_fog_tex = ImageTexture.create_from_image(_fog_img)
+
+
+func _refresh_map() -> void:
+	prepare_map()
+	var has_map: bool = main.player.inv.count_of("map") > 0
+	var fog := Color("d3c7a4")
+	var F := World.W / 4
+	var seen_c: PackedByteArray = main.explored_coarse
+	for y in F:
+		for x in F:
+			var seen: bool = has_map or seen_c[y * F + x] == 1
+			_fog_img.set_pixel(x, y, Color(0, 0, 0, 0) if seen else (fog.darkened(0.03) if (x * 7 + y * 3) % 5 == 0 else fog))
 	_fog_tex.update(_fog_img)
+	_map_center = main.player.global_position / World.T
+	_map_zoom = clampf(_map_zoom, 1.0, MAP_ZOOM_MAX)
+
+
+## Map screen layout: the map square and the legend beside it.
+func _map_rect(vs: Vector2) -> Rect2:
+	var size := floorf(minf(vs.y - 100.0, vs.x - 360.0))
+	return Rect2(Vector2(floorf((vs.x - size) / 2.0) - 90.0, 56), Vector2(size, size))
+
+
+## Pixels per tile at the current zoom, and the top-left tile shown.
+func _map_view(r: Rect2) -> Array:
+	var ppt := r.size.x / World.W * _map_zoom
+	var view := r.size / ppt
+	_map_center = _map_center.clamp(view / 2.0, Vector2(World.W, World.H) - view / 2.0)
+	return [ppt, _map_center - view / 2.0, view]
+
+
+func _map_input(event: InputEvent) -> bool:
+	var vs := get_viewport_rect().size
+	var r := _map_rect(vs)
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN] and r.has_point(mb.position):
+			# zoom around the point under the mouse
+			var v := _map_view(r)
+			var tile: Vector2 = v[1] + (mb.position - r.position) / float(v[0])
+			_map_zoom = clampf(_map_zoom * (1.25 if mb.button_index == MOUSE_BUTTON_WHEEL_UP else 0.8), 1.0, MAP_ZOOM_MAX)
+			var v2 := _map_view(r)
+			_map_center += tile - (v2[1] + (mb.position - r.position) / float(v2[0]))
+			return true
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			_map_dragging = mb.pressed and r.has_point(mb.position)
+			_map_drag_last = mb.position
+			return true
+	elif event is InputEventMouseMotion and _map_dragging:
+		var mm := event as InputEventMouseMotion
+		var v := _map_view(r)
+		_map_center -= (mm.position - _map_drag_last) / float(v[0])
+		_map_drag_last = mm.position
+		return true
+	return false
 
 
 func set_inventory_open(open: bool) -> void:
@@ -208,6 +288,10 @@ func set_inventory_open(open: bool) -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if map_open:
+		if _map_input(event):
+			get_viewport().set_input_as_handled()
+		return
 	if not (event is InputEventMouseButton):
 		return
 	var mb := event as InputEventMouseButton
@@ -571,11 +655,11 @@ func _draw() -> void:
 		_text(Vector2(ar.end.x + 8, ar.position.y + 38), "[E]", 14, C_DIM)
 
 	# Help
-	if show_help and not inventory_open:
+	if show_help and not inventory_open and not map_open:
 		var lines := [
 			"WASD move   Shift sprint   Melee is automatic   Guns aim for you - stand still, then click",
 			"E / button: search, pick up, skin, cook, drink   R reload   X lower weapon   C campfire",
-			"1 / 2 / 3 or wheel: main / secondary / melee   K crafting   M map",
+			"1 / 2 / 3: main / secondary / melee   Mouse wheel: zoom   K crafting   M map",
 			"Tab inventory: click an item to eat, drink, bandage, wear...   Esc pause   F1 hide help",
 		]
 		draw_rect(Rect2(14, 14, 660, 104), Color(0.08, 0.04, 0.07, 0.6))
@@ -805,40 +889,148 @@ func _info(it: Dictionary) -> String:
 
 
 func _draw_map(p: Player, vs: Vector2) -> void:
-	draw_rect(Rect2(Vector2.ZERO, vs), Color(0.05, 0.02, 0.05, 0.7))
-	var size := minf(vs.y - 90.0, vs.x - 260.0)
-	var scale := size / World.W
-	var r := Rect2(Vector2((vs.x - size) / 2.0, 54), Vector2(size, size))
-	# Paper sheet
-	draw_rect(r.grow(14), Color("5a4630"))
-	draw_rect(r.grow(10), Color("e6dcbe"))
-	draw_texture_rect(_map_tex, r, false)
-	draw_texture_rect(_fog_tex, r, false)
+	var w: World = main.world
+	draw_rect(Rect2(Vector2.ZERO, vs), Color(0.05, 0.02, 0.05, 0.75))
+	var r := _map_rect(vs)
+	var v := _map_view(r)
+	var ppt: float = v[0]
+	var origin: Vector2 = v[1]
+	var view: Vector2 = v[2]
 	var has_map: bool = p.inv.count_of("map") > 0
-	_text(Vector2(r.position.x, r.position.y - 18), "MAP", 22, C_TEXT)
-	_text(Vector2(r.end.x, r.position.y - 18), "M / Esc to close", 13, C_DIM, HORIZONTAL_ALIGNMENT_RIGHT, 0)
-	# Settlement names (only where you've been, unless you carry a road map)
-	for st in main.world.settlements:
+	var to_screen := func(tile: Vector2) -> Vector2: return r.position + (tile - origin) * ppt
+	# Terrain
+	draw_texture_rect_region(_map_tex, r, Rect2(origin / 2.0, view / 2.0))
+	# Grid: a square every 32 tiles
+	var g := 32
+	for k in range(0, World.W + 1, g):
+		var sx: float = r.position.x + (k - origin.x) * ppt
+		if sx > r.position.x and sx < r.end.x:
+			draw_line(Vector2(sx, r.position.y), Vector2(sx, r.end.y), Color(0.45, 0.38, 0.28, 0.25), 1.0)
+		var sy: float = r.position.y + (k - origin.y) * ppt
+		if sy > r.position.y and sy < r.end.y:
+			draw_line(Vector2(r.position.x, sy), Vector2(r.end.x, sy), Color(0.45, 0.38, 0.28, 0.25), 1.0)
+	# Roads: highways as wide amber lines, settlement streets as thin dark ones
+	var lo := origin
+	var hi := origin + view
+	for pass_i in 2:
+		for seg in w.segments:
+			var hw: bool = seg["kind"] == "highway"
+			var a: Vector2
+			var b: Vector2
+			var mid := float(seg["at"]) + 1.5
+			if seg["vertical"]:
+				if mid < lo.x or mid > hi.x:
+					continue
+				a = Vector2(mid, maxf(float(seg["from"]), lo.y))
+				b = Vector2(mid, minf(float(seg["to"]), hi.y))
+				if a.y >= b.y:
+					continue
+			else:
+				if mid < lo.y or mid > hi.y:
+					continue
+				a = Vector2(maxf(float(seg["from"]), lo.x), mid)
+				b = Vector2(minf(float(seg["to"]), hi.x), mid)
+				if a.x >= b.x:
+					continue
+			var width := maxf(2.0, 2.4 * ppt) if hw else maxf(1.5, 1.6 * ppt)
+			if pass_i == 0:
+				draw_line(to_screen.call(a), to_screen.call(b), Color("6e5038") if hw else Color(0, 0, 0, 0), width + 2.0)
+			else:
+				draw_line(to_screen.call(a), to_screen.call(b), Color("e0ad62") if hw else Color("5d544b"), width)
+	# Unexplored areas
+	draw_texture_rect_region(_fog_tex, r, Rect2(origin / 4.0, view / 4.0))
+	# Settlements: an icon (more blocks = bigger place) and the name
+	for st in w.settlements:
 		var c: Vector2i = st["center"]
-		var known: bool = has_map or main.explored[c.y * World.W + c.x] == 1
+		var known: bool = has_map or main.explored[w.idx(c)] == 1
 		if not known:
 			continue
-		var pos := r.position + Vector2(c) * scale
-		var size_px: int = {"city": 18, "town": 15, "village": 13}[st["type"]]
-		draw_string(_font, pos + Vector2(-80 + 1, 1), st["name"], HORIZONTAL_ALIGNMENT_CENTER, 160, size_px, Color(0.9, 0.85, 0.7, 0.8))
-		draw_string(_font, pos + Vector2(-80, 0), st["name"], HORIZONTAL_ALIGNMENT_CENTER, 160, size_px, Color("3a2418"))
+		var pos: Vector2 = to_screen.call(Vector2(c) + Vector2(0.5, 0.5))
+		if not r.grow(-4).has_point(pos):
+			continue
+		_settlement_icon(pos, String(st["type"]))
+		var fs: int = {"city": 20, "town": 17, "village": 15, "hamlet": 13}.get(st["type"], 13)
+		var label := String(st["name"])
+		if st["type"] == "city":
+			label = label.to_upper()
+		var tp := pos + Vector2(14, fs * 0.35)
+		for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
+			draw_string(_font, tp + o, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(MAP_PAPER, 0.9))
+		draw_string(_font, tp, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, MAP_INK)
 	# You are here
-	var me := r.position + p.global_position / World.T * scale
-	var f := p.facing.normalized()
-	var tri := PackedVector2Array([me + f * 9.0, me + f.rotated(2.5) * 7.0, me + f.rotated(-2.5) * 7.0])
-	draw_colored_polygon(tri, Color("b83a3a"))
-	draw_polyline(PackedVector2Array([tri[0], tri[1], tri[2], tri[0]]), Color("1a1016"), 1.5)
+	var me: Vector2 = to_screen.call(p.global_position / World.T)
+	if r.has_point(me):
+		var f := p.facing.normalized()
+		var tri := PackedVector2Array([me + f * 10.0, me + f.rotated(2.5) * 8.0, me + f.rotated(-2.5) * 8.0])
+		draw_colored_polygon(tri, Color("c23a30"))
+		draw_polyline(PackedVector2Array([tri[0], tri[1], tri[2], tri[0]]), MAP_INK, 1.5)
+	# Paper margin and frame (also hides anything that spilled over the edge)
+	var m := 12.0
+	var paper := MAP_PAPER.darkened(0.04)
+	draw_rect(Rect2(r.position - Vector2(m, m), Vector2(r.size.x + 2 * m, m)), paper)
+	draw_rect(Rect2(Vector2(r.position.x - m, r.end.y), Vector2(r.size.x + 2 * m, m)), paper)
+	draw_rect(Rect2(r.position - Vector2(m, 0), Vector2(m, r.size.y)), paper)
+	draw_rect(Rect2(Vector2(r.end.x, r.position.y), Vector2(m, r.size.y)), paper)
+	draw_rect(r.grow(m), Color("5a4630"), false, 3.0)
+	draw_rect(r, Color(0.35, 0.28, 0.2, 0.6), false, 1.0)
+	# Grid labels in the margin: letters across, numbers down
+	for k in range(0, World.W / g):
+		var cx: float = r.position.x + (k * g + g * 0.5 - origin.x) * ppt
+		if cx > r.position.x + 4 and cx < r.end.x - 4:
+			draw_string(_font, Vector2(cx - 4, r.position.y - 2), char(65 + k), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("6e5a44"))
+		var cy: float = r.position.y + (k * g + g * 0.5 - origin.y) * ppt
+		if cy > r.position.y + 4 and cy < r.end.y - 4:
+			draw_string(_font, Vector2(r.position.x - m + 1, cy + 4), str(k + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("6e5a44"))
+	# Legend
+	var lx := r.end.x + 30.0
+	var ly := r.position.y + 4.0
+	draw_rect(Rect2(lx - 10, ly - 4, 190, 330), Color(0.12, 0.08, 0.1, 0.85))
+	_text(Vector2(lx, ly + 18), "MAP", 18, C_TEXT)
+	var rows := [["city", "City"], ["town", "Town"], ["village", "Village"], ["hamlet", "Hamlet"]]
+	for i in rows.size():
+		var y := ly + 46 + i * 26
+		draw_rect(Rect2(lx - 2, y - 12, 26, 22), MAP_PAPER)
+		_settlement_icon(Vector2(lx + 11, y - 1), rows[i][0])
+		_text(Vector2(lx + 34, y + 5), rows[i][1], 14, C_TEXT)
+	var y2 := ly + 46 + 4 * 26
+	draw_line(Vector2(lx, y2), Vector2(lx + 24, y2), Color("6e5038"), 5.0)
+	draw_line(Vector2(lx, y2), Vector2(lx + 24, y2), Color("e0ad62"), 3.0)
+	_text(Vector2(lx + 34, y2 + 5), "Road", 14, C_TEXT)
+	draw_line(Vector2(lx, y2 + 24), Vector2(lx + 24, y2 + 24), Color("5d544b"), 2.0)
+	_text(Vector2(lx + 34, y2 + 29), "Street", 14, C_TEXT)
+	draw_rect(Rect2(lx, y2 + 40, 24, 14), Color("b3c493"))
+	_text(Vector2(lx + 34, y2 + 53), "Forest", 14, C_TEXT)
+	draw_rect(Rect2(lx, y2 + 64, 24, 14), Color("9ec4d8"))
+	_text(Vector2(lx + 34, y2 + 77), "Water", 14, C_TEXT)
+	draw_colored_polygon(PackedVector2Array([Vector2(lx + 20, y2 + 95), Vector2(lx + 4, y2 + 89), Vector2(lx + 4, y2 + 101)]), Color("c23a30"))
+	_text(Vector2(lx + 34, y2 + 101), "You", 14, C_TEXT)
 	# Compass
-	var cp := Vector2(r.end.x + 60, r.position.y + 50)
-	draw_circle(cp, 26, Color("e6dcbe"))
+	var cp := Vector2(lx + 85, y2 + 160)
+	draw_circle(cp, 26, MAP_PAPER)
 	draw_arc(cp, 26, 0, TAU, 24, Color("5a4630"), 2.0)
-	draw_colored_polygon(PackedVector2Array([cp + Vector2(0, -22), cp + Vector2(6, 0), cp + Vector2(-6, 0)]), Color("b83a3a"))
+	draw_colored_polygon(PackedVector2Array([cp + Vector2(0, -22), cp + Vector2(6, 0), cp + Vector2(-6, 0)]), Color("c23a30"))
 	draw_colored_polygon(PackedVector2Array([cp + Vector2(0, 22), cp + Vector2(6, 0), cp + Vector2(-6, 0)]), Color("5a4630"))
 	_text(cp + Vector2(-5, -30), "N", 14, C_TEXT)
+	_text(Vector2(0, r.end.y + 34), "Scroll to zoom  -  drag to move  -  M / Esc to close", 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if not has_map:
-		_text(Vector2(0, r.end.y + 32), "Only places you've been are drawn. Find a Road map (cars, desks, garages) to see everything.", 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		_text(Vector2(0, r.end.y + 54), "Only places you've been are drawn. A Road map (cars, shops, garages, police) shows everything.", 13, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+
+
+## Settlement symbol: blocks of buildings - 4 for the city, 3 for a town, 2 for a village, 1 for a hamlet.
+func _settlement_icon(pos: Vector2, kind: String) -> void:
+	var n: int = {"city": 4, "town": 3, "village": 2, "hamlet": 1}.get(kind, 1)
+	var sz := 6.0 if kind != "hamlet" else 5.0
+	var cells := [Vector2(-1, -1), Vector2(0, -1), Vector2(-1, 0), Vector2(0, 0)]
+	if n == 3:
+		cells = [Vector2(-1, -1), Vector2(0, -1), Vector2(-0.5, 0)]
+	elif n == 2:
+		cells = [Vector2(-1, -0.5), Vector2(0, -0.5)]
+	elif n == 1:
+		cells = [Vector2(-0.5, -0.5)]
+	if kind == "city":
+		draw_circle(pos, 12.0, Color(0.75, 0.25, 0.2, 0.25))
+	for c in cells:
+		var rr := Rect2(pos + c * (sz + 1.5), Vector2(sz, sz))
+		draw_rect(rr.grow(1), MAP_PAPER)
+		draw_rect(rr, MAP_INK)
+
