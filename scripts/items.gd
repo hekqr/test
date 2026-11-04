@@ -21,7 +21,7 @@ const DEFS := {
 	"chips_cheese": {"name": "Cheese chips", "icon": "item_chips_yellow", "stack": 1, "kind": "consumable", "hunger": 15.0, "thirst": -5.0},
 	"meat": {"name": "Raw meat", "icon": "px:meat", "stack": 4, "kind": "consumable", "hunger": 20.0, "poison": 0.35},
 	"cooked_meat": {"name": "Cooked meat", "icon": "px:cooked_meat", "stack": 4, "kind": "consumable", "hunger": 40.0},
-	"water": {"name": "Water bottle", "icon": "item_water", "stack": 1, "kind": "consumable", "thirst": 40.0},
+	"water": {"name": "Water bottle", "icon": "px:water", "stack": 1, "kind": "consumable", "thirst": 40.0},
 	"soda": {"name": "Soda can", "icon": "px:soda", "stack": 1, "kind": "consumable", "thirst": 25.0, "hunger": 5.0,
 		"colors": ["red", "blue", "green", "orange", "purple", "yellow", "black"]},
 

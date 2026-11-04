@@ -1,7 +1,7 @@
 extends SceneTree
 ## Dev tool: renders all drawn icons to one PNG. godot --headless --path . -s tests/icon_preview.gd -- <out.png>
 func _initialize() -> void:
-	var names := ["tshirt", "flannel", "hoodie", "jacket", "jeans", "cargo_pants", "boots", "vest", "helmet", "cap", "beanie", "backpack_small", "backpack_large", "soda", "meat", "cooked_meat", "matches"]
+	var names := ["tshirt", "flannel", "hoodie", "jacket", "jeans", "cargo_pants", "boots", "vest", "helmet", "cap", "beanie", "backpack_small", "backpack_large", "soda", "meat", "cooked_meat", "matches", "water"]
 	var slots := ["head", "armour", "coat", "shirt", "pants", "boots", "back", "hands", "primary", "secondary", "melee"]
 	var sc := 4
 	var out := Image.create_empty(names.size() * 34 * sc, 3 * 34 * sc, false, Image.FORMAT_RGBA8)

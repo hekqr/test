@@ -7,14 +7,14 @@ const SIZE := 32
 const OUTLINE := Color("1a1016")
 
 const NAMES := ["tshirt", "flannel", "hoodie", "jacket", "jeans", "cargo_pants", "boots", "vest",
-	"helmet", "cap", "beanie", "backpack_small", "backpack_large", "soda", "meat", "cooked_meat", "matches"]
+	"helmet", "cap", "beanie", "backpack_small", "backpack_large", "soda", "meat", "cooked_meat", "matches", "water"]
 
 ## Default colours for items without a random colour.
 const DEFAULT := {
 	"tshirt": "6b7a4a", "flannel": "8c3b3b", "hoodie": "5a5f6e", "jacket": "6e4a32", "jeans": "3b5a8c",
 	"cargo_pants": "6a6440", "boots": "5a4030", "vest": "4e5434", "helmet": "4e5a3a", "cap": "8a3030",
 	"beanie": "3a4a5a", "backpack_small": "5a6a3a", "backpack_large": "6a4a30", "soda": "a83838",
-	"meat": "a83a3a", "cooked_meat": "7a4a2a", "matches": "a83838",
+	"meat": "a83a3a", "cooked_meat": "7a4a2a", "matches": "a83838", "water": "7ab8e0",
 }
 
 ## Slot symbol shapes (drawn as silhouettes)
@@ -182,6 +182,20 @@ static func _draw_item(img: Image, name: String, c: Color, silhouette: bool) -> 
 			else:
 				_line(img, Vector2i(8, 12), Vector2i(15, 10), Color("e8c8b8"))
 				_line(img, Vector2i(11, 17), Vector2i(19, 14), Color("e8c8b8"))
+		"water":
+			# Plastic bottle of clear water
+			_rect(img, 13, 1, 6, 3, Color("3a6aa8"))
+			_rect(img, 14, 4, 4, 3, Color("cfe4f0"))
+			_poly(img, [Vector2(14, 7), Vector2(18, 7), Vector2(23, 11.5), Vector2(23, 30), Vector2(9, 30), Vector2(9, 11.5)], Color("cfe4f0"))
+			_rect(img, 9, 13, 14, 17, c)
+			if silhouette:
+				return
+			_rect(img, 9, 13, 14, 2, c.lightened(0.35))
+			_rect(img, 9, 25, 14, 5, c.darkened(0.2))
+			_rect(img, 9, 17, 14, 6, Color("e8eef2"))
+			_line(img, Vector2i(10, 19), Vector2i(21, 19), Color("3a6aa8"))
+			_line(img, Vector2i(12, 21), Vector2i(19, 21), Color("6a9ac8"))
+			_line(img, Vector2i(11, 9), Vector2i(11, 28), Color(1, 1, 1, 0.9))
 		"matches":
 			for x in [10, 14, 18, 22]:
 				_line(img, Vector2i(x, 3), Vector2i(x, 12), Color("e0c890"))
