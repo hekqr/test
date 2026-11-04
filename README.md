@@ -18,6 +18,8 @@ The game saves automatically (every 20 s, when you quit, and when you die) to
 | Left click | Shoot (guns aim by themselves — stand still to steady the aim; melee attacks automatically) |
 | E (or the on-screen button) | Search container / pick up item / skin animal / use campfire |
 | C | Build campfire (3 sticks + 1 match) |
+| K | Crafting |
+| M | Map |
 | R | Reload (restart when dead) |
 | 1 / 2 / 3, mouse wheel | Primary / secondary / melee weapon |
 | X | Lower weapon (fists) |

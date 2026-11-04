@@ -36,6 +36,8 @@ func _ready() -> void:
 	_key("reload", [KEY_R], false)
 	_key("holster", [KEY_X], false)
 	_key("build_fire", [KEY_C], false)
+	_key("craft", [KEY_K], false)
+	_key("map", [KEY_M], false)
 	_key("weapon_primary", [KEY_1])
 	_key("weapon_secondary", [KEY_2])
 	_key("weapon_melee", [KEY_3])

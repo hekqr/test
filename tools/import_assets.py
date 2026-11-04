@@ -82,6 +82,26 @@ PA.update({
     "ui_bullet_rifle.png": "UI/Bullet Indicators/Small/Gun-Bullet_Small.png",
     "ui_bullet_rifle_empty.png": "UI/Bullet Indicators/Small/Gun-Bullet_Small_Empty.png",
 })
+# --- building fronts (3/4 view): wall tilesets in 4 colours, windows and doors
+PA.update({
+    "bld_dark.png": "Tiles/Buildings/Buildings_dark_TileSet.png",
+    "bld_beige.png": "Tiles/Buildings/Buildings_beige_TileSet.png",
+    "bld_gray.png": "Tiles/Buildings/Buildings_gray_TileSet.png",
+    "bld_white.png": "Tiles/Buildings/Buildings_white_TileSet.png",
+    "win_wood.png": "Objects/Windows/Window_3_wood.png",
+    "win_wood_broken.png": "Objects/Windows/Window_1_broken_wood.png",
+    "win_wood_boarded.png": "Objects/Windows/Window_5_Boarded-up_wood.png",
+    "win_gray.png": "Objects/Windows/Window_9_gray.png",
+    "win_gray_broken.png": "Objects/Windows/Window_7_broken_gray.png",
+    "win_gray_boarded.png": "Objects/Windows/Window_11_Boarded-up_gray.png",
+    "win_beige.png": "Objects/Windows/Window_15_Beige.png",
+    "win_beige_broken.png": "Objects/Windows/Window_13_Broken_Beige.png",
+    "win_beige_boarded.png": "Objects/Windows/Window_17_Boarded-up_Beige.png",
+    "door_wood.png": "Objects/Buildings/Door_2_Ajar_Beige.png",
+    "door_wood_closed.png": "Objects/Buildings/Door_1_Beige.png",
+    "door_metal.png": "Objects/Buildings/Door_4_Metal.png",
+    "door_rusty.png": "Objects/Buildings/Door_5_Rusty_Metal.png",
+})
 # --- furniture-ish containers and street props
 PA.update({
     "prop_fridge.png": "Objects/Refrigerator.png",

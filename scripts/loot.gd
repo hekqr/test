@@ -9,23 +9,23 @@ const CONTAINERS := {
 		["water", 6, 1, 1], ["soda", 6, 1, 1], ["meat", 4, 1, 1], ["soup", 2, 1, 1], ["food", 2, 1, 1]]},
 	"cupboard": {"name": "Kitchen cupboard", "sprite": "px:counter", "rolls": Vector2i(0, 2), "empty": 0.45, "table": [
 		["food", 6, 1, 1], ["soup", 5, 1, 1], ["chips_salted", 3, 1, 1], ["chips_cheese", 3, 1, 1], ["water", 2, 1, 1], ["knife", 2, 1, 1], ["matches", 3, 2, 6]]},
-	"wardrobe": {"name": "Wardrobe", "sprite": "px:wardrobe", "rolls": Vector2i(0, 2), "empty": 0.4, "table": [
+	"wardrobe": {"name": "Wardrobe", "sprite": "px:wardrobe", "rolls": Vector2i(0, 2), "empty": 0.4, "table": [["rags", 2, 1, 3], 
 		["tshirt", 6, 1, 1], ["flannel", 5, 1, 1], ["hoodie", 5, 1, 1], ["jacket", 2, 1, 1], ["jeans", 5, 1, 1],
 		["cargo_pants", 3, 1, 1], ["boots", 3, 1, 1], ["cap", 4, 1, 1], ["beanie", 3, 1, 1], ["backpack_small", 2, 1, 1]]},
 	"medicine": {"name": "Medicine cabinet", "sprite": "px:medcabinet", "rolls": Vector2i(0, 1), "empty": 0.5, "table": [
 		["bandage", 6, 1, 1], ["firstaid", 2, 1, 1]]},
 	"washer": {"name": "Washing machine", "sprite": "prop_washer", "rolls": Vector2i(0, 1), "empty": 0.5, "table": [
 		["tshirt", 5, 1, 1], ["flannel", 3, 1, 1], ["jeans", 3, 1, 1], ["hoodie", 2, 1, 1], ["beanie", 1, 1, 1]]},
-	"desk": {"name": "Desk", "sprite": "px:desk", "rolls": Vector2i(0, 1), "empty": 0.45, "table": [
+	"desk": {"name": "Desk", "sprite": "px:desk", "rolls": Vector2i(0, 1), "empty": 0.45, "table": [["map", 2, 1, 1], 
 		["ammo_9mm", 3, 2, 6], ["bandage", 3, 1, 1], ["chips_salted", 2, 1, 1], ["knife", 2, 1, 1], ["pistol", 1, 1, 1], ["cap", 2, 1, 1], ["matches", 2, 2, 5]]},
-	"box": {"name": "Cardboard box", "sprite": "loot_box_1", "rolls": Vector2i(0, 2), "empty": 0.5, "table": [
+	"box": {"name": "Cardboard box", "sprite": "loot_box_1", "rolls": Vector2i(0, 2), "empty": 0.5, "table": [["sack", 2, 1, 1], ["rags", 2, 1, 3], 
 		["food", 3, 1, 1], ["water", 3, 1, 1], ["bandage", 2, 1, 1], ["tshirt", 2, 1, 1], ["cap", 1, 1, 1],
 		["ammo_9mm", 1, 2, 6], ["bat", 1, 1, 1], ["backpack_small", 1, 1, 1]]},
-	"trash": {"name": "Trash can", "sprite": "loot_trash_1", "rolls": Vector2i(0, 1), "empty": 0.6, "table": [
+	"trash": {"name": "Trash can", "sprite": "loot_trash_1", "rolls": Vector2i(0, 1), "empty": 0.6, "table": [["rags", 3, 1, 2], 
 		["chips_salted", 3, 1, 1], ["soda", 3, 1, 1], ["tshirt", 2, 1, 1], ["bandage", 1, 1, 1], ["meat", 1, 1, 1]]},
 
 	# --- shops
-	"shelf": {"name": "Shop shelf", "sprite": "px:shelf", "rolls": Vector2i(0, 2), "empty": 0.4, "table": [
+	"shelf": {"name": "Shop shelf", "sprite": "px:shelf", "rolls": Vector2i(0, 2), "empty": 0.4, "table": [["map", 1, 1, 1], 
 		["food", 5, 1, 1], ["soup", 4, 1, 1], ["chips_salted", 4, 1, 1], ["chips_cheese", 4, 1, 1], ["water", 5, 1, 1],
 		["soda", 5, 1, 1], ["bandage", 1, 1, 1]]},
 	"vending": {"name": "Vending machine", "sprite": "prop_vending_red", "rolls": Vector2i(0, 1), "empty": 0.4, "table": [
@@ -34,22 +34,22 @@ const CONTAINERS := {
 		["bandage", 6, 1, 1], ["firstaid", 4, 1, 1], ["water", 2, 1, 1]]},
 
 	# --- police / military
-	"locker": {"name": "Police locker", "sprite": "px:locker", "rolls": Vector2i(0, 2), "empty": 0.35, "table": [
+	"locker": {"name": "Police locker", "sprite": "px:locker", "rolls": Vector2i(0, 2), "empty": 0.35, "table": [["map", 1, 1, 1], ["rope", 1, 1, 1], 
 		["pistol", 4, 1, 1], ["ammo_9mm", 6, 4, 10], ["shotgun", 2, 1, 1], ["ammo_12ga", 4, 2, 6],
 		["rifle", 1, 1, 1], ["ammo_556", 2, 6, 15], ["vest", 2, 1, 1], ["helmet", 2, 1, 1], ["boots", 2, 1, 1],
 		["bandage", 2, 1, 1], ["firstaid", 1, 1, 1]]},
 
 	# --- garages / workshops
-	"crate": {"name": "Tool crate", "sprite": "prop_pallet_1", "rolls": Vector2i(0, 2), "empty": 0.45, "table": [
+	"crate": {"name": "Tool crate", "sprite": "prop_pallet_1", "rolls": Vector2i(0, 2), "empty": 0.45, "table": [["sack", 3, 1, 1], ["rope", 3, 1, 1], ["map", 1, 1, 1], 
 		["bat", 4, 1, 1], ["axe", 3, 1, 1], ["knife", 3, 1, 1], ["hunting_rifle", 1, 1, 1], ["ammo_308", 2, 2, 6],
 		["boots", 3, 1, 1], ["cargo_pants", 2, 1, 1], ["cap", 2, 1, 1], ["water", 2, 1, 1], ["backpack_large", 1, 1, 1], ["matches", 2, 2, 6], ["sticks", 2, 2, 5]]},
 
 	# --- outside
-	"bin": {"name": "Garbage bin", "sprite": "prop_bin_1", "rolls": Vector2i(0, 1), "empty": 0.6, "table": [
+	"bin": {"name": "Garbage bin", "sprite": "prop_bin_1", "rolls": Vector2i(0, 1), "empty": 0.6, "table": [["rags", 2, 1, 2], ["sack", 1, 1, 1], 
 		["chips_salted", 3, 1, 1], ["chips_cheese", 2, 1, 1], ["soda", 3, 1, 1], ["tshirt", 2, 1, 1], ["meat", 1, 1, 1],
 		["bandage", 1, 1, 1], ["cap", 1, 1, 1]]},
 	# Cars give at most one item.
-	"car": {"name": "Car", "sprite": "", "rolls": Vector2i(1, 1), "empty": 0.55, "table": [
+	"car": {"name": "Car", "sprite": "", "rolls": Vector2i(1, 1), "empty": 0.55, "table": [["map", 3, 1, 1], ["rope", 1, 1, 1], 
 		["water", 5, 1, 1], ["soda", 4, 1, 1], ["chips_salted", 3, 1, 1], ["bandage", 3, 1, 1], ["firstaid", 1, 1, 1],
 		["ammo_9mm", 3, 2, 6], ["ammo_12ga", 1, 2, 6], ["pistol", 1, 1, 1], ["bat", 2, 1, 1], ["cap", 2, 1, 1],
 		["jacket", 1, 1, 1], ["backpack_small", 1, 1, 1], ["matches", 2, 1, 4]]},

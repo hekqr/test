@@ -1,14 +1,15 @@
 class_name World
 extends Node2D
-## The map: roads, hand-made buildings (see buildings.gd) placed facing the roads, street props and
-## lootable cars along the roads, forests and nature in the wilderness.
+## The map: named settlements (a city, towns, villages) with their own street layouts, connected by
+## highways; hand-made buildings (see buildings.gd) facing the streets; street props and lootable cars;
+## forests, nature and animals in the wilderness between them.
 ## Also provides pathfinding and line of sight.
 
 enum { GROUND, WALL, TREE, FLOOR, ROAD, WINDOW, FURN }
 enum { F_NONE, F_WOOD, F_TILE, F_CONCRETE }
 
-const W := 140
-const H := 140
+const W := 200
+const H := 200
 const T := 32
 
 var tiles := PackedByteArray()
@@ -28,8 +29,29 @@ var tree_tex: Array[String] = []
 var props: Array = [] # street props / nature: {"pos": Vector2, "tex": String, "flip": bool, "tall": bool}
 var car_rects: Array[Rect2] = []
 var spawn_cell := Vector2i(W / 2, H / 2)
-var road_v: Array[int] = [] # x of vertical roads (3 wide)
-var road_h: Array[int] = [] # y of horizontal roads (3 wide)
+## Road segments, each 3 tiles wide: {"vertical": bool, "at": first lane x (vertical) or y, "from", "to", "kind": "street"/"highway", "town": index}
+var segments: Array = []
+var road_dir := PackedByteArray() # per cell: 1 = part of a horizontal road, 2 = vertical
+var intersections: Array[Vector2i] = []
+## Settlements: {"name", "type": "city"/"town"/"village", "rect": Rect2i, "center": Vector2i}
+var settlements: Array = []
+var building_town: Array[int] = [] # settlement index per building (-1 = roadside)
+var building_style: Array[String] = [] # wall colour: dark / beige / gray / white
+var building_id := PackedInt32Array() # per cell: building index, or -1
+var facades: Array[Sprite2D] = [] # front wall of each building (3/4 view), fades with the roof
+var _face_windows: Array = [] # [{cell, tex}] windows on interior wall faces
+
+const TOWN_NAMES := ["Ashford", "Millbrook", "Pine Hollow", "Greywater", "Stonebridge", "Redfield", "Elm Crossing",
+	"Harrow", "Oakvale", "Cold Spring", "Linton", "Marsh End", "Westbury", "Fairhill", "Dunmore", "Northfield",
+	"Bramley", "Kettle Creek", "Larkspur", "Willow Bend"]
+## Building mix per settlement type (weights)
+const TOWN_MIX := {
+	"city": {"house_small": 18, "house_large": 20, "shop": 18, "police": 9, "clinic": 9, "garage": 10},
+	"town": {"house_small": 32, "house_large": 26, "shop": 12, "police": 4, "clinic": 6, "garage": 12},
+	"village": {"house_small": 45, "house_large": 25, "shop": 6, "garage": 14},
+}
+## How likely a container in each building type has already been looted by someone else
+const PRE_LOOTED := {"house_small": 0.45, "house_large": 0.45, "shop": 0.35, "police": 0.3, "clinic": 0.35, "garage": 0.35}
 var roofs: Array[TileMapLayer] = [] # one per building, same order as `buildings`
 
 # Atlas coords in tiles_ground.png / tiles_building.png (16x16 tiles)
@@ -89,6 +111,11 @@ func generate(seed_value: int, entities: Node2D) -> void:
 	tiles.fill(GROUND)
 	floor_kind.resize(W * H)
 	floor_kind.fill(F_NONE)
+	road_dir.resize(W * H)
+	road_dir.fill(0)
+	building_id.resize(W * H)
+	building_id.fill(-1)
+	_make_settlements()
 	_make_roads()
 	_make_buildings()
 	_make_street()
@@ -104,65 +131,153 @@ func generate(seed_value: int, entities: Node2D) -> void:
 	_place_furniture()
 	_scatter_decor()
 	_build_roofs()
+	_build_facades(entities)
+	_build_shadows()
 
 
-# ---------------------------------------------------------------- roads
+# ---------------------------------------------------------------- settlements & roads
+
+func _make_settlements() -> void:
+	var names := TOWN_NAMES.duplicate()
+	for i in names.size():
+		var j := rng.randi_range(i, names.size() - 1)
+		var tmp = names[i]
+		names[i] = names[j]
+		names[j] = tmp
+	var plan := [["city", 76], ["town", 52], ["town", 48], ["village", 34], ["village", 30], ["village", 34], ["village", 30], ["village", 32]]
+	for entry in plan:
+		var kind: String = entry[0]
+		var size: int = entry[1]
+		for attempt in 600:
+			var margin := size / 2 + 6
+			var c := Vector2i(rng.randi_range(margin, W - margin), rng.randi_range(margin, H - margin))
+			if kind == "city":
+				c = Vector2i(rng.randi_range(W / 2 - 20, W / 2 + 20), rng.randi_range(H / 2 - 20, H / 2 + 20))
+			var r := Rect2i(c - Vector2i(size, size) / 2, Vector2i(size, size))
+			var ok := true
+			for s2 in settlements:
+				if (s2["rect"] as Rect2i).grow(10).intersects(r):
+					ok = false
+					break
+			if ok:
+				settlements.append({"name": names.pop_back(), "type": kind, "rect": r, "center": c})
+				break
+
 
 func _make_roads() -> void:
-	var x := rng.randi_range(10, 25)
-	while x < W - 8:
-		road_v.append(x)
-		_road_line(true, x)
-		x += rng.randi_range(28, 42)
-	var y := rng.randi_range(10, 25)
-	while y < H - 8:
-		road_h.append(y)
-		_road_line(false, y)
-		y += rng.randi_range(28, 42)
+	for ti in settlements.size():
+		var st: Dictionary = settlements[ti]
+		var r: Rect2i = st["rect"]
+		match st["type"]:
+			"city":
+				# Street grid
+				var x := r.position.x + rng.randi_range(2, 6)
+				while x < r.end.x - 4:
+					_add_segment(true, x, r.position.y, r.end.y, "street", ti)
+					x += rng.randi_range(25, 29)
+				var y := r.position.y + rng.randi_range(2, 6)
+				while y < r.end.y - 4:
+					_add_segment(false, y, r.position.x, r.end.x, "street", ti)
+					y += rng.randi_range(25, 29)
+			"town":
+				# Main street + a few cross streets
+				var main_v := rng.randf() < 0.5
+				var c: Vector2i = st["center"]
+				_add_segment(main_v, (c.x if main_v else c.y) - 1, r.position.y if main_v else r.position.x, r.end.y if main_v else r.end.x, "street", ti)
+				var n := rng.randi_range(2, 3)
+				for k in n:
+					var at := (r.position.y if main_v else r.position.x) + 6 + k * (r.size.x - 12) / maxi(n - 1, 1)
+					var half := rng.randi_range(10, r.size.x / 2)
+					var mid := c.x if main_v else c.y
+					_add_segment(not main_v, at, mid - half, mid + half, "street", ti)
+			"village":
+				# One road through, sometimes a short side lane
+				var main_v := rng.randf() < 0.5
+				var c: Vector2i = st["center"]
+				_add_segment(main_v, (c.x if main_v else c.y) - 1, r.position.y if main_v else r.position.x, r.end.y if main_v else r.end.x, "street", ti)
+				if rng.randf() < 0.6:
+					var at := (c.y if main_v else c.x) + rng.randi_range(-6, 6)
+					var dir := 1 if rng.randf() < 0.5 else -1
+					var mid := c.x if main_v else c.y
+					_add_segment(not main_v, at, mini(mid, mid + dir * 11), maxi(mid, mid + dir * 11), "street", ti)
+	# Highways: connect every settlement (minimum spanning tree + one extra link)
+	var connected := [0]
+	var edges := []
+	while connected.size() < settlements.size():
+		var best := [-1, -1, INF]
+		for a in connected:
+			for b in settlements.size():
+				if b in connected:
+					continue
+				var d := Vector2(settlements[a]["center"]).distance_to(Vector2(settlements[b]["center"]))
+				if d < best[2]:
+					best = [a, b, d]
+		connected.append(best[1])
+		edges.append([best[0], best[1]])
+	if settlements.size() > 3:
+		edges.append([settlements.size() - 1, settlements.size() - 2])
+	for e in edges:
+		var a: Vector2i = settlements[e[0]]["center"]
+		var b: Vector2i = settlements[e[1]]["center"]
+		if rng.randf() < 0.5:
+			_add_segment(false, a.y - 1, mini(a.x, b.x) - 1, maxi(a.x, b.x) + 2, "highway", -1)
+			_add_segment(true, b.x - 1, mini(a.y, b.y) - 1, maxi(a.y, b.y) + 2, "highway", -1)
+		else:
+			_add_segment(true, a.x - 1, mini(a.y, b.y) - 1, maxi(a.y, b.y) + 2, "highway", -1)
+			_add_segment(false, b.y - 1, mini(a.x, b.x) - 1, maxi(a.x, b.x) + 2, "highway", -1)
+	# Intersections: cells on both a horizontal and a vertical road
+	for y in H:
+		for x in W:
+			if road_dir[y * W + x] == 3:
+				intersections.append(Vector2i(x, y))
 
 
-func _road_line(vertical: bool, at: int) -> void:
-	for i in W:
+## Paints a 3-wide road from `from` to `to` along x (vertical = false) or y.
+func _add_segment(vertical: bool, at: int, from: int, to: int, kind: String, town: int) -> void:
+	from = clampi(from, 1, (H if vertical else W) - 2)
+	to = clampi(to, 1, (H if vertical else W) - 1)
+	at = clampi(at, 1, (W if vertical else H) - 4)
+	segments.append({"vertical": vertical, "at": at, "from": from, "to": to, "kind": kind, "town": town})
+	for i in range(from, to):
 		for k in 3:
-			if vertical:
-				set_tile(Vector2i(at + k, i), ROAD)
-			else:
-				set_tile(Vector2i(i, at + k), ROAD)
+			var c := Vector2i(at + k, i) if vertical else Vector2i(i, at + k)
+			if not in_bounds(c):
+				continue
+			set_tile(c, ROAD)
+			road_dir[idx(c)] |= 2 if vertical else 1
 
 
-func _in_h_road(y: int) -> bool:
-	for ry in road_h:
-		if y >= ry and y < ry + 3:
-			return true
-	return false
-
-
-func _in_v_road(x: int) -> bool:
-	for rx in road_v:
-		if x >= rx and x < rx + 3:
-			return true
-	return false
+func settlement_at(c: Vector2i) -> int:
+	for i in settlements.size():
+		if (settlements[i]["rect"] as Rect2i).grow(3).has_point(c):
+			return i
+	return -1
 
 
 # ---------------------------------------------------------------- buildings
 
-## Walks along both sides of every road and places buildings facing it.
+## Buildings line both sides of every settlement street; a few stand alone along highways.
 func _make_buildings() -> void:
-	for rx in road_v:
-		_line_of_buildings(true, rx, -1)
-		_line_of_buildings(true, rx, 1)
-	for ry in road_h:
-		_line_of_buildings(false, ry, -1)
-		_line_of_buildings(false, ry, 1)
+	for seg in segments:
+		if seg["kind"] == "street":
+			var mix: Dictionary = TOWN_MIX[settlements[seg["town"]]["type"]]
+			_line_of_buildings(seg, -1, mix, 0.2, seg["town"])
+			_line_of_buildings(seg, 1, mix, 0.2, seg["town"])
+		else:
+			var lone := {"house_small": 5, "garage": 3, "house_large": 2}
+			_line_of_buildings(seg, -1, lone, 0.96, -1)
+			_line_of_buildings(seg, 1, lone, 0.96, -1)
 
 
-func _line_of_buildings(vertical: bool, at: int, side: int) -> void:
-	var cursor := rng.randi_range(2, 8)
-	while cursor < W - 4:
-		if rng.randf() < 0.25: # empty lot
+func _line_of_buildings(seg: Dictionary, side: int, mix: Dictionary, empty_lot: float, town: int) -> void:
+	var vertical: bool = seg["vertical"]
+	var at: int = seg["at"]
+	var cursor: int = seg["from"] + rng.randi_range(1, 4)
+	while cursor < int(seg["to"]) - 4:
+		if rng.randf() < empty_lot:
 			cursor += rng.randi_range(4, 9)
 			continue
-		var kind := Buildings.pick(rng)
+		var kind := Buildings.pick(rng, mix)
 		var front := ""
 		if vertical:
 			front = "E" if side < 0 else "W"
@@ -180,11 +295,12 @@ func _line_of_buildings(vertical: bool, at: int, side: int) -> void:
 			var y0 := at - setback - bh if side < 0 else at + 3 + setback
 			pos = Vector2i(cursor, y0)
 		var r := Rect2i(pos, Vector2i(bw, bh))
-		if r.position.x >= 2 and r.position.y >= 2 and r.end.x <= W - 2 and r.end.y <= H - 2 and _area_is(r.grow(1), GROUND):
-			_place_building(r, kind, plan)
+		# Need open ground around it (and room behind the roof edge)
+		if r.position.x >= 3 and r.position.y >= 4 and r.end.x <= W - 3 and r.end.y <= H - 3 and _area_is(r.grow(1), GROUND):
+			_place_building(r, kind, plan, town)
 			cursor += (bh if vertical else bw) + rng.randi_range(2, 4)
 		else:
-			cursor += 3
+			cursor += 2
 
 
 func _area_is(r: Rect2i, t: int) -> bool:
@@ -195,9 +311,13 @@ func _area_is(r: Rect2i, t: int) -> bool:
 	return true
 
 
-func _place_building(r: Rect2i, kind: String, plan: Array) -> void:
+func _place_building(r: Rect2i, kind: String, plan: Array, town := -1) -> void:
 	var doors: Array[Vector2i] = []
 	var floors: Array[Vector2i] = []
+	var bi := buildings.size()
+	for y in range(r.position.y, r.end.y):
+		for x in range(r.position.x, r.end.x):
+			building_id[idx(Vector2i(x, y))] = bi
 	for y in r.size.y:
 		var row: String = plan[y]
 		for x in r.size.x:
@@ -227,11 +347,17 @@ func _place_building(r: Rect2i, kind: String, plan: Array) -> void:
 							tex = "loot_trash_1" if rng.randf() < 0.5 else "loot_trash_2"
 						elif k == "crate":
 							tex = "prop_pallet_1" if rng.randf() < 0.5 else "prop_pallet_2"
-						containers.append({"pos": center_of(c), "kind": k, "tex": tex, "flip": false, "reach": 44.0})
+						containers.append({"pos": center_of(c), "kind": k, "tex": tex, "flip": false, "reach": 44.0,
+							"empty_chance": PRE_LOOTED.get(kind, 0.4)})
 					elif Buildings.FURNITURE_CHARS.has(ch):
 						furniture.append({"cell": c, "name": Buildings.FURNITURE_CHARS[ch]})
 	buildings.append(r)
 	building_types.append(kind)
+	building_town.append(town)
+	var styles := {"house_small": ["beige", "white", "gray", "dark"], "house_large": ["beige", "white", "gray"],
+		"shop": ["gray", "white"], "police": ["gray", "white"], "clinic": ["white"], "garage": ["dark", "gray"]}
+	var options: Array = styles.get(kind, ["gray"])
+	building_style.append(options[rng.randi() % options.size()])
 	building_doors.append(doors)
 	building_floors.append(floors)
 
@@ -248,69 +374,74 @@ func _is_sidewalk(c: Vector2i) -> bool:
 
 
 func _near_intersection(c: Vector2i, dist: int) -> bool:
-	for rx in road_v:
-		if c.x >= rx - dist and c.x < rx + 3 + dist and _in_h_road_near(c.y, dist):
-			return true
+	var r := dist + 1
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			var n := c + Vector2i(dx, dy)
+			if in_bounds(n) and road_dir[idx(n)] == 3:
+				return true
 	return false
 
 
-func _in_h_road_near(y: int, dist: int) -> bool:
-	for ry in road_h:
-		if y >= ry - dist and y < ry + 3 + dist:
-			return true
-	return false
+func _is_vertical_road(c: Vector2i) -> bool:
+	return in_bounds(c) and (road_dir[idx(c)] & 2) != 0
 
 
 func _make_street() -> void:
-	# Street lights along every road
-	for rx in road_v:
-		var y := rng.randi_range(2, 8)
-		while y < H - 2:
+	# Street lights along settlement streets
+	for seg in segments:
+		if seg["kind"] != "street":
+			continue
+		var i: int = seg["from"] + rng.randi_range(2, 8)
+		while i < int(seg["to"]) - 2:
 			for side in [-1, 3]:
-				var c := Vector2i(rx + side, y + (0 if side < 0 else 5))
-				if _is_sidewalk(c):
+				var c: Vector2i
+				var tex := ""
+				if seg["vertical"]:
+					c = Vector2i(int(seg["at"]) + side, i + (0 if side < 0 else 5))
+					tex = "prop_light_side"
+				else:
+					c = Vector2i(i + (0 if side < 0 else 5), int(seg["at"]) + side)
+					tex = "prop_light_down" if side < 0 else "prop_light_up"
+				if _is_sidewalk(c) and not _near_intersection(c, 0):
 					set_tile(c, FURN)
-					props.append({"pos": center_of(c) + Vector2(0, 12), "tex": "prop_light_side", "flip": side < 0, "tall": true})
-			y += 11
-	for ry in road_h:
-		var x := rng.randi_range(2, 8)
-		while x < W - 2:
-			for side in [-1, 3]:
-				var c := Vector2i(x + (0 if side < 0 else 5), ry + side)
-				if _is_sidewalk(c):
-					set_tile(c, FURN)
-					props.append({"pos": center_of(c) + Vector2(0, 12), "tex": "prop_light_down" if side < 0 else "prop_light_up", "flip": false, "tall": true})
-			x += 11
-	# Stop signs at intersection corners
-	for rx in road_v:
-		for ry in road_h:
-			var c := Vector2i(rx - 1, ry - 1)
+					props.append({"pos": center_of(c) + Vector2(0, 12), "tex": tex, "flip": seg["vertical"] and side < 0, "tall": true})
+			i += 11
+	# Stop signs at intersections in towns
+	var done := {}
+	for c0 in intersections:
+		var key := Vector2i(c0.x / 4, c0.y / 4)
+		if done.has(key) or settlement_at(c0) < 0:
+			continue
+		done[key] = true
+		for off in [Vector2i(-2, -2), Vector2i(2, 2)]:
+			var c: Vector2i = c0 + off
 			if _is_sidewalk(c):
 				set_tile(c, FURN)
-				props.append({"pos": center_of(c) + Vector2(0, 12), "tex": "prop_stop_down", "flip": false, "tall": true})
-			c = Vector2i(rx + 3, ry + 3)
-			if _is_sidewalk(c):
-				set_tile(c, FURN)
-				props.append({"pos": center_of(c) + Vector2(0, 12), "tex": "prop_stop_up", "flip": false, "tall": true})
-	# Sidewalk clutter: hydrants, benches, garbage bins (searchable), trash bags, barrels, tires
+				props.append({"pos": center_of(c) + Vector2(0, 12), "tex": "prop_stop_down" if off.y < 0 else "prop_stop_up", "flip": false, "tall": true})
+				break
+	# Sidewalk clutter in settlements: hydrants, benches, garbage bins (searchable), trash bags, barrels
 	for y in range(2, H - 2):
 		for x in range(2, W - 2):
 			var c := Vector2i(x, y)
+			var town := settlement_at(c)
+			if town < 0:
+				continue
 			if _is_sidewalk(c) and not _near_intersection(c, 1):
 				var r := rng.randf()
-				var vert_road := _in_v_road(x - 1) or _in_v_road(x + 1)
+				var vert_road := _is_vertical_road(c + Vector2i(-1, 0)) or _is_vertical_road(c + Vector2i(1, 0))
 				if r < 0.012:
 					set_tile(c, FURN)
 					props.append({"pos": center_of(c) + Vector2(0, 12), "tex": "prop_hydrant_%d" % rng.randi_range(1, 2), "flip": false, "tall": true})
 				elif r < 0.022:
 					set_tile(c, FURN)
 					props.append({"pos": center_of(c) + Vector2(0, 12), "tex": "prop_bench_side" if vert_road else "prop_bench_down", "flip": rng.randf() < 0.5, "tall": true})
-				elif r < 0.036:
+				elif r < 0.034:
 					set_tile(c, FURN)
 					containers.append({"pos": center_of(c), "kind": "bin", "tex": "prop_bin_%d" % rng.randi_range(1, 4), "flip": rng.randf() < 0.5, "reach": 48.0})
-				elif r < 0.06:
+				elif r < 0.058:
 					props.append({"pos": center_of(c) + Vector2(rng.randf_range(-6, 6), rng.randf_range(-4, 8)), "tex": "prop_bag_%d" % rng.randi_range(1, 2), "flip": rng.randf() < 0.5, "tall": false})
-				elif r < 0.068:
+				elif r < 0.066:
 					props.append({"pos": center_of(c), "tex": ["prop_tire", "prop_barrel_1", "prop_barrel_2", "prop_barrel_3", "prop_pallet_2", "prop_debris"][rng.randi() % 6], "flip": rng.randf() < 0.5, "tall": true})
 			elif get_tile(c) == ROAD and not _near_intersection(c, 0):
 				var r2 := rng.randf()
@@ -332,42 +463,34 @@ func _make_street() -> void:
 	_make_cars()
 
 
-## Abandoned cars on the roads. Each can be searched once (one item at most).
+## Abandoned cars: plenty in town streets, a few along highways. Each can be searched once (one item at most).
 func _make_cars() -> void:
-	for rx in road_v:
-		var y := rng.randi_range(3, 12)
-		while y < H - 6:
-			if not _in_h_road_near(y, 3) and not _in_h_road_near(y + 3, 3) and rng.randf() < 0.6:
-				var lane := rng.randi_range(0, 1)
-				var col: String = CAR_COLORS[rng.randi() % CAR_COLORS.size()]
-				var tex: String = ["car_front_", "car_front_", "car_flipped_", "car_moto_"][rng.randi() % 4] + col
-				var cx := rx * T + (24 if lane == 0 else 72)
-				_add_car(tex, Vector2(cx, y * T + 40), rng.randf() < 0.5)
-			y += rng.randi_range(9, 20)
-	for ry in road_h:
-		var x := rng.randi_range(3, 12)
-		while x < W - 8:
-			if not _in_v_road_near(x, 3) and not _in_v_road_near(x + 4, 3) and rng.randf() < 0.6:
-				var lane := rng.randi_range(0, 1)
-				var col: String = CAR_COLORS[rng.randi() % CAR_COLORS.size()]
-				var pick := rng.randi() % 10
-				var tex := "car_side_" + col
-				if pick == 0:
-					tex = "car_bus_%d" % rng.randi_range(1, 5)
-				elif pick <= 2:
-					tex = "car_van_%d" % rng.randi_range(1, 2)
-				elif pick <= 4:
-					tex = "car_scrap_" + col
-				var cy := ry * T + (24 if lane == 0 else 72)
-				_add_car(tex, Vector2(x * T + 64, cy), rng.randf() < 0.5)
-			x += rng.randi_range(10, 22)
-
-
-func _in_v_road_near(x: int, dist: int) -> bool:
-	for rx in road_v:
-		if x >= rx - dist and x < rx + 3 + dist:
-			return true
-	return false
+	for seg in segments:
+		var town: bool = seg["kind"] == "street"
+		var gap_min := 9 if town else 22
+		var gap_max := 20 if town else 45
+		var i: int = seg["from"] + rng.randi_range(3, 12)
+		while i < int(seg["to"]) - 6:
+			var lane := rng.randi_range(0, 1)
+			var col: String = CAR_COLORS[rng.randi() % CAR_COLORS.size()]
+			if seg["vertical"]:
+				var c := Vector2i(int(seg["at"]) + 1, i)
+				if not _near_intersection(c, 4) and rng.randf() < 0.6:
+					var tex: String = ["car_front_", "car_front_", "car_flipped_", "car_moto_"][rng.randi() % 4] + col
+					_add_car(tex, Vector2(int(seg["at"]) * T + (24 if lane == 0 else 72), i * T + 40), rng.randf() < 0.5)
+			else:
+				var c := Vector2i(i, int(seg["at"]) + 1)
+				if not _near_intersection(c, 4) and not _near_intersection(c + Vector2i(4, 0), 4) and rng.randf() < 0.6:
+					var pick := rng.randi() % 10
+					var tex := "car_side_" + col
+					if pick == 0:
+						tex = "car_bus_%d" % rng.randi_range(1, 5)
+					elif pick <= 2:
+						tex = "car_van_%d" % rng.randi_range(1, 2)
+					elif pick <= 4:
+						tex = "car_scrap_" + col
+					_add_car(tex, Vector2(i * T + 64, int(seg["at"]) * T + (24 if lane == 0 else 72)), rng.randf() < 0.5)
+			i += rng.randi_range(gap_min, gap_max)
 
 
 func _add_car(tex: String, center: Vector2, flip: bool) -> void:
@@ -393,8 +516,43 @@ func _near_type(c: Vector2i, t: int, radius: int) -> bool:
 	return false
 
 
+var _wild := PackedByteArray() # 1 = open ground at least 3 tiles from roads / buildings, outside towns
+
+
 func _is_wild(c: Vector2i) -> bool:
-	return get_tile(c) == GROUND and not _near_type(c, ROAD, 3) and not _near_type(c, WALL, 3) and not _near_type(c, WINDOW, 3)
+	if _wild.is_empty():
+		_build_wild_mask()
+	return in_bounds(c) and _wild[idx(c)] == 1 and get_tile(c) == GROUND
+
+
+## Marks cells far from roads and buildings (two passes of a 7-wide box, much faster than checking each cell's area).
+func _build_wild_mask() -> void:
+	var built := PackedByteArray()
+	built.resize(W * H)
+	for i in W * H:
+		var t := tiles[i]
+		built[i] = 1 if (t == ROAD or t == WALL or t == WINDOW) else 0
+	var horiz := PackedByteArray()
+	horiz.resize(W * H)
+	for y in H:
+		for x in W:
+			var v := 0
+			for dx in range(-3, 4):
+				var xx := x + dx
+				if xx >= 0 and xx < W and built[y * W + xx] == 1:
+					v = 1
+					break
+			horiz[y * W + x] = v
+	_wild.resize(W * H)
+	for y in H:
+		for x in W:
+			var v := 0
+			for dy in range(-3, 4):
+				var yy := y + dy
+				if yy >= 0 and yy < H and horiz[yy * W + x] == 1:
+					v = 1
+					break
+			_wild[y * W + x] = 1 if v == 0 and settlement_at(Vector2i(x, y)) < 0 else 0
 
 
 func _make_trees() -> void:
@@ -407,6 +565,8 @@ func _make_trees() -> void:
 			if get_tile(c) != GROUND:
 				continue
 			var p := 0.35 if noise.get_noise_2d(x, y) > 0.15 else 0.02
+			if settlement_at(c) >= 0:
+				p *= 0.12 # gardens, not forests, inside towns
 			if rng.randf() >= p:
 				continue
 			if _near_type(c, ROAD, 1) or _near_type(c, WALL, 1) or _near_type(c, FLOOR, 1) or _near_type(c, WINDOW, 1) or _near_type(c, FURN, 1):
@@ -453,16 +613,22 @@ func _make_border() -> void:
 		set_tile(Vector2i(W - 1, i), WALL)
 
 
+## You start on the main street of a village.
 func _find_spawn() -> void:
-	var mid := Vector2(W * 0.5, H * 0.5)
-	var best_d := INF
-	for y in H:
-		for x in W:
-			if tiles[y * W + x] == ROAD:
-				var d := Vector2(x, y).distance_squared_to(mid)
-				if d < best_d:
-					best_d = d
-					spawn_cell = Vector2i(x, y)
+	var options := []
+	for seg in segments:
+		if seg["kind"] == "street" and settlements[seg["town"]]["type"] == "village":
+			options.append(seg)
+	if options.is_empty():
+		options = segments
+	var seg: Dictionary = options[rng.randi() % options.size()]
+	for attempt in 50:
+		var i := rng.randi_range(int(seg["from"]) + 2, int(seg["to"]) - 3)
+		var c := Vector2i(int(seg["at"]) + 1, i) if seg["vertical"] else Vector2i(i, int(seg["at"]) + 1)
+		if is_walkable(c):
+			spawn_cell = c
+			return
+	spawn_cell = Vector2i(int(seg["at"]) + 1, int(seg["from"]) + 2) if seg["vertical"] else Vector2i(int(seg["from"]) + 2, int(seg["at"]) + 1)
 
 
 # ---------------------------------------------------------------- physics / pathing
@@ -527,7 +693,10 @@ func _build_tilemaps() -> void:
 	var ts := TileSet.new()
 	ts.tile_size = Vector2i(16, 16)
 	var ground_id := ts.add_source(_atlas(Game.tex("tiles_ground"), GRASS_TILES + GRASS_DECOR_TILES + WOOD_TILES))
-	var wall_id := ts.add_source(_atlas(Game.tex("tiles_building"), WALL_H_TILES + WALL_V_TILES))
+	var face_ids := {}
+	for st in ["dark", "beige", "gray", "white"]:
+		face_ids[st] = ts.add_source(_atlas(Game.tex("bld_" + st), FACE_TILES))
+	var top_id := ts.add_source(_atlas(_make_wall_tops(), [Vector2i(0, 0), Vector2i(1, 0)]))
 	var road_id := ts.add_source(_atlas(_make_asphalt(), [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)]))
 	var floor_id := ts.add_source(_atlas(_make_floors(), [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)]))
 
@@ -559,15 +728,63 @@ func _build_tilemaps() -> void:
 				var g: Array = GRASS_DECOR_TILES if rng.randf() < 0.06 else GRASS_TILES
 				ground.set_cell(c, ground_id, g[rng.randi() % g.size()])
 			if t == WALL or t == WINDOW:
-				var vertical := _is_wallish(c + Vector2i(0, -1)) and _is_wallish(c + Vector2i(0, 1)) \
-					and not _is_wallish(c + Vector2i(-1, 0)) and not _is_wallish(c + Vector2i(1, 0))
-				var arr: Array = WALL_V_TILES if vertical else WALL_H_TILES
-				walls.set_cell(c, wall_id, arr[rng.randi() % arr.size()])
-	# dark outline around walls + glass in windows
+				# 3/4 view: a wall with room floor in front of it shows its face; other walls are thin dark tops.
+				if is_face(c):
+					var st: String = building_style[building_id[idx(c)]]
+					walls.set_cell(c, face_ids[st], FACE_TILES[0] if rng.randf() < 0.75 else FACE_TILES[rng.randi() % FACE_TILES.size()])
+					if t == WINDOW:
+						_face_windows.append({"cell": c, "tex": _window_tex(building_style[building_id[idx(c)]])})
+				else:
+					walls.set_cell(c, top_id, Vector2i(rng.randi() % 2, 0))
+	# dark outline around walls + glass in top-view windows
 	var outline := Line2DOutline.new()
 	outline.world = self
 	outline.z_index = -8
 	add_child(outline)
+	# windows on interior wall faces
+	var wins := Node2D.new()
+	wins.z_index = -8
+	add_child(wins)
+	for fw in _face_windows:
+		var spr := Sprite2D.new()
+		spr.texture = Game.tex(fw["tex"])
+		spr.scale = Vector2(2, 2)
+		spr.position = center_of(fw["cell"]) + Vector2(0, 1)
+		wins.add_child(spr)
+
+
+## Face tiles from the building tilesets (plain wall, cracked wall, worn wall)
+const FACE_TILES := [Vector2i(7, 4), Vector2i(8, 4), Vector2i(6, 1)]
+
+
+## True for a wall / window that has room floor right in front of it (south), so you see its face.
+func is_face(c: Vector2i) -> bool:
+	var t := get_tile(c)
+	if t != WALL and t != WINDOW:
+		return false
+	var b := building_id[idx(c)] if in_bounds(c) else -1
+	var s := c + Vector2i(0, 1)
+	if b < 0 or not in_bounds(s) or building_id[idx(s)] != b:
+		return false
+	var ts := get_tile(s)
+	return ts == FLOOR or ts == FURN
+
+
+func _window_tex(style: String) -> String:
+	var base: String = {"dark": "win_gray", "gray": "win_gray", "beige": "win_beige", "white": "win_wood"}[style]
+	var r := rng.randf()
+	return base + ("_broken" if r < 0.2 else ("_boarded" if r < 0.3 else ""))
+
+
+## Thin dark wall tops (what you see of a wall from above).
+func _make_wall_tops() -> Texture2D:
+	var img := Image.create_empty(32, 16, false, Image.FORMAT_RGBA8)
+	for t in 2:
+		for y in 16:
+			for x in 16:
+				var c := Color("3a2c30").lightened(rng.randf_range(-0.04, 0.05))
+				img.set_pixel(t * 16 + x, y, c)
+	return ImageTexture.create_from_image(img)
 
 
 func _is_wallish(c: Vector2i) -> bool:
@@ -586,16 +803,14 @@ func _atlas(t: Texture2D, coords: Array) -> TileSetAtlasSource:
 
 
 func _road_tile(c: Vector2i) -> Vector2i:
-	var on_v := false
-	for rx in road_v:
-		if c.x >= rx and c.x < rx + 3:
-			on_v = true
-			if c.x == rx + 1 and not _in_h_road(c.y) and c.y % 3 != 0:
-				return Vector2i(3, 0)
-	for ry in road_h:
-		if c.y >= ry and c.y < ry + 3:
-			if c.y == ry + 1 and not on_v and c.x % 3 != 0:
-				return Vector2i(2, 0)
+	var dir := road_dir[idx(c)]
+	if dir == 2:
+		# vertical road: dash on the middle lane
+		if road_dir[idx(c + Vector2i(-1, 0))] & 2 and road_dir[idx(c + Vector2i(1, 0))] & 2 and c.y % 3 != 0:
+			return Vector2i(3, 0)
+	elif dir == 1:
+		if road_dir[idx(c + Vector2i(0, -1))] & 1 and road_dir[idx(c + Vector2i(0, 1))] & 1 and c.x % 3 != 0:
+			return Vector2i(2, 0)
 	return Vector2i(rng.randi() % 2, 0)
 
 
@@ -723,7 +938,8 @@ func _scatter_decor() -> void:
 
 # ---------------------------------------------------------------- roofs
 
-## Roofs cover every building and fade out while the player is inside it.
+## Roofs sit one tile higher than the building (3/4 view), above the 2-tile front wall.
+## Both fade out while the player is inside the building.
 func _build_roofs() -> void:
 	var ts := TileSet.new()
 	ts.tile_size = Vector2i(16, 16)
@@ -739,24 +955,92 @@ func _build_roofs() -> void:
 		roof.scale = Vector2(2, 2)
 		roof.z_index = 5
 		var base := 8 if rng.randf() < 0.5 else 0
-		var mid := r.position.y + r.size.y / 2
-		var doors: Array = building_doors[bi]
-		for y in range(r.position.y, r.end.y):
+		var top := r.position.y - 1
+		var bottom := r.end.y - 3 # last roof row; the front wall covers the 2 rows below it
+		var mid := (top + bottom) / 2
+		var cut_cells := {}
+		for d in building_doors[bi]:
+			var dc: Vector2i = d
+			if dc.y < r.end.y - 1: # doors on the back / sides: leave a gap in the roof
+				cut_cells[dc + Vector2i(0, -1)] = true
+				cut_cells[dc] = true
+		for y in range(top, bottom + 1):
 			for x in range(r.position.x, r.end.x):
 				var c := Vector2i(x, y)
-				if c in doors:
-					continue # doorways stay open so entrances are visible
+				if cut_cells.has(c):
+					continue
 				var col := 0 if x == r.position.x else (2 if x == r.end.x - 1 else 1)
 				var row := 0
-				if y == r.end.y - 1:
+				if y == bottom:
 					row = 4
 				elif y == mid:
 					row = 2
-				elif y > r.position.y:
-					row = 1 if (y - r.position.y) % 2 == 1 else 3
+				elif y > top:
+					row = 1 if (y - top) % 2 == 1 else 3
 				roof.set_cell(c, src_id, Vector2i(base + col, row))
 		add_child(roof)
 		roofs.append(roof)
+
+
+## The front (south) wall of every building, 2 tiles tall, built from the pack's wall tiles with windows and doors.
+## Sorted with the player, so you walk in front of it and zombies inside are hidden behind it.
+func _build_facades(entities: Node2D) -> void:
+	var holder := Node2D.new()
+	holder.name = "Facades"
+	holder.y_sort_enabled = true
+	entities.add_child(holder)
+	for bi in buildings.size():
+		var r := buildings[bi]
+		var style := building_style[bi]
+		var src := Game.tex("bld_" + style).get_image()
+		src.convert(Image.FORMAT_RGBA8)
+		var w := r.size.x
+		var img := Image.create_empty(w * 16, 32, false, Image.FORMAT_RGBA8)
+		var y_row := r.end.y - 1
+		var door_tex := "door_wood" if building_types[bi].begins_with("house") else ("door_rusty" if building_types[bi] == "garage" else "door_metal")
+		var win_tex := _window_tex(style)
+		for x in w:
+			# Plain pieces of the tileset: column 4 = left end, 9 = right end, 5-8 middle
+			var top_col: int = 4 if x == 0 else (9 if x == w - 1 else [5, 6][x % 2])
+			var face_col := 4 if x == 0 else (9 if x == w - 1 else (8 if rng.randf() < 0.2 else 7))
+			# top half: wall with a top lip, bottom half: wall face, then a base strip
+			img.blend_rect(src, Rect2i(top_col * 16, 3 * 16, 16, 16), Vector2i(x * 16, 0))
+			img.blend_rect(src, Rect2i(face_col * 16, 4 * 16, 16, 16), Vector2i(x * 16, 16))
+			img.blend_rect(src, Rect2i(top_col * 16, 5 * 16, 16, 6), Vector2i(x * 16, 26))
+			var t := get_tile(Vector2i(r.position.x + x, y_row))
+			if t == WINDOW:
+				var win := Game.tex(win_tex if rng.randf() < 0.7 else _window_tex(style)).get_image()
+				win.convert(Image.FORMAT_RGBA8)
+				img.blend_rect(win, Rect2i(Vector2i.ZERO, win.get_size()), Vector2i(x * 16 + (16 - win.get_width()) / 2, 9))
+			elif t == FLOOR:
+				# doorway
+				img.fill_rect(Rect2i(x * 16, 7, 16, 25), Color("1a1016"))
+				var door := Game.tex(door_tex).get_image()
+				door.convert(Image.FORMAT_RGBA8)
+				img.blend_rect(door, Rect2i(Vector2i.ZERO, door.get_size()), Vector2i(x * 16, 32 - door.get_height()))
+		var spr := Sprite2D.new()
+		spr.texture = ImageTexture.create_from_image(img)
+		spr.centered = false
+		spr.scale = Vector2(2, 2)
+		spr.offset = Vector2(0, -32)
+		spr.position = Vector2(r.position.x * T, r.end.y * T)
+		holder.add_child(spr)
+		facades.append(spr)
+
+
+## Soft shadows to the right of each building (light from the top-left).
+func _build_shadows() -> void:
+	var layer := Node2D.new()
+	layer.z_index = -7
+	add_child(layer)
+	for r in buildings:
+		var x := r.end.x * T
+		var y0 := (r.position.y - 1) * T + 10
+		var y1 := r.end.y * T
+		var poly := Polygon2D.new()
+		poly.polygon = PackedVector2Array([Vector2(x, y0), Vector2(x + 22, y0 + 22), Vector2(x + 22, y1 + 10), Vector2(x - (r.size.x * T) + 14, y1 + 10), Vector2(x - (r.size.x * T) + 4, y1)])
+		poly.color = Color(0, 0, 0, 0.22)
+		layer.add_child(poly)
 
 
 func building_at(p: Vector2) -> int:
@@ -774,6 +1058,9 @@ func update_roofs(player_pos: Vector2, delta: float) -> void:
 		var r := roofs[i]
 		r.modulate.a = move_toward(r.modulate.a, target, delta * 4.0)
 		r.visible = r.modulate.a > 0.01
+		if i < facades.size():
+			facades[i].modulate.a = r.modulate.a
+			facades[i].visible = r.visible
 
 
 # ---------------------------------------------------------------- queries

@@ -46,6 +46,11 @@ var _btn_down := false
 var _drag := {} # location being dragged
 var _menu := {} # right-click menu: {"loc", "pos", "items": [[label, action], ...]}
 var _near_scroll := 0
+var left_tab := "near" # "near" or "craft"
+var map_open := false
+var _map_tex: ImageTexture
+var _fog_img: Image
+var _fog_tex: ImageTexture
 
 
 func _ready() -> void:
@@ -91,6 +96,14 @@ func near_row(i: int) -> Rect2:
 	return Rect2(NEAR_RECT.position + Vector2(10, 50 + i * ROW_H), Vector2(NEAR_RECT.size.x - 20, ROW_H - 4))
 
 
+func tab_rect(i: int) -> Rect2:
+	return Rect2(NEAR_RECT.position + Vector2(10 + i * 150, 10), Vector2(140, 30))
+
+
+func craft_row(i: int) -> Rect2:
+	return Rect2(NEAR_RECT.position + Vector2(10, 50 + i * 58), Vector2(NEAR_RECT.size.x - 20, 54))
+
+
 func near_visible_rows() -> int:
 	return int((NEAR_RECT.size.y - 50 - 70) / ROW_H)
 
@@ -131,7 +144,7 @@ func loc_at(pos: Vector2) -> Dictionary:
 		for i in g["cargo"].size():
 			if cargo_cell(s, i).has_point(pos):
 				return Inventory.cargo_loc(s, i)
-	if inv.near:
+	if inv.near and left_tab == "near":
 		for r in near_visible_rows():
 			var i := r + _near_scroll
 			if i < inv.near.contents.size() and near_row(r).has_point(pos):
@@ -140,6 +153,49 @@ func loc_at(pos: Vector2) -> Dictionary:
 
 
 # ---------------------------------------------------------------- input
+
+func set_map_open(open: bool) -> void:
+	if open and inventory_open:
+		set_inventory_open(false)
+	map_open = open
+	Game.ui_open = open
+	if open:
+		_refresh_map()
+
+
+## Builds the paper map of the world once, and the fog of unexplored areas each time it opens.
+func _refresh_map() -> void:
+	var w: World = main.world
+	if _map_tex == null:
+		var img := Image.create_empty(World.W, World.H, false, Image.FORMAT_RGBA8)
+		var paper := Color("d8ccaa")
+		for y in World.H:
+			for x in World.W:
+				var c := paper
+				match w.get_tile(Vector2i(x, y)):
+					World.TREE:
+						c = Color("9aa47a")
+					World.ROAD:
+						c = Color("7a6a58")
+					World.FLOOR, World.FURN:
+						c = Color("a8784e") if w.floor_kind[y * World.W + x] != 0 else Color("7a6a58")
+					World.WALL, World.WINDOW:
+						c = Color("5a3a28")
+				if c == paper and (x * 7 + y * 13) % 11 == 0:
+					c = paper.darkened(0.04)
+				img.set_pixel(x, y, c)
+		_map_tex = ImageTexture.create_from_image(img)
+		_fog_img = Image.create_empty(World.W, World.H, false, Image.FORMAT_RGBA8)
+		_fog_tex = ImageTexture.create_from_image(_fog_img)
+	var has_map: bool = main.player.inv.count_of("map") > 0
+	var fog := Color("cdbf9a")
+	for y in World.H:
+		for x in World.W:
+			var seen: bool = has_map or main.explored[y * World.W + x] == 1
+			var hatch := (x + y) % 4 == 0
+			_fog_img.set_pixel(x, y, Color(0, 0, 0, 0) if seen else (fog.darkened(0.08) if hatch else fog))
+	_fog_tex.update(_fog_img)
+
 
 func set_inventory_open(open: bool) -> void:
 	inventory_open = open
@@ -181,6 +237,22 @@ func _input(event: InputEvent) -> void:
 			if i >= 0:
 				p.do_action(_menu["loc"], _menu["items"][i][1])
 		_menu = {}
+		get_viewport().set_input_as_handled()
+		return
+	# Tabs on the left panel: NEARBY / CRAFTING
+	if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+		for i in 2:
+			if tab_rect(i).has_point(mb.position):
+				left_tab = ["near", "craft"][i]
+				get_viewport().set_input_as_handled()
+				return
+		if left_tab == "craft":
+			for i in Crafting.RECIPES.size():
+				if craft_row(i).has_point(mb.position):
+					p.craft(Crafting.RECIPES[i]["id"])
+					get_viewport().set_input_as_handled()
+					return
+	if left_tab == "craft" and NEAR_RECT.has_point(mb.position) and _drag.is_empty():
 		get_viewport().set_input_as_handled()
 		return
 	if mb.button_index == MOUSE_BUTTON_LEFT:
@@ -267,7 +339,19 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif p.dead and event.is_action_pressed("reload"):
 		main.restart()
 	elif event.is_action_pressed("inventory") and not p.dead and not get_tree().paused:
+		if not inventory_open:
+			left_tab = "near"
 		set_inventory_open(not inventory_open)
+	elif event.is_action_pressed("map") and not p.dead and not get_tree().paused:
+		set_map_open(not map_open)
+	elif event.is_action_pressed("pause") and map_open:
+		set_map_open(false)
+	elif event.is_action_pressed("craft") and not p.dead and not get_tree().paused:
+		if inventory_open and left_tab == "craft":
+			set_inventory_open(false)
+		else:
+			left_tab = "craft"
+			set_inventory_open(true)
 	elif event.is_action_pressed("pause") and inventory_open:
 		set_inventory_open(false)
 	elif event.is_action_pressed("pause") and not p.dead:
@@ -475,6 +559,8 @@ func _draw() -> void:
 
 	if inventory_open:
 		_draw_inventory(p, vs)
+	if map_open:
+		_draw_map(p, vs)
 
 	# Message
 	if p.message_t > 0.0:
@@ -500,10 +586,47 @@ func _draw_inventory(p: Player, vs: Vector2) -> void:
 	var inv := p.inv
 	draw_rect(Rect2(Vector2.ZERO, vs), Color(0.05, 0.02, 0.05, 0.65))
 
-	# ---- NEARBY: list of what's in the container / on the ground here
+	# ---- Left panel: NEARBY (list of what's here) or CRAFTING
 	_panel(NEAR_RECT)
 	var near_title := inv.near.title().to_upper() if inv.near else "GROUND"
-	_text(NEAR_RECT.position + Vector2(14, 32), near_title, 20, C_TEXT)
+	for i in 2:
+		var tr2 := tab_rect(i)
+		var on := (i == 0 and left_tab == "near") or (i == 1 and left_tab == "craft")
+		draw_rect(tr2, C_EDGE)
+		draw_rect(tr2.grow(-2), C_LIGHT if on else C_CARD)
+		_text(Vector2(tr2.position.x, tr2.position.y + 21), [near_title, "CRAFTING [K]"][i], 14 if on else 13, C_TEXT if on else C_DIM, HORIZONTAL_ALIGNMENT_CENTER, tr2.size.x)
+	if left_tab == "craft":
+		_draw_crafting(p)
+	else:
+		_draw_nearby(p, inv)
+
+	_draw_gear(p, inv, vs)
+
+
+func _draw_crafting(p: Player) -> void:
+	for i in Crafting.RECIPES.size():
+		var r: Dictionary = Crafting.RECIPES[i]
+		var row := craft_row(i)
+		var miss := Crafting.missing(r, p.inv)
+		var ok := miss == ""
+		draw_rect(row, C_EDGE)
+		draw_rect(row.grow(-2), (C_LIGHT if row.has_point(_mouse) else C_CARD) if ok else C_FILL)
+		var icon: Texture2D = Items.icon(r["makes"]) if r["makes"] != "" else Items.icon("sticks")
+		_fit_icon(icon, Rect2(row.position + Vector2(4, 6), Vector2(42, 42)), Color.WHITE if ok else Color(1, 1, 1, 0.5), 0.9)
+		_text(row.position + Vector2(54, 20), String(r["name"]), 15, C_TEXT if ok else C_DIM)
+		var parts := PackedStringArray()
+		for item in r["needs"]:
+			parts.append("%d/%d %s" % [mini(p.inv.count_of(item), int(r["needs"][item])), int(r["needs"][item]), Items.name_of(item).to_lower()])
+		if not r["tools"].is_empty():
+			parts.append("tool: " + " / ".join(PackedStringArray(r["tools"])))
+		_text(row.position + Vector2(54, 38), ", ".join(parts), 12, Color(0.6, 0.9, 0.55) if ok else Color(0.95, 0.6, 0.5))
+		if ok:
+			_text(Vector2(row.end.x - 10, row.position.y + 20), "Click to craft", 11, C_DIM, HORIZONTAL_ALIGNMENT_RIGHT, 0)
+	_text(Vector2(NEAR_RECT.position.x, NEAR_RECT.end.y - 40), "Tear shirts into rags (right-click a shirt)", 12, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, NEAR_RECT.size.x)
+	_text(Vector2(NEAR_RECT.position.x, NEAR_RECT.end.y - 22), "Cook raw meat at a lit campfire", 12, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, NEAR_RECT.size.x)
+
+
+func _draw_nearby(p: Player, inv: Inventory) -> void:
 	var near_items: Array = inv.near.contents if inv.near else []
 	_near_scroll = clampi(_near_scroll, 0, maxi(near_items.size() - near_visible_rows(), 0))
 	if near_items.is_empty():
@@ -531,6 +654,8 @@ func _draw_inventory(p: Player, vs: Vector2) -> void:
 		_tex(Game.tex("ui_button"), tr.position, 2.0)
 		_text(Vector2(tr.position.x, tr.position.y + 27), "Take all", 15, C_EDGE, HORIZONTAL_ALIGNMENT_CENTER, tr.size.x)
 
+
+func _draw_gear(p: Player, inv: Inventory, vs: Vector2) -> void:
 	# ---- INVENTORY: gear slots, each with fixed room for its storage
 	_panel(INV_RECT)
 	_text(INV_RECT.position + Vector2(14, 32), "INVENTORY", 20, C_TEXT)
@@ -639,3 +764,43 @@ func _info(it: Dictionary) -> String:
 	if d.has("cures"):
 		parts.append("cures " + ", ".join(PackedStringArray(d["cures"])))
 	return ", ".join(parts)
+
+
+func _draw_map(p: Player, vs: Vector2) -> void:
+	draw_rect(Rect2(Vector2.ZERO, vs), Color(0.05, 0.02, 0.05, 0.7))
+	var size := minf(vs.y - 90.0, vs.x - 260.0)
+	var scale := size / World.W
+	var r := Rect2(Vector2((vs.x - size) / 2.0, 54), Vector2(size, size))
+	# Paper sheet
+	draw_rect(r.grow(14), Color("5a4630"))
+	draw_rect(r.grow(10), Color("e6dcbe"))
+	draw_texture_rect(_map_tex, r, false)
+	draw_texture_rect(_fog_tex, r, false)
+	var has_map: bool = p.inv.count_of("map") > 0
+	_text(Vector2(r.position.x, r.position.y - 18), "MAP", 22, C_TEXT)
+	_text(Vector2(r.end.x, r.position.y - 18), "M / Esc to close", 13, C_DIM, HORIZONTAL_ALIGNMENT_RIGHT, 0)
+	# Settlement names (only where you've been, unless you carry a road map)
+	for st in main.world.settlements:
+		var c: Vector2i = st["center"]
+		var known: bool = has_map or main.explored[c.y * World.W + c.x] == 1
+		if not known:
+			continue
+		var pos := r.position + Vector2(c) * scale
+		var size_px: int = {"city": 18, "town": 15, "village": 13}[st["type"]]
+		draw_string(_font, pos + Vector2(-80 + 1, 1), st["name"], HORIZONTAL_ALIGNMENT_CENTER, 160, size_px, Color(0.9, 0.85, 0.7, 0.8))
+		draw_string(_font, pos + Vector2(-80, 0), st["name"], HORIZONTAL_ALIGNMENT_CENTER, 160, size_px, Color("3a2418"))
+	# You are here
+	var me := r.position + p.global_position / World.T * scale
+	var f := p.facing.normalized()
+	var tri := PackedVector2Array([me + f * 9.0, me + f.rotated(2.5) * 7.0, me + f.rotated(-2.5) * 7.0])
+	draw_colored_polygon(tri, Color("b83a3a"))
+	draw_polyline(PackedVector2Array([tri[0], tri[1], tri[2], tri[0]]), Color("1a1016"), 1.5)
+	# Compass
+	var cp := Vector2(r.end.x + 60, r.position.y + 50)
+	draw_circle(cp, 26, Color("e6dcbe"))
+	draw_arc(cp, 26, 0, TAU, 24, Color("5a4630"), 2.0)
+	draw_colored_polygon(PackedVector2Array([cp + Vector2(0, -22), cp + Vector2(6, 0), cp + Vector2(-6, 0)]), Color("b83a3a"))
+	draw_colored_polygon(PackedVector2Array([cp + Vector2(0, 22), cp + Vector2(6, 0), cp + Vector2(-6, 0)]), Color("5a4630"))
+	_text(cp + Vector2(-5, -30), "N", 14, C_TEXT)
+	if not has_map:
+		_text(Vector2(0, r.end.y + 32), "Only places you've been are drawn. Find a Road map (cars, desks, garages) to see everything.", 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)

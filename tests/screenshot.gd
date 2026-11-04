@@ -79,10 +79,23 @@ func _process(_delta: float) -> void:
 		main.hud.set_inventory_open(true)
 	if frame == 104:
 		_shot("inventory")
+		p.inv.add("rags", 5)
+		p.inv.add("sack")
+		p.inv.add("sticks", 4)
+		main.hud.left_tab = "craft"
+		await get_tree().process_frame
+		await get_tree().process_frame
+		_shot("crafting")
+		main.hud.left_tab = "near"
 		main.hud.set_inventory_open(false)
 		main.time_of_day = 0.02
 	if frame == 130:
 		_shot("night")
+		main.hud.set_map_open(true)
+		await get_tree().process_frame
+		await get_tree().process_frame
+		_shot("map")
+		main.hud.set_map_open(false)
 		main.save_game()
 		main.queue_free()
 		add_child(load("res://scenes/menu.tscn").instantiate())

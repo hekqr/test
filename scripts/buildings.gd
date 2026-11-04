@@ -97,13 +97,17 @@ const FLOOR_OF := {
 }
 
 
-static func pick(rng: RandomNumberGenerator) -> String:
+## Picks a building type; `mix` (type -> weight) overrides the default weights.
+static func pick(rng: RandomNumberGenerator, mix := {}) -> String:
+	var weights := {}
+	for k in TEMPLATES:
+		weights[k] = mix.get(k, 0) if not mix.is_empty() else int(TEMPLATES[k]["weight"])
 	var total := 0
-	for k in TEMPLATES:
-		total += int(TEMPLATES[k]["weight"])
-	var r := rng.randi() % total
-	for k in TEMPLATES:
-		r -= int(TEMPLATES[k]["weight"])
+	for k in weights:
+		total += int(weights[k])
+	var r := rng.randi() % maxi(total, 1)
+	for k in weights:
+		r -= int(weights[k])
 		if r < 0:
 			return k
 	return "house_small"

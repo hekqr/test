@@ -70,6 +70,43 @@ func _physics_process(_delta: float) -> void:
 					win += 1
 			check(win > 20, "buildings have windows (%d)" % win)
 			check(w.has_los(Vector2.ZERO, Vector2.ZERO) and _window_see_through(w), "you can see through windows but not walls")
+			print("Settlements / map")
+			var kinds2 := {}
+			var names := {}
+			for st in w.settlements:
+				kinds2[st["type"]] = kinds2.get(st["type"], 0) + 1
+				names[st["name"]] = true
+			check(w.settlements.size() >= 5 and kinds2.has("city") and kinds2.has("village"), "city, towns and villages placed (%s)" % str(kinds2))
+			check(names.size() == w.settlements.size(), "every settlement has its own name")
+			var unreachable := 0
+			for st in w.settlements:
+				if w.find_path(w.center_of(w.spawn_cell), w.center_of(st["center"])).size() < 2:
+					unreachable += 1
+			check(unreachable == 0, "every settlement reachable from the start (roads connect them)")
+			var in_towns := 0
+			for i in w.buildings.size():
+				if w.building_town[i] >= 0:
+					in_towns += 1
+			check(in_towns >= w.buildings.size() * 0.8, "buildings are in settlements (%d / %d)" % [in_towns, w.buildings.size()])
+			check(w.facades.size() == w.buildings.size() and w.roofs.size() == w.buildings.size(), "every building has a front wall and a roof (3/4 view)")
+			var faces := 0
+			for y in World.H:
+				for x in World.W:
+					if w.is_face(Vector2i(x, y)):
+						faces += 1
+			check(faces > 50, "interior walls show their faces (%d)" % faces)
+			var house_empty := 0
+			var house_total := 0
+			for n in get_tree().get_nodes_in_group("loot"):
+				var l := n as LootSpot
+				if not l.is_bag and l.kind in ["fridge", "cupboard", "wardrobe", "medicine", "washer"]:
+					house_total += 1
+					if l.contents.is_empty():
+						house_empty += 1
+			check(house_total > 0 and float(house_empty) / house_total > 0.5, "most house furniture is empty (%d / %d)" % [house_empty, house_total])
+			main.reveal_around(p.global_position)
+			check(main.explored[w.idx(w.cell_of(p.global_position))] == 1, "map reveals where you are")
+			check(main.explored[w.idx(Vector2i(1, 1))] == 0 or w.cell_of(p.global_position).distance_to(Vector2i(1, 1)) < 20, "far away stays unexplored")
 			check(not ("stamina" in p), "stamina removed")
 			_clear_zombies()
 			pos_before = p.global_position
@@ -262,11 +299,37 @@ func _physics_process(_delta: float) -> void:
 			print("Tearing")
 			var shirt := Items.make("tshirt")
 			inv.gear["hands"] = shirt
-			var b0 := inv.count_of("bandage")
+			var r0 := inv.count_of("rags")
 			p.tear(Inventory.gear_loc("hands"))
-			check(inv.gear["hands"] == null or inv.gear["hands"]["id"] == "bandage", "shirt is gone after tearing")
-			check(inv.count_of("bandage") + _pile_count("bandage") >= b0 + 2, "t-shirt tears into 2 bandages")
+			check(inv.gear["hands"] == null or inv.gear["hands"]["id"] == "rags", "shirt is gone after tearing")
+			check(inv.count_of("rags") + _pile_count("rags") >= r0 + 3, "t-shirt tears into 3 rags")
 			check(not p.actions_for(Inventory.gear_loc("pants")).any(func(a): return a[1] == "tear"), "jeans can't be torn")
+			print("Crafting")
+			var cinv: Inventory = p.inv
+			var keep_gear := cinv.gear.duplicate(true)
+			var keep_active := cinv.active
+			cinv.gear["back"] = Items.make("backpack_large")
+			cinv.gear["melee"] = null
+			cinv.gear["hands"] = null
+			cinv.add("rags", 6)
+			cinv.add("rags", 6)
+			var b0 := cinv.count_of("bandage")
+			check(p.craft("bandage") and cinv.count_of("bandage") == b0 + 1, "2 rags -> bandage")
+			check(p.craft("rope") and cinv.count_of("rope") >= 1, "3 rags -> rope")
+			check(p.craft("rope"), "second rope")
+			check(not p.craft("sack_backpack"), "sack backpack needs a sack")
+			cinv.add("sack")
+			check(p.craft("sack_backpack") and (cinv.count_of("sack_backpack") + _pile_count("sack_backpack")) >= 1, "sack + rope -> sack backpack")
+			cinv.add("sticks", 3)
+			cinv.remove("knife", 9)
+			cinv.remove("axe", 9)
+			check(not p.craft("spear"), "spear needs a knife or axe as a tool")
+			cinv.add("knife")
+			check(p.craft("spear") and cinv.count_of("knife") == 1, "spear crafted, knife kept")
+			check(cinv.count_of("spear") + _pile_count("spear") >= 1 or (cinv.gear["melee"] != null and cinv.gear["melee"]["id"] == "spear"), "spear in inventory")
+			check(Items.WEAPONS["spear"]["range"] > Items.WEAPONS["bat"]["range"], "spear reaches further than a bat")
+			cinv.gear = keep_gear
+			cinv.active = keep_active
 			print("Colours")
 			var cols := {}
 			for i in 30:

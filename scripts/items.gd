@@ -9,7 +9,7 @@ class_name Items
 ## armour  armour points (1 point = 10% less damage; best possible gear stays well below 10)
 ## warmth  how much the item warms you
 ## sleeves takes extra wear when you're attacked
-## tear    bandages you get from tearing it up
+## tear    rags you get from tearing it up
 ## colors  random colour picked when the item spawns
 ## icon    "px:<name>" = drawn in code, "sheet:<tex>:<frames>:<frame>" = frame of a sprite sheet, else a texture
 
@@ -32,6 +32,10 @@ const DEFS := {
 	# --- survival (campfires: 3 sticks + 1 match)
 	"sticks": {"name": "Sticks", "icon": "nat_stick_1", "stack": 10, "kind": "material"},
 	"matches": {"name": "Matches", "icon": "px:matches", "stack": 10, "kind": "material"},
+	"rags": {"name": "Rags", "icon": "px:rags", "stack": 6, "kind": "material"},
+	"rope": {"name": "Rope", "icon": "px:rope", "stack": 3, "kind": "material"},
+	"sack": {"name": "Sack", "icon": "px:sack", "stack": 3, "kind": "material"},
+	"map": {"name": "Road map", "icon": "px:map", "stack": 1, "kind": "material"},
 
 	# --- ammo (each gun takes exactly one type)
 	"ammo_9mm": {"name": "9mm rounds", "icon": "icon_ammo_pistol", "stack": 30, "kind": "ammo"},
@@ -42,6 +46,7 @@ const DEFS := {
 	# --- weapons
 	"knife": {"name": "Knife", "icon": "icon_knife", "stack": 1, "kind": "weapon", "equip": "melee", "big": false},
 	"bat": {"name": "Baseball bat", "icon": "icon_bat", "stack": 1, "kind": "weapon", "equip": "melee", "big": true},
+	"spear": {"name": "Wooden spear", "icon": "px:spear", "stack": 1, "kind": "weapon", "equip": "melee", "big": true},
 	"axe": {"name": "Fire axe", "icon": "sheet:axe_sheet:9:0", "stack": 1, "kind": "weapon", "equip": "melee", "big": true},
 	"pistol": {"name": "Pistol", "icon": "icon_pistol", "stack": 1, "kind": "weapon", "equip": "secondary", "big": true},
 	"shotgun": {"name": "Shotgun", "icon": "icon_shotgun", "stack": 1, "kind": "weapon", "equip": "primary", "big": true},
@@ -55,9 +60,9 @@ const DEFS := {
 		"colors": ["grey", "black", "red", "blue", "green", "orange", "purple"]},
 	"helmet": {"name": "Helmet", "icon": "px:helmet", "stack": 1, "kind": "clothing", "equip": "head", "cargo": 0, "big": true, "warmth": 3.0, "armour": 2.0,
 		"colors": ["olive", "black", "tan"]},
-	"tshirt": {"name": "T-shirt", "icon": "px:tshirt", "stack": 1, "kind": "clothing", "equip": "shirt", "cargo": 0, "big": true, "warmth": 3.0, "tear": 2,
+	"tshirt": {"name": "T-shirt", "icon": "px:tshirt", "stack": 1, "kind": "clothing", "equip": "shirt", "cargo": 0, "big": true, "warmth": 3.0, "tear": 3,
 		"colors": ["white", "black", "grey", "red", "blue", "green", "yellow", "orange", "purple", "pink"]},
-	"flannel": {"name": "Flannel shirt", "icon": "px:flannel", "stack": 1, "kind": "clothing", "equip": "shirt", "cargo": 0, "big": true, "warmth": 8.0, "armour": 0.2, "sleeves": true, "tear": 3,
+	"flannel": {"name": "Flannel shirt", "icon": "px:flannel", "stack": 1, "kind": "clothing", "equip": "shirt", "cargo": 0, "big": true, "warmth": 8.0, "armour": 0.2, "sleeves": true, "tear": 4,
 		"colors": ["red", "blue", "green", "brown", "black", "grey"]},
 	"hoodie": {"name": "Hoodie", "icon": "px:hoodie", "stack": 1, "kind": "clothing", "equip": "coat", "cargo": 2, "big": true, "warmth": 14.0, "armour": 0.3, "sleeves": true,
 		"colors": ["black", "grey", "red", "blue", "green", "yellow", "purple", "orange", "white"]},
@@ -73,6 +78,7 @@ const DEFS := {
 		"colors": ["olive", "black", "tan"]},
 	"backpack_small": {"name": "Small backpack", "icon": "px:backpack_small", "stack": 1, "kind": "clothing", "equip": "back", "cargo": 6, "big": true, "warmth": 2.0,
 		"colors": ["olive", "black", "blue", "red", "grey", "brown"]},
+	"sack_backpack": {"name": "Sack backpack", "icon": "px:sack_backpack", "stack": 1, "kind": "clothing", "equip": "back", "cargo": 4, "big": true, "warmth": 1.0},
 	"backpack_large": {"name": "Hiking backpack", "icon": "px:backpack_large", "stack": 1, "kind": "clothing", "equip": "back", "cargo": 10, "big": true, "warmth": 3.0,
 		"colors": ["brown", "olive", "orange", "blue", "red", "black"]},
 }
@@ -92,6 +98,7 @@ const WEAPONS := {
 	"fists": {"name": "Fists", "melee": true, "damage": 18.0, "range": 34.0, "cooldown": 0.55, "noise": 90.0, "held": ""},
 	"knife": {"name": "Knife", "melee": true, "damage": 28.0, "range": 34.0, "cooldown": 0.38, "noise": 70.0, "held": "icon_knife"},
 	"bat": {"name": "Baseball bat", "melee": true, "damage": 42.0, "range": 48.0, "cooldown": 0.75, "noise": 140.0, "held": "item_bat"},
+	"spear": {"name": "Wooden spear", "melee": true, "damage": 34.0, "range": 60.0, "cooldown": 0.8, "noise": 100.0, "held": "px:spear"},
 	"axe": {"name": "Fire axe", "melee": true, "damage": 60.0, "range": 50.0, "cooldown": 1.0, "noise": 150.0, "held": "sheet:axe_sheet:9:0"},
 	"pistol": {"name": "Pistol", "melee": false, "damage": 45.0, "mag": 8, "ammo": "ammo_9mm",
 		"cooldown": 0.32, "reload": 1.4, "pellets": 1, "spread": 0.0, "range": 750.0, "noise": 750.0,

@@ -121,6 +121,27 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ **Damage shown** for every weapon (item info, tooltips, inventory, HUD); shotgun shows
   "24 - 144 damage (1 - 6 pellets)"
 
+## Milestone 3 — World, buildings, map, crafting
+- ✅ **Settlements**: a bigger map (200 × 200 tiles) with a city (street grid; shops, police, clinic, houses),
+  two towns (main street + cross streets) and ~5 villages (one road), each with its own name and building mix,
+  all connected by highways. Wilderness (forests, animals, nature) in between. You start in a village
+- ✅ Zombies gather in settlements (most in the city); fewer out in the wild
+- ✅ **3/4 view buildings**: from outside you see a raised roof and a 2-tile front wall with windows and an
+  open door (pack wall tiles in 4 colours); zombies inside are hidden behind it. Inside, walls with floor in front
+  of them show their face (with windows), the rest are thin dark tops. Buildings cast a shadow
+- ✅ **Less loot in houses**: ~45% of house furniture has already been looted; fewer loose items
+- ✅ **Map** (M): paper map of roads, buildings and forests with town names, your position and a compass.
+  Only explored areas are drawn — a **Road map** item (cars, desks, garages, police) shows everything. Saved
+- ✅ **Crafting** (K or the CRAFTING tab in the inventory):
+  - Bandage = 2 rags
+  - Rope = 3 rags
+  - Sack backpack (4 slots) = sack + rope
+  - Wooden spear (melee, longest reach) = 3 sticks + rope, needs a knife or axe
+  - Campfire = 3 sticks + 1 match
+  - Shirts / flannels now tear into **rags** (3 / 4)
+- 💭 **Crafting ideas for later**: bow & arrows, splint (for broken legs), torch, barricade planks for doors &
+  windows, sewing kit / toolbox repairs, boiling dirty water, improvised armour from metal plates
+
 ## Planned
 - 📌 **Base building** (wooden & reinforced walls and gates are in the art pack)
 

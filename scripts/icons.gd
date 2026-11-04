@@ -7,7 +7,8 @@ const SIZE := 32
 const OUTLINE := Color("1a1016")
 
 const NAMES := ["tshirt", "flannel", "hoodie", "jacket", "jeans", "cargo_pants", "boots", "vest",
-	"helmet", "cap", "beanie", "backpack_small", "backpack_large", "soda", "meat", "cooked_meat", "matches", "water"]
+	"helmet", "cap", "beanie", "backpack_small", "backpack_large", "soda", "meat", "cooked_meat", "matches", "water",
+	"rags", "rope", "sack", "sack_backpack", "spear", "map"]
 
 ## Default colours for items without a random colour.
 const DEFAULT := {
@@ -15,6 +16,7 @@ const DEFAULT := {
 	"cargo_pants": "6a6440", "boots": "5a4030", "vest": "4e5434", "helmet": "4e5a3a", "cap": "8a3030",
 	"beanie": "3a4a5a", "backpack_small": "5a6a3a", "backpack_large": "6a4a30", "soda": "a83838",
 	"meat": "a83a3a", "cooked_meat": "7a4a2a", "matches": "a83838", "water": "7ab8e0",
+	"rags": "b8ae98", "rope": "a08458", "sack": "a08a60", "sack_backpack": "8a7450", "spear": "7a5a38", "map": "d8ccaa",
 }
 
 ## Slot symbol shapes (drawn as silhouettes)
@@ -196,6 +198,62 @@ static func _draw_item(img: Image, name: String, c: Color, silhouette: bool) -> 
 			_line(img, Vector2i(10, 19), Vector2i(21, 19), Color("3a6aa8"))
 			_line(img, Vector2i(12, 21), Vector2i(19, 21), Color("6a9ac8"))
 			_line(img, Vector2i(11, 9), Vector2i(11, 28), Color(1, 1, 1, 0.9))
+		"rags":
+			# A few torn cloth strips in a pile
+			_poly(img, [Vector2(4, 20), Vector2(14, 15), Vector2(26, 17), Vector2(28, 22), Vector2(18, 27), Vector2(6, 26)], c)
+			_poly(img, [Vector2(7, 14), Vector2(18, 9), Vector2(25, 12), Vector2(14, 18), Vector2(8, 18)], c.lightened(0.12))
+			if silhouette:
+				return
+			_line(img, Vector2i(6, 23), Vector2i(26, 20), d)
+			_line(img, Vector2i(10, 15), Vector2i(22, 11), d)
+			for p in [Vector2i(5, 26), Vector2i(9, 27), Vector2i(27, 22)]:
+				_px(img, p.x, p.y, dd)
+		"rope":
+			# Coiled rope
+			for r in [11.5, 8.5, 5.5]:
+				_ring(img, Vector2(16, 17), r, 2.6, c if r != 8.5 else c.darkened(0.12))
+			_rect(img, 24, 23, 6, 3, c)
+			if silhouette:
+				return
+			for a in range(0, 360, 30):
+				var v := Vector2.from_angle(deg_to_rad(a))
+				_px(img, int(16 + v.x * 11.5), int(17 + v.y * 11.5), d)
+				_px(img, int(16 + v.x * 5.5), int(17 + v.y * 5.5), d)
+		"sack", "sack_backpack":
+			# Burlap sack tied at the top (backpack version has straps)
+			_poly(img, [Vector2(13, 3), Vector2(19, 3), Vector2(18, 8), Vector2(25, 13), Vector2(27, 24), Vector2(23, 30), Vector2(9, 30), Vector2(5, 24), Vector2(7, 13), Vector2(14, 8)], c)
+			if silhouette:
+				return
+			_line(img, Vector2i(13, 8), Vector2i(19, 8), Color("5a4630"))
+			_line(img, Vector2i(12, 9), Vector2i(20, 9), Color("5a4630"))
+			for y in range(12, 29, 3):
+				_line(img, Vector2i(8, y), Vector2i(24, y), c.darkened(0.12))
+			if name == "sack_backpack":
+				_line(img, Vector2i(10, 10), Vector2i(8, 29), Color("4a3828"))
+				_line(img, Vector2i(11, 10), Vector2i(9, 29), Color("4a3828"))
+				_line(img, Vector2i(22, 10), Vector2i(24, 29), Color("4a3828"))
+				_line(img, Vector2i(21, 10), Vector2i(23, 29), Color("4a3828"))
+		"spear":
+			# Sharpened pole with a knife lashed to the tip
+			_poly(img, [Vector2(3, 28), Vector2(21, 10), Vector2(23, 12), Vector2(5, 30)], c)
+			_poly(img, [Vector2(21, 9), Vector2(29, 2), Vector2(30, 3), Vector2(23, 11)], Color("b8bcc4"))
+			if silhouette:
+				return
+			_line(img, Vector2i(19, 12), Vector2i(22, 15), Color("c8b088"))
+			_line(img, Vector2i(18, 13), Vector2i(21, 16), Color("c8b088"))
+			_line(img, Vector2i(24, 7), Vector2i(29, 3), Color("e8ecf0"))
+		"map":
+			# Folded paper road map
+			_poly(img, [Vector2(3, 7), Vector2(11, 4), Vector2(21, 7), Vector2(29, 4), Vector2(29, 26), Vector2(21, 29), Vector2(11, 26), Vector2(3, 29)], c)
+			if silhouette:
+				return
+			_line(img, Vector2i(11, 5), Vector2i(11, 26), d)
+			_line(img, Vector2i(21, 8), Vector2i(21, 28), d)
+			_line(img, Vector2i(5, 20), Vector2i(27, 12), Color("8a8478"))
+			_line(img, Vector2i(14, 9), Vector2i(17, 26), Color("8a8478"))
+			_rect(img, 6, 10, 3, 3, Color("6a8a4a"))
+			_rect(img, 23, 19, 4, 3, Color("6a8a4a"))
+			_circle(img, Vector2(18, 17), 1.6, Color("b83a3a"))
 		"matches":
 			for x in [10, 14, 18, 22]:
 				_line(img, Vector2i(x, 3), Vector2i(x, 12), Color("e0c890"))
@@ -251,6 +309,14 @@ static func _circle(img: Image, c: Vector2, r: float, col: Color) -> void:
 	for y in SIZE:
 		for x in SIZE:
 			if Vector2(x + 0.5, y + 0.5).distance_to(c) <= r:
+				img.set_pixel(x, y, col)
+
+
+static func _ring(img: Image, c: Vector2, r: float, w: float, col: Color) -> void:
+	for y in SIZE:
+		for x in SIZE:
+			var d := Vector2(x + 0.5, y + 0.5).distance_to(c)
+			if absf(d - r) <= w * 0.5:
 				img.set_pixel(x, y, col)
 
 

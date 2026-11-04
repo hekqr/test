@@ -1,12 +1,12 @@
 extends Node2D
 ## Builds a run: world, loot, player, zombies, day/night, HUD.
 
-const MAX_ZOMBIES_DAY := 60
-const MAX_ZOMBIES_NIGHT := 95
+const MAX_ZOMBIES_DAY := 110
+const MAX_ZOMBIES_NIGHT := 160
 const DAY_LENGTH := 480.0 # seconds for a full day/night cycle
 const AUTOSAVE_EVERY := 20.0
-const MAX_RABBITS := 14
-const MAX_DEER := 7
+const MAX_RABBITS := 22
+const MAX_DEER := 11
 
 var world: World
 var player: Player
@@ -22,6 +22,10 @@ var world_seed := 0
 var _spawn_t := 0.0
 var _save_t := AUTOSAVE_EVERY
 var _animal_t := 0.0
+## Map exploration: 1 = you've seen this cell (W x H)
+var explored := PackedByteArray()
+var _reveal_t := 0.0
+const REVEAL_RADIUS := 15
 
 
 func _ready() -> void:
@@ -39,6 +43,8 @@ func _ready() -> void:
 	entities.y_sort_enabled = true
 	add_child(entities)
 	world.generate(world_seed, entities)
+	explored.resize(World.W * World.H)
+	explored.fill(0)
 	if save.is_empty():
 		_spawn_loot()
 	else:
@@ -94,6 +100,18 @@ func _ready() -> void:
 		save_game() # a new survivor replaces the old save straight away
 
 
+## Marks the area around a position as explored on the map.
+func reveal_around(pos: Vector2) -> void:
+	var c := world.cell_of(pos)
+	var r := REVEAL_RADIUS
+	for dy in range(-r, r + 1):
+		for dx in range(-r, r + 1):
+			if dx * dx + dy * dy <= r * r:
+				var n := c + Vector2i(dx, dy)
+				if world.in_bounds(n):
+					explored[world.idx(n)] = 1
+
+
 func _spawn_loot() -> void:
 	# Furniture, garbage bins and cars (each with its own loot table)
 	for c in world.containers:
@@ -103,11 +121,13 @@ func _spawn_loot() -> void:
 		l.flip = c["flip"]
 		l.reach = c["reach"]
 		l.position = c["pos"]
+		if randf() < float(c.get("empty_chance", 0.0)):
+			l.loaded = true # someone got here first: starts empty
 		entities.add_child(l)
 	# Loose items lying on building floors
 	for i in world.buildings.size():
 		var floors: Array = world.building_floors[i]
-		if floors.is_empty() or randf() > 0.25:
+		if floors.is_empty() or randf() > 0.15:
 			continue
 		var g := LootSpot.new()
 		g.is_bag = true
@@ -151,6 +171,7 @@ func to_save() -> Dictionary:
 		},
 		"loot": loot, "zombies": zs,
 		"fires": get_tree().get_nodes_in_group("fires").map(func(f): return f.to_save()),
+		"explored": Marshalls.raw_to_base64(explored.compress(FileAccess.COMPRESSION_DEFLATE)),
 	}
 
 
@@ -174,6 +195,10 @@ func _apply_save(s: Dictionary) -> void:
 	player.update_outfit()
 	if ps.has("inv"):
 		player.inv.load_save(ps["inv"])
+	if s.has("explored"):
+		var raw := Marshalls.base64_to_raw(s["explored"]).decompress(World.W * World.H, FileAccess.COMPRESSION_DEFLATE)
+		if raw.size() == World.W * World.H:
+			explored = raw
 	for fd in s.get("fires", []):
 		add_fire(SaveGame.vec(fd["pos"]), fd["fuel"])
 	for zd in s["zombies"]:
@@ -210,6 +235,11 @@ func _process(delta: float) -> void:
 	night_tint.color = Color(0.30, 0.36, 0.66).lerp(Color.WHITE, light)
 	player.set_night(1.0 - light)
 
+	_reveal_t -= delta
+	if _reveal_t <= 0.0:
+		_reveal_t = 0.4
+		reveal_around(player.global_position)
+
 	if not player.dead:
 		_save_t -= delta
 		if _save_t <= 0.0:
@@ -245,9 +275,25 @@ func clock_text() -> String:
 	return "%02d:%02d" % [minutes / 60, minutes % 60]
 
 
+## Zombies gather where people used to live: mostly in settlements (more in the city), some in the wild.
 func spawn_zombie(min_dist: float) -> Zombie:
+	var weights := {"city": 5.0, "town": 2.5, "village": 1.2}
 	for attempt in 40:
-		var c := Vector2i(randi_range(2, World.W - 3), randi_range(2, World.H - 3))
+		var c: Vector2i
+		if randf() < 0.8 and not world.settlements.is_empty():
+			var total := 0.0
+			for st in world.settlements:
+				total += weights[st["type"]]
+			var pick := randf() * total
+			var r: Rect2i = world.settlements[0]["rect"]
+			for st in world.settlements:
+				pick -= weights[st["type"]]
+				if pick <= 0.0:
+					r = st["rect"]
+					break
+			c = Vector2i(randi_range(r.position.x, r.end.x - 1), randi_range(r.position.y, r.end.y - 1))
+		else:
+			c = Vector2i(randi_range(2, World.W - 3), randi_range(2, World.H - 3))
 		if not world.is_walkable(c):
 			continue
 		var p := world.center_of(c)

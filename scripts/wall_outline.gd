@@ -33,7 +33,7 @@ func _draw() -> void:
 				draw_rect(Rect2(p, Vector2(2, T)), col)
 			if world.in_bounds(c + Vector2i(1, 0)) and not _solid(c + Vector2i(1, 0)):
 				draw_rect(Rect2(p + Vector2(T - 2, 0), Vector2(2, T)), col)
-			if world.get_tile(c) == World.WINDOW:
+			if world.get_tile(c) == World.WINDOW and not world.is_face(c):
 				# Glass pane along the wall's direction
 				var horizontal := _solid(c + Vector2i(-1, 0)) or _solid(c + Vector2i(1, 0))
 				var r := Rect2(p + Vector2(4, 11), Vector2(T - 8, 10)) if horizontal else Rect2(p + Vector2(11, 4), Vector2(10, T - 8))

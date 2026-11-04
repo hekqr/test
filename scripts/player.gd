@@ -192,7 +192,7 @@ func actions_for(loc: Dictionary) -> Array:
 		if worn:
 			out.append(["Take off" if Items.is_clothing(id) else "Put away", "unequip"])
 	if d.has("tear"):
-		out.append(["Tear into bandages", "tear"])
+		out.append(["Tear into rags", "tear"])
 	if id == "sticks" or id == "matches":
 		out.append(["Build campfire", "fire"])
 	if loc["t"] == "near":
@@ -243,21 +243,43 @@ func quick_use(loc: Dictionary) -> void:
 		do_action(loc, acts[0][1])
 
 
-## Tear a shirt into bandages. Anything stored in it drops to the ground.
+## Tear a shirt into rags (rags craft into bandages and rope). Anything stored in it drops to the ground.
 func tear(loc: Dictionary) -> void:
 	var it: Dictionary = inv.take(loc)
 	var n: int = Items.def(it["id"])["tear"]
 	if Items.is_ruined(it):
-		n = 1
+		n = maxi(n - 1, 1)
 	for x in it.get("cargo", []):
 		if x != null:
 			drop_item(x)
-	var left := 0
-	for i in n:
-		left += inv.pickup(Items.make("bandage"))
-	for i in left:
-		drop_item(Items.make("bandage"))
-	say("Tore the %s into %d bandage%s" % [Items.name_of(it["id"]).to_lower(), n, "" if n == 1 else "s"])
+	var left := inv.pickup(Items.make("rags", n))
+	if left > 0:
+		drop_item(Items.make("rags", left))
+	say("Tore the %s into %d rags" % [Items.name_of(it["id"]).to_lower(), n])
+
+
+## Crafting menu: make something from a recipe (see crafting.gd).
+func craft(recipe_id: String) -> bool:
+	var r := Crafting.get_recipe(recipe_id)
+	if r.is_empty():
+		return false
+	var miss := Crafting.missing(r, inv)
+	if miss != "":
+		say("Missing: " + miss)
+		return false
+	if recipe_id == "campfire":
+		var before := get_tree().get_nodes_in_group("fires").size()
+		build_fire()
+		return get_tree().get_nodes_in_group("fires").size() > before
+	for item in r["needs"]:
+		inv.remove(item, int(r["needs"][item]))
+	var made := Items.make(r["makes"], int(r["count"]))
+	var left := inv.pickup(made)
+	if left > 0:
+		made["count"] = left
+		drop_item(made)
+	say("Crafted " + String(r["name"]).to_lower())
+	return true
 
 
 func _consume(loc: Dictionary, id: String) -> void:
@@ -904,6 +926,8 @@ func _animate() -> void:
 	if not _held.visible:
 		return
 	_held.texture = Items.icon_of(held)
+	var hm := maxf(_held.texture.get_width(), _held.texture.get_height())
+	_held.scale = Vector2.ONE * (2.0 if hm <= 18.0 else 0.85)
 	_held.z_index = -1 if d == "up" else 0
 	if weapon()["melee"]:
 		# Bat: rest over the shoulder, swing through an arc when attacking.
