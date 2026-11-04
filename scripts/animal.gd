@@ -43,7 +43,7 @@ func _ready() -> void:
 		add_to_group("wolves")
 	health = s["health"] * randf_range(0.9, 1.1)
 	collision_layer = Game.LAYER_ANIMAL
-	collision_mask = Game.LAYER_WALL | Game.LAYER_WATER
+	collision_mask = Game.LAYER_WALL | Game.LAYER_WATER | Game.LAYER_DOOR
 	if is_predator():
 		collision_mask |= Game.LAYER_PLAYER | Game.LAYER_NPC
 	var circle := CircleShape2D.new()

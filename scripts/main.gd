@@ -336,7 +336,7 @@ func spawn_zombie(min_dist: float) -> Zombie:
 			c = Vector2i(randi_range(r.position.x, r.end.x - 1), randi_range(r.position.y, r.end.y - 1))
 		else:
 			c = Vector2i(randi_range(2, World.W - 3), randi_range(2, World.H - 3))
-		if not world.is_walkable(c):
+		if not world.is_walkable(c) or world.is_door(c):
 			continue
 		var p := world.center_of(c)
 		if p.distance_to(player.position) < min_dist:
@@ -482,9 +482,11 @@ func _on_noise(pos: Vector2, radius: float) -> void:
 	for n in get_tree().get_nodes_in_group("animals"):
 		if (n as Animal).global_position.distance_to(pos) <= radius * 1.3:
 			(n as Animal).scare(pos)
+	# Walls muffle sound: through a wall (or a closed door) it only carries half as far.
 	for n in get_tree().get_nodes_in_group("zombies"):
 		var z := n as Zombie
-		if z.position.distance_to(pos) <= radius:
+		var d := z.position.distance_to(pos)
+		if d <= radius and (d <= radius * 0.5 or world.has_los(z.position, pos)):
 			z.hear(pos)
 	for n in get_tree().get_nodes_in_group("survivors"):
 		var s := n as Survivor

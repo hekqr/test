@@ -41,6 +41,12 @@ var building_id := PackedInt32Array() # per cell: building index, or -1
 var facades: Array[Sprite2D] = [] # front wall of each building (3/4 view), fades with the roof
 var _face_windows: Array = [] # [{cell, tex}] windows on interior wall faces
 var taps: Array[Vector2] = [] # bathroom taps (at house baths) - some still have water
+var door_cells: Array = [] # every door: {"cell": Vector2i, "b": building index}
+var door_closed := PackedByteArray() # per cell: 1 = a closed door (blocks zombies and sight)
+## Zombies' pathfinding: like `astar`, but closed doors are solid (zombies can't open doors).
+var astar_z := AStarGrid2D.new()
+var _front_doors := {} # cell -> Sprite2D on the building's front wall
+var _door_at := {}
 
 const TOWN_NAMES := ["Ashford", "Millbrook", "Pine Hollow", "Greywater", "Stonebridge", "Redfield", "Elm Crossing",
 	"Harrow", "Oakvale", "Cold Spring", "Linton", "Marsh End", "Westbury", "Fairhill", "Dunmore", "Northfield",
@@ -90,8 +96,20 @@ func is_walkable(c: Vector2i) -> bool:
 	return t == GROUND or t == FLOOR or t == ROAD
 
 
+## Walls, windows and closed doors block sight (so zombies can't spot you inside a closed house).
 func blocks_sight(c: Vector2i) -> bool:
-	return get_tile(c) == WALL
+	var t := get_tile(c)
+	return t == WALL or t == WINDOW or (in_bounds(c) and door_closed[idx(c)] == 1)
+
+
+func is_door(c: Vector2i) -> bool:
+	return _door_at.has(c)
+
+
+## Called by doors: open doors let zombies through (and let them see through).
+func set_door_open(c: Vector2i, o: bool) -> void:
+	door_closed[idx(c)] = 0 if o else 1
+	astar_z.set_point_solid(c, not o)
 
 
 func cell_of(p: Vector2) -> Vector2i:
@@ -116,6 +134,8 @@ func generate(seed_value: int, entities: Node2D) -> void:
 	road_dir.fill(0)
 	building_id.resize(W * H)
 	building_id.fill(-1)
+	door_closed.resize(W * H)
+	door_closed.fill(0)
 	_make_settlements()
 	_make_roads()
 	_make_buildings()
@@ -134,6 +154,7 @@ func generate(seed_value: int, entities: Node2D) -> void:
 	_scatter_decor()
 	_build_roofs()
 	_build_facades(entities)
+	_build_doors()
 	_build_shadows()
 
 
@@ -334,6 +355,9 @@ func _place_building(r: Rect2i, kind: String, plan: Array, town := -1) -> void:
 				"w", "t", "c", "D":
 					set_tile(c, FLOOR)
 					floors.append(c)
+					if ch == "D":
+						door_cells.append({"cell": c, "b": bi})
+						_door_at[c] = true
 					if ch == "D" and (x == 0 or y == 0 or x == r.size.x - 1 or y == r.size.y - 1):
 						doors.append(c)
 				_:
@@ -783,16 +807,19 @@ func _build_collision() -> void:
 
 
 func _build_astar() -> void:
-	astar.region = Rect2i(0, 0, W, H)
-	astar.cell_size = Vector2(T, T)
-	astar.offset = Vector2(T * 0.5, T * 0.5)
-	astar.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
-	astar.update()
+	for a in [astar, astar_z]:
+		var g := a as AStarGrid2D
+		g.region = Rect2i(0, 0, W, H)
+		g.cell_size = Vector2(T, T)
+		g.offset = Vector2(T * 0.5, T * 0.5)
+		g.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
+		g.update()
 	for y in H:
 		for x in W:
 			var c := Vector2i(x, y)
 			if not is_walkable(c):
 				astar.set_point_solid(c, true)
+				astar_z.set_point_solid(c, true)
 
 
 # ---------------------------------------------------------------- rendering
@@ -1154,11 +1181,8 @@ func _build_facades(entities: Node2D) -> void:
 				win.convert(Image.FORMAT_RGBA8)
 				img.blend_rect(win, Rect2i(Vector2i.ZERO, win.get_size()), Vector2i(x * 16 + (16 - win.get_width()) / 2, 9))
 			elif t == FLOOR:
-				# doorway
+				# doorway (the door itself is a separate sprite that opens and closes, see door.gd)
 				img.fill_rect(Rect2i(x * 16, 7, 16, 25), Color("1a1016"))
-				var door := Game.tex(door_tex).get_image()
-				door.convert(Image.FORMAT_RGBA8)
-				img.blend_rect(door, Rect2i(Vector2i.ZERO, door.get_size()), Vector2i(x * 16, 32 - door.get_height()))
 		var spr := Sprite2D.new()
 		spr.texture = ImageTexture.create_from_image(img)
 		spr.centered = false
@@ -1167,6 +1191,33 @@ func _build_facades(entities: Node2D) -> void:
 		spr.position = Vector2(r.position.x * T, r.end.y * T)
 		holder.add_child(spr)
 		facades.append(spr)
+		for x in w:
+			var dc := Vector2i(r.position.x + x, y_row)
+			if get_tile(dc) == FLOOR:
+				var ds := Sprite2D.new()
+				ds.centered = false
+				ds.position = Vector2(x * 16, -25)
+				ds.set_meta("door_tex", door_tex)
+				spr.add_child(ds)
+				_front_doors[dc] = ds
+
+
+## A Door for every doorway: opens for people, stays shut for zombies and animals.
+func _build_doors() -> void:
+	var layer := Node2D.new()
+	layer.name = "Doors"
+	layer.z_index = -6
+	add_child(layer)
+	for d in door_cells:
+		var door := Door.new()
+		door.world = self
+		door.cell = d["cell"]
+		var kind := building_types[int(d["b"])]
+		door.metal = not kind.begins_with("house")
+		door.tex_closed = "door_wood_closed" if kind.begins_with("house") else ("door_rusty" if kind == "garage" else "door_metal")
+		door.tex_open = "door_wood" if kind.begins_with("house") else ""
+		door.front = _front_doors.get(d["cell"])
+		layer.add_child(door)
 
 
 ## Soft shadows to the right of each building (light from the top-left).
@@ -1206,7 +1257,7 @@ func update_roofs(player_pos: Vector2, delta: float) -> void:
 
 # ---------------------------------------------------------------- queries
 
-## Walls block sight; windows, furniture and cars don't.
+## Walls, windows and closed doors block sight; furniture, cars and water don't.
 func has_los(a: Vector2, b: Vector2) -> bool:
 	var d := b - a
 	var steps := int(d.length() / 8.0) + 1
@@ -1228,12 +1279,14 @@ func nearest_walkable(c: Vector2i) -> Vector2i:
 	return c
 
 
-func find_path(from: Vector2, to: Vector2) -> PackedVector2Array:
+## Path between two points. Zombies (zombie = true) can't go through closed doors: they get as close
+## as they can instead.
+func find_path(from: Vector2, to: Vector2, zombie := false) -> PackedVector2Array:
 	var a := nearest_walkable(cell_of(from))
 	var b := nearest_walkable(cell_of(to))
 	if not in_bounds(a) or not in_bounds(b) or not is_walkable(a) or not is_walkable(b):
 		return PackedVector2Array()
-	return astar.get_point_path(a, b, true)
+	return (astar_z if zombie else astar).get_point_path(a, b, true)
 
 
 func random_walkable_near(p: Vector2, radius_tiles: int) -> Vector2:

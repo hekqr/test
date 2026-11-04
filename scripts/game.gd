@@ -7,6 +7,7 @@ const LAYER_ZOMBIE := 4
 const LAYER_ANIMAL := 8
 const LAYER_NPC := 16 # hostile survivors
 const LAYER_WATER := 32 # lakes & rivers: block walking, not bullets or sight
+const LAYER_DOOR := 64 # closed doors: block zombies and animals, not people
 
 signal noise_made(pos: Vector2, radius: float)
 

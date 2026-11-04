@@ -94,7 +94,7 @@ func _ready() -> void:
 		type = "walker"
 	_t = TYPES[type]
 	collision_layer = Game.LAYER_ZOMBIE
-	collision_mask = Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_ZOMBIE | Game.LAYER_NPC | Game.LAYER_WATER
+	collision_mask = Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_ZOMBIE | Game.LAYER_NPC | Game.LAYER_WATER | Game.LAYER_DOOR
 	var circle := CircleShape2D.new()
 	circle.radius = RADIUS + (3.0 if type == "brute" else 0.0)
 	var cs := CollisionShape2D.new()
@@ -325,7 +325,7 @@ func _wander(dt: float) -> void:
 
 func _set_path(to: Vector2) -> void:
 	target = to
-	path = world.find_path(global_position, to)
+	path = world.find_path(global_position, to, true)
 	_path_i = 0
 
 

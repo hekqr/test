@@ -5,6 +5,7 @@ var main: Node
 var frame := 0
 var out := "user://"
 var _enemies: Array = []
+var _door: Door
 
 
 func _ready() -> void:
@@ -22,8 +23,8 @@ func _shot(name: String) -> void:
 
 func _process(_delta: float) -> void:
 	frame += 1
-	if frame > 130:
-		if frame == 140:
+	if frame > 145:
+		if frame == 155:
 			_shot("menu")
 			get_tree().quit()
 		return
@@ -140,8 +141,19 @@ func _process(_delta: float) -> void:
 		_shot("crafting")
 		main.hud.left_tab = "near"
 		main.hud.set_inventory_open(false)
+		# Stand a few steps from a house's front door (closed)
+		for d in get_tree().get_nodes_in_group("doors"):
+			if d.front != null and w.building_types[w.building_id[w.idx(d.cell)]].begins_with("house"):
+				_door = d
+				break
+		p.global_position = w.center_of(_door.cell + Vector2i(2, 3))
+	if frame == 118:
+		_shot("door_closed")
+		p.global_position = w.center_of(_door.cell + Vector2i(0, 1)) + Vector2(0, 6)
+	if frame == 126:
+		_shot("door_open")
 		main.time_of_day = 0.02
-	if frame == 130:
+	if frame == 145:
 		_shot("night")
 		main.hud.set_map_open(true)
 		await get_tree().process_frame

@@ -78,7 +78,8 @@ func _physics_process(_delta: float) -> void:
 				if t == World.WINDOW:
 					win += 1
 			check(win > 20, "buildings have windows (%d)" % win)
-			check(w.has_los(Vector2.ZERO, Vector2.ZERO) and _window_see_through(w), "you can see through windows but not walls")
+			check(w.has_los(Vector2.ZERO, Vector2.ZERO) and not _window_see_through(w), "walls and windows block zombies' sight")
+			_door_tests(w)
 			print("Settlements / map")
 			var kinds2 := {}
 			var names := {}
@@ -1055,3 +1056,53 @@ func _nothing_near(pos: Vector2, r: float) -> bool:
 			if (n as Node2D).global_position.distance_to(pos) < r:
 				return false
 	return true
+
+
+## Doors open for people, stay shut for zombies; closed doors block zombie paths and sight.
+func _door_tests(w: World) -> void:
+	print("Doors")
+	var doors := get_tree().get_nodes_in_group("doors")
+	check(doors.size() >= w.buildings.size(), "every building has doors (%d)" % doors.size())
+	# A house's front door, with the room behind it
+	var door: Door = null
+	var inside := Vector2i.ZERO
+	var outside := Vector2i.ZERO
+	for d in doors:
+		var dd := d as Door
+		var b := w.building_id[w.idx(dd.cell)]
+		if dd.front != null and w.building_types[b].begins_with("house") and w.is_walkable(dd.cell + Vector2i(0, -1)) and w.is_walkable(dd.cell + Vector2i(0, 1)):
+			door = dd
+			inside = dd.cell + Vector2i(0, -1)
+			outside = dd.cell + Vector2i(0, 1)
+			break
+	check(door != null and not door.open, "doors start closed")
+	if door == null:
+		return
+	check(w.astar_z.is_point_solid(door.cell) and not w.astar.is_point_solid(door.cell), "closed doors block zombies' paths, not people's")
+	check(not w.has_los(w.center_of(outside), w.center_of(inside)), "a closed door blocks sight")
+	var zpath := w.find_path(w.center_of(outside + Vector2i(0, 2)), w.center_of(inside), true)
+	check(not zpath.has(w.center_of(door.cell)), "zombies can't path through a closed door")
+	var hpath := w.find_path(w.center_of(outside + Vector2i(0, 2)), w.center_of(inside))
+	check(hpath.has(w.center_of(door.cell)), "people walk through doors")
+	var p: Player = main.player
+	var back := p.global_position
+	p.global_position = w.center_of(outside)
+	door._t = 0.0
+	door._physics_process(0.016)
+	check(door.open and not w.astar_z.is_point_solid(door.cell) and w.has_los(w.center_of(outside), w.center_of(inside)), "a door opens when you walk up to it")
+	p.global_position = back
+	door._t = 0.0
+	door._physics_process(0.016)
+	check(not door.open, "and closes behind you")
+	var z: Zombie = main.add_zombie(w.center_of(door.cell))
+	p.global_position = w.center_of(outside)
+	door._t = 0.0
+	door._physics_process(0.016)
+	p.global_position = back
+	door._t = 0.0
+	door._physics_process(0.016)
+	check(door.open, "a door won't close on a zombie standing in it")
+	z.free()
+	door._t = 0.0
+	door._physics_process(0.016)
+	check(not door.open, "it closes once the doorway is clear")

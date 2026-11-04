@@ -187,6 +187,14 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
   "I'm dehydrated!" at 0), "I'm bleeding!"
 - ✅ Action button text centred on the button face, no text shadow
 
+## Milestone 7 — Doors & sneaking
+- ✅ **Doors** on every doorway (front, back and inside). They open by themselves when a person — you or a
+  bandit — walks up, and close once the doorway is clear. **Zombies and animals can't open doors**: a closed
+  door blocks them and their pathfinding, so they only get inside if they're right behind you
+- ✅ Zombies no longer spot you through walls: walls, **windows** and closed doors block their sight
+- ✅ Walls muffle noise: through a wall or closed door a sound only carries half as far
+- ✅ Zombies never spawn in a doorway
+
 ## Planned
 - 📌 **Base building** (wooden & reinforced walls and gates are in the art pack)
 
