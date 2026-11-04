@@ -313,7 +313,7 @@ func _physics_process(_delta: float) -> void:
 			print("Loot")
 			loot = null
 			for n in get_tree().get_nodes_in_group("loot"):
-				if not n.is_bag:
+				if not n.is_bag and Loot.search_time(n.kind) > 0.0:
 					loot = n
 					break
 			loot.contents = [Items.make("bandage", 1), Items.make("bat"), Items.make("shotgun")]
@@ -324,7 +324,7 @@ func _physics_process(_delta: float) -> void:
 			check(p.nearest_loot == loot, "container detected nearby")
 			_press("interact")
 		65:
-			check(p.busy_t > 0.0 and p.busy_label.begins_with("Searching") and absf(p.busy_total - 1.0) < 0.01, "searching takes 1 second")
+			check(p.busy_t > 0.0 and p.busy_label.begins_with("Searching") and absf(p.busy_total - 1.0) < 0.01, "searching a %s takes 1 second" % loot.kind)
 			p.finish_busy()
 			check(loot.opened and loot.contents.is_empty() and not Game.ui_open, "the container is searched")
 			var spilled: LootSpot = null
@@ -335,6 +335,29 @@ func _physics_process(_delta: float) -> void:
 			p._find_loot()
 			check(inv.near == spilled, "the pile shows in the inventory's nearby list")
 			check(p.nearest_loot != loot, "a searched container isn't offered again")
+			check(["trash", "bin", "car", "medicine"].all(func(k): return Loot.search_time(k) == 1.0) and ["fridge", "wardrobe", "shelf"].all(func(k): return Loot.search_time(k) == 0.0),
+				"bins, car trunks and medicine boxes take 1 s; fridges, wardrobes and shop shelves are instant")
+			var quick: LootSpot = null
+			for n in get_tree().get_nodes_in_group("loot"):
+				if not n.is_bag and n.kind == "fridge" and n != loot:
+					quick = n
+					break
+			if quick:
+				var qpos := p.global_position
+				quick.contents = [Items.make("soda")]
+				quick.opened = false
+				p.global_position = quick.global_position + Vector2(5, 0)
+				p._find_loot()
+				p.interact()
+				check(p.busy_t <= 0.0 and quick.opened and quick.contents.is_empty(), "a fridge is searched instantly")
+				var pile2: LootSpot = _pile_with("soda")
+				p._find_loot()
+				if pile2 and p.nearest_loot == pile2:
+					p.interact()
+					check(p.busy_t <= 0.0 and inv.count_of("soda") >= 1, "picking things up is instant")
+					inv.remove("soda", inv.count_of("soda"))
+				p.global_position = qpos
+				p._find_loot()
 			var bat_i := -1
 			for i in spilled.contents.size():
 				if spilled.contents[i]["id"] == "bat":

@@ -64,8 +64,7 @@ var busy_t := 0.0
 var busy_total := 0.0
 var busy_label := ""
 var _busy_done := Callable()
-const T_SEARCH := 1.0
-const T_PICKUP := 1.0
+const T_SEARCH := 1.0 # bins, car trunks, medicine boxes, lockers, crates (see Loot.search_time)
 const T_EAT := 3.0
 const T_DRINK := 3.0
 const T_BANDAGE := 5.0
@@ -934,11 +933,13 @@ func interact() -> void:
 			if is_instance_valid(spot):
 				say(spot.spill(self).replace("Found:", "Skinned:")))
 	elif spot.is_bag:
-		start_busy("Picking up..", T_PICKUP, func():
-			if is_instance_valid(spot) and not spot.is_queued_for_deletion():
-				say(spot.search(self)))
+		if busy_t <= 0.0:
+			say(spot.search(self)) # picking things up is instant
+	elif Loot.search_time(spot.kind) <= 0.0:
+		if busy_t <= 0.0:
+			say(spot.spill(self)) # fridges, wardrobes, shelves: just open and look
 	else:
-		start_busy("Searching..", T_SEARCH, func():
+		start_busy("Searching..", Loot.search_time(spot.kind), func():
 			if is_instance_valid(spot):
 				say(spot.spill(self)))
 
@@ -1015,11 +1016,9 @@ func _use_structure(st: Structure) -> void:
 			if st.caught <= 0:
 				say("Nothing caught yet" if st.kind == "snare" else "No fish in the trap yet")
 			else:
-				start_busy("Taking..", T_PICKUP, func():
-					if is_instance_valid(st) and st.caught > 0:
-						for it in st.take_catch():
-							drop_item(it)
-						say("A rabbit in the snare: raw meat" if st.kind == "snare" else "Took the fish from the trap"))
+				for it in st.take_catch():
+					drop_item(it)
+				say("A rabbit in the snare: raw meat" if st.kind == "snare" else "Took the fish from the trap")
 		_:
 			dismantle(st)
 

@@ -246,8 +246,9 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ **Auto aim (default)**: Space shoots, the gun locks onto the nearest enemy you can actually hit (not behind
   walls, trees or cars), you face where you walk, the mouse cursor is hidden. **T** switches to mouse aim
   (aim with the mouse, click to shoot); the choice is remembered
-- ✅ **Timed actions** with a progress bar (you can only shuffle along meanwhile): searching 1 s, picking up a
-  pile 1 s, eating / drinking 3 s, bandage / first aid 5 s, skinning 3 s, crafting 2 s, repairing 3 s, tearing
+- ✅ **Timed actions** with a progress bar (you can only shuffle along meanwhile): searching bins, car trunks,
+  medicine boxes, lockers and crates 1 s (fridges, wardrobes, cupboards, shop shelves, desks and boxes are
+  instant), picking things up instant, eating / drinking 3 s, bandage / first aid 5 s, skinning 3 s, crafting 2 s, repairing 3 s, tearing
   2 s, building a fire 2 s
 - ✅ **Searching drops the loot on the floor** in front of the container (a pile you pick up); searched
   containers aren't offered again. Skinning drops the meat and leather too

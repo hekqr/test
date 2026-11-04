@@ -84,6 +84,15 @@ const CONTAINERS := {
 }
 
 
+## Containers you just open and look into are searched instantly; bins, car trunks, medicine boxes,
+## lockers and crates take a second (search_time).
+const QUICK_SEARCH := ["fridge", "cupboard", "wardrobe", "shelf", "pharmacy", "desk", "washer", "box"]
+
+
+static func search_time(kind: String) -> float:
+	return 0.0 if kind in QUICK_SEARCH else 1.0
+
+
 static func title(kind: String) -> String:
 	return CONTAINERS[kind]["name"]
 
