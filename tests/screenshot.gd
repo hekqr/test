@@ -94,6 +94,9 @@ func _process(_delta: float) -> void:
 	if frame == 45:
 		for e in _enemies:
 			e._animate(false) if e is Zombie else e._animate()
+			if e is Zombie and (e.type == "walker" or e.type == "brute"):
+				e.health = e.max_health * 0.55 # show the health bar
+				e.queue_redraw()
 		await get_tree().process_frame
 		_shot("enemies")
 		for e in _enemies:

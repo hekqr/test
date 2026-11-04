@@ -12,9 +12,9 @@ enum State { WANDER, INVESTIGATE, FIGHT, FLEE }
 const RADIUS := 11.0
 const HAND := Vector2(0, -8)
 const THINK := 0.3
-const WALK := 62.0
-const RUN := 138.0
-const FLEE_SPEED := 160.0
+const WALK := 37.0
+const RUN := 83.0
+const FLEE_SPEED := 96.0
 const SIGHT_DAY := 430.0
 const SIGHT_NIGHT := 260.0
 const ZOMBIE_ALERT := 250.0 # zombies closer than this get shot at
@@ -69,11 +69,7 @@ func _ready() -> void:
 	add_to_group("survivors")
 	collision_layer = Game.LAYER_NPC
 	collision_mask = Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_ZOMBIE | Game.LAYER_NPC | Game.LAYER_WATER
-	var circle := CircleShape2D.new()
-	circle.radius = RADIUS
-	var cs := CollisionShape2D.new()
-	cs.shape = circle
-	add_child(cs)
+	add_child(Game.foot_shape(RADIUS, 7.0))
 	if gear.is_empty():
 		_roll_gear()
 	_sprite = AnimatedSprite2D.new()
@@ -541,7 +537,7 @@ func _animate() -> void:
 		anim = "punch_" + d
 	if _sprite.animation != anim:
 		_sprite.play(anim)
-	_sprite.speed_scale = 0.6 if (_moving and state == State.WANDER) else 1.0
+	_sprite.speed_scale = 0.45 if (_moving and state == State.WANDER) else 0.75
 	_sprite.modulate = Color(1, 0.55, 0.55) if _flash_t > 0.0 else Color.WHITE
 	var held: String = weapon()["held"]
 	_held.visible = held != ""

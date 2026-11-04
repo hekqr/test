@@ -131,6 +131,19 @@ func ground(from: Node) -> Node:
 	return e if e != null else from.get_parent()
 
 
+## Collision shape around a character's feet (a flat capsule), so they touch walls where their feet are -
+## not the old circle that stuck out below the sprite. half_w / half_h in pixels; feet at y = +2.
+func foot_shape(half_w: float, half_h: float) -> CollisionShape2D:
+	var cap := CapsuleShape2D.new()
+	cap.radius = half_h
+	cap.height = half_w * 2.0
+	var cs := CollisionShape2D.new()
+	cs.shape = cap
+	cs.rotation = PI * 0.5
+	cs.position = Vector2(0, 2.0 - half_h)
+	return cs
+
+
 ## Short blood spray where a bullet or blade hits (plays once, then removes itself).
 func hit_fx(parent: Node, pos: Vector2, dir: Vector2) -> void:
 	if parent == null:

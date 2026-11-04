@@ -195,6 +195,26 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ Walls muffle noise: through a wall or closed door a sound only carries half as far
 - ✅ Zombies never spawn in a doorway
 
+## Milestone 8 — Rations first
+- ✅ **Clusters**: settlements are small clusters of 4–7 buildings close together on one street (the "city" cluster
+  has police, a clinic and a shop; town clusters a shop), at least 42 tiles of wilderness apart, linked by long
+  roads with nothing on them. Map is 256 × 256
+- ✅ **Smaller houses** (9×7 and 11×8): bedroom(s), bathroom, living room with a kitchen corner
+- ✅ **Only sensible things can be searched** in houses: fridge, wardrobe, medicine cabinet, trash can.
+  Kitchen counters and desks are just furniture; boxes and washing machines are gone.
+  Shops, pharmacies, police lockers and tool crates still have their own loot
+- ✅ **Fridges and wardrobes** always have 1–3 tries (30% empty each); shop shelves give less
+- ✅ **Rations are the main problem**: hunger / thirst drain the same as before, but a whole map now holds only
+  about 1.5–2 hours of food (mostly in fridges). Hunt, cook, and refill at lakes and taps to stretch it.
+  Rare finds in the woods are much rarer
+- ✅ **Far fewer zombies**: 30 by day / 45 at night (was 110 / 160), a new one every 12 s at most
+- ✅ **Zombie health bars** once they're hurt
+- ✅ **Everyone ~40% slower**: you 84 / 117 (walk / sprint), walker chase 67, runner 114, brute 60,
+  wolves 126, bandits 37 / 83, deer 105, rabbits 99. Animations slowed to match
+- ✅ **Hitbox at the feet**: characters collide where their feet are (a flat capsule) instead of a circle that
+  stuck out below the sprite — no more stopping short of walls when walking down
+- 🔧 Dev tool: `tests/loot_census.tscn` counts how much food / water a new world has
+
 ## Planned
 - 📌 **Base building** (wooden & reinforced walls and gates are in the art pack)
 

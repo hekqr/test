@@ -3,7 +3,7 @@ extends Node2D
 ## An axe thrown by an axe zombie. Spins through the air, hurts the player / a bandit it hits,
 ## and lands as an axe lying on the ground - the zombie comes back for it, unless you take it first.
 
-const SPEED := 380.0
+const SPEED := 300.0
 const HIT_RADIUS := 16.0
 
 var world: World

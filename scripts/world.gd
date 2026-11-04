@@ -1,15 +1,17 @@
 class_name World
 extends Node2D
-## The map: named settlements (a city, towns, villages) with their own street layouts, connected by
-## highways; hand-made buildings (see buildings.gd) facing the streets; street props and lootable cars;
+## The map: small named settlements - clusters of 4-7 buildings (a "city" cluster with police and a clinic,
+## a few town clusters with a shop, the rest villages) - far apart and connected by long roads; hand-made buildings (see buildings.gd) facing the streets; street props and lootable cars;
 ## forests, lakes, a river, nature and animals in the wilderness between them.
 ## Also provides pathfinding and line of sight.
 
 enum { GROUND, WALL, TREE, FLOOR, ROAD, WINDOW, FURN, WATER }
 enum { F_NONE, F_WOOD, F_TILE, F_CONCRETE }
 
-const W := 200
-const H := 200
+const W := 256
+const H := 256
+## Settlements are clusters of a few buildings; at least this many tiles of wilderness between two clusters.
+const CLUSTER_GAP := 42
 const T := 32
 
 var tiles := PackedByteArray()
@@ -53,12 +55,19 @@ const TOWN_NAMES := ["Ashford", "Millbrook", "Pine Hollow", "Greywater", "Stoneb
 	"Bramley", "Kettle Creek", "Larkspur", "Willow Bend"]
 ## Building mix per settlement type (weights)
 const TOWN_MIX := {
-	"city": {"house_small": 18, "house_large": 20, "shop": 18, "police": 9, "clinic": 9, "garage": 10},
-	"town": {"house_small": 32, "house_large": 26, "shop": 12, "police": 4, "clinic": 6, "garage": 12},
-	"village": {"house_small": 45, "house_large": 25, "shop": 6, "garage": 14},
+	"city": {"house_small": 30, "house_large": 25, "shop": 15, "police": 8, "clinic": 8, "garage": 10},
+	"town": {"house_small": 40, "house_large": 28, "shop": 10, "clinic": 6, "garage": 12},
+	"village": {"house_small": 55, "house_large": 30, "garage": 12},
 }
+## [type, number of buildings]; clusters that don't fit on the map are skipped.
+const CLUSTERS := [["city", 7], ["town", 6], ["town", 6], ["village", 5], ["village", 4], ["village", 5],
+	["village", 4], ["village", 5], ["village", 4], ["village", 5], ["village", 4]]
+## Buildings every cluster of a type gets first.
+const FORCED := {"city": ["police", "clinic", "shop"], "town": ["shop"]}
+var _left: Array[int] = [] # buildings still to place, per settlement
+var _forced: Array = [] # kinds still to place first, per settlement
 ## How likely a container in each building type has already been looted by someone else
-const PRE_LOOTED := {"house_small": 0.45, "house_large": 0.45, "shop": 0.35, "police": 0.3, "clinic": 0.35, "garage": 0.35}
+const PRE_LOOTED := {"house_small": 0.4, "house_large": 0.4, "shop": 0.5, "police": 0.3, "clinic": 0.4, "garage": 0.35}
 var roofs: Array[TileMapLayer] = [] # one per building, same order as `buildings`
 
 # Atlas coords in tiles_ground.png / tiles_building.png (16x16 tiles)
@@ -167,62 +176,38 @@ func _make_settlements() -> void:
 		var tmp = names[i]
 		names[i] = names[j]
 		names[j] = tmp
-	var plan := [["city", 76], ["town", 52], ["town", 48], ["village", 34], ["village", 30], ["village", 34], ["village", 30], ["village", 32]]
-	for entry in plan:
+	for entry in CLUSTERS:
 		var kind: String = entry[0]
-		var size: int = entry[1]
+		var count: int = entry[1]
+		var size := maxi(28, ((count + 1) / 2) * 12 + 6) # one street, buildings on both sides
+		var vertical := rng.randf() < 0.5
+		var dims := Vector2i(24, size) if vertical else Vector2i(size, 24)
 		for attempt in 600:
-			var margin := size / 2 + 6
+			var margin := size / 2 + 8
 			var c := Vector2i(rng.randi_range(margin, W - margin), rng.randi_range(margin, H - margin))
 			if kind == "city":
-				c = Vector2i(rng.randi_range(W / 2 - 20, W / 2 + 20), rng.randi_range(H / 2 - 20, H / 2 + 20))
-			var r := Rect2i(c - Vector2i(size, size) / 2, Vector2i(size, size))
+				c = Vector2i(rng.randi_range(W / 2 - 24, W / 2 + 24), rng.randi_range(H / 2 - 24, H / 2 + 24))
+			var r := Rect2i(c - dims / 2, dims)
 			var ok := true
 			for s2 in settlements:
-				if (s2["rect"] as Rect2i).grow(10).intersects(r):
+				if (s2["rect"] as Rect2i).grow(CLUSTER_GAP).intersects(r):
 					ok = false
 					break
 			if ok:
-				settlements.append({"name": names.pop_back(), "type": kind, "rect": r, "center": c})
+				settlements.append({"name": names.pop_back(), "type": kind, "rect": r, "center": c, "vertical": vertical})
+				_left.append(count)
+				_forced.append((FORCED.get(kind, []) as Array).duplicate())
 				break
 
 
+## One street through each cluster, then long roads between the clusters.
 func _make_roads() -> void:
 	for ti in settlements.size():
 		var st: Dictionary = settlements[ti]
 		var r: Rect2i = st["rect"]
-		match st["type"]:
-			"city":
-				# Street grid
-				var x := r.position.x + rng.randi_range(2, 6)
-				while x < r.end.x - 4:
-					_add_segment(true, x, r.position.y, r.end.y, "street", ti)
-					x += rng.randi_range(25, 29)
-				var y := r.position.y + rng.randi_range(2, 6)
-				while y < r.end.y - 4:
-					_add_segment(false, y, r.position.x, r.end.x, "street", ti)
-					y += rng.randi_range(25, 29)
-			"town":
-				# Main street + a few cross streets
-				var main_v := rng.randf() < 0.5
-				var c: Vector2i = st["center"]
-				_add_segment(main_v, (c.x if main_v else c.y) - 1, r.position.y if main_v else r.position.x, r.end.y if main_v else r.end.x, "street", ti)
-				var n := rng.randi_range(2, 3)
-				for k in n:
-					var at := (r.position.y if main_v else r.position.x) + 6 + k * (r.size.x - 12) / maxi(n - 1, 1)
-					var half := rng.randi_range(10, r.size.x / 2)
-					var mid := c.x if main_v else c.y
-					_add_segment(not main_v, at, mid - half, mid + half, "street", ti)
-			"village":
-				# One road through, sometimes a short side lane
-				var main_v := rng.randf() < 0.5
-				var c: Vector2i = st["center"]
-				_add_segment(main_v, (c.x if main_v else c.y) - 1, r.position.y if main_v else r.position.x, r.end.y if main_v else r.end.x, "street", ti)
-				if rng.randf() < 0.6:
-					var at := (c.y if main_v else c.x) + rng.randi_range(-6, 6)
-					var dir := 1 if rng.randf() < 0.5 else -1
-					var mid := c.x if main_v else c.y
-					_add_segment(not main_v, at, mini(mid, mid + dir * 11), maxi(mid, mid + dir * 11), "street", ti)
+		var c: Vector2i = st["center"]
+		var main_v: bool = st["vertical"]
+		_add_segment(main_v, (c.x if main_v else c.y) - 1, r.position.y if main_v else r.position.x, r.end.y if main_v else r.end.x, "street", ti)
 	# Highways: connect every settlement (minimum spanning tree + one extra link)
 	var connected := [0]
 	var edges := []
@@ -239,20 +224,60 @@ func _make_roads() -> void:
 		edges.append([best[0], best[1]])
 	if settlements.size() > 3:
 		edges.append([settlements.size() - 1, settlements.size() - 2])
+	# Each road leaves a cluster straight along its street (so it never cuts through the building lots),
+	# then bends once out in the wild.
 	for e in edges:
-		var a: Vector2i = settlements[e[0]]["center"]
-		var b: Vector2i = settlements[e[1]]["center"]
-		if rng.randf() < 0.5:
-			_add_segment(false, a.y - 1, mini(a.x, b.x) - 1, maxi(a.x, b.x) + 2, "highway", -1)
-			_add_segment(true, b.x - 1, mini(a.y, b.y) - 1, maxi(a.y, b.y) + 2, "highway", -1)
+		var ea := _cluster_exit(e[0], settlements[e[1]]["center"])
+		var eb := _cluster_exit(e[1], settlements[e[0]]["center"])
+		var h_first := _road_overlaps(ea, eb, true) <= _road_overlaps(ea, eb, false)
+		if _road_overlaps(ea, eb, true) == _road_overlaps(ea, eb, false):
+			h_first = rng.randf() < 0.5
+		if h_first:
+			_add_segment(false, ea.y - 1, mini(ea.x, eb.x) - 1, maxi(ea.x, eb.x) + 2, "highway", -1)
+			_add_segment(true, eb.x - 1, mini(ea.y, eb.y) - 1, maxi(ea.y, eb.y) + 2, "highway", -1)
 		else:
-			_add_segment(true, a.x - 1, mini(a.y, b.y) - 1, maxi(a.y, b.y) + 2, "highway", -1)
-			_add_segment(false, b.y - 1, mini(a.x, b.x) - 1, maxi(a.x, b.x) + 2, "highway", -1)
+			_add_segment(true, ea.x - 1, mini(ea.y, eb.y) - 1, maxi(ea.y, eb.y) + 2, "highway", -1)
+			_add_segment(false, eb.y - 1, mini(ea.x, eb.x) - 1, maxi(ea.x, eb.x) + 2, "highway", -1)
 	# Intersections: cells on both a horizontal and a vertical road
 	for y in H:
 		for x in W:
 			if road_dir[y * W + x] == 3:
 				intersections.append(Vector2i(x, y))
+
+
+## Where a road leaves cluster `ti` towards `toward`: just past the end of its street (the street is
+## extended to there).
+func _cluster_exit(ti: int, toward: Vector2i) -> Vector2i:
+	var st: Dictionary = settlements[ti]
+	var r: Rect2i = st["rect"]
+	var c: Vector2i = st["center"]
+	if st["vertical"]:
+		if toward.y < c.y:
+			_add_segment(true, c.x - 1, r.position.y - 4, r.position.y + 1, "highway", -1)
+			return Vector2i(c.x, r.position.y - 3)
+		_add_segment(true, c.x - 1, r.end.y - 1, r.end.y + 4, "highway", -1)
+		return Vector2i(c.x, r.end.y + 2)
+	if toward.x < c.x:
+		_add_segment(false, c.y - 1, r.position.x - 4, r.position.x + 1, "highway", -1)
+		return Vector2i(r.position.x - 3, c.y)
+	_add_segment(false, c.y - 1, r.end.x - 1, r.end.x + 4, "highway", -1)
+	return Vector2i(r.end.x + 2, c.y)
+
+
+## How many cells of an L-shaped road from a to b would run through a cluster.
+func _road_overlaps(a: Vector2i, b: Vector2i, horizontal_first: bool) -> int:
+	var corner := Vector2i(b.x, a.y) if horizontal_first else Vector2i(a.x, b.y)
+	var n := 0
+	for leg in [[a, corner], [corner, b]]:
+		var p: Vector2i = leg[0]
+		var q: Vector2i = leg[1]
+		var steps := maxi(absi(q.x - p.x), absi(q.y - p.y))
+		for i in steps + 1:
+			var cell := p + (q - p) * i / maxi(steps, 1)
+			for st in settlements:
+				if (st["rect"] as Rect2i).grow(1).has_point(cell):
+					n += 1
+	return n
 
 
 ## Paints a 3-wide road from `from` to `to` along x (vertical = false) or y.
@@ -279,28 +304,28 @@ func settlement_at(c: Vector2i) -> int:
 
 # ---------------------------------------------------------------- buildings
 
-## Buildings line both sides of every settlement street; a few stand alone along highways.
+## A few buildings close together on both sides of each cluster's street(s). Nothing along the highways:
+## between clusters it's a long walk through the wild.
 func _make_buildings() -> void:
-	for seg in segments:
-		if seg["kind"] == "street":
-			var mix: Dictionary = TOWN_MIX[settlements[seg["town"]]["type"]]
-			_line_of_buildings(seg, -1, mix, 0.2, seg["town"])
-			_line_of_buildings(seg, 1, mix, 0.2, seg["town"])
-		else:
-			var lone := {"house_small": 5, "garage": 3, "house_large": 2}
-			_line_of_buildings(seg, -1, lone, 0.96, -1)
-			_line_of_buildings(seg, 1, lone, 0.96, -1)
+	for pass_i in 2:
+		for seg in segments:
+			if seg["kind"] == "street":
+				var mix: Dictionary = TOWN_MIX[settlements[seg["town"]]["type"]]
+				_line_of_buildings(seg, -1 if pass_i == 0 else 1, mix, 0.04, seg["town"])
 
 
 func _line_of_buildings(seg: Dictionary, side: int, mix: Dictionary, empty_lot: float, town: int) -> void:
 	var vertical: bool = seg["vertical"]
 	var at: int = seg["at"]
-	var cursor: int = seg["from"] + rng.randi_range(1, 4)
+	var cursor: int = seg["from"] + rng.randi_range(1, 3)
 	while cursor < int(seg["to"]) - 4:
+		if town >= 0 and _left[town] <= 0:
+			return
 		if rng.randf() < empty_lot:
-			cursor += rng.randi_range(4, 9)
+			cursor += rng.randi_range(3, 6)
 			continue
-		var kind := Buildings.pick(rng, mix)
+		var forced: Array = _forced[town] if town >= 0 else []
+		var kind: String = forced[0] if not forced.is_empty() else Buildings.pick(rng, mix)
 		var front := ""
 		if vertical:
 			front = "E" if side < 0 else "W"
@@ -321,7 +346,11 @@ func _line_of_buildings(seg: Dictionary, side: int, mix: Dictionary, empty_lot: 
 		# Need open ground around it (and room behind the roof edge)
 		if r.position.x >= 3 and r.position.y >= 4 and r.end.x <= W - 3 and r.end.y <= H - 3 and _area_is(r.grow(1), GROUND):
 			_place_building(r, kind, plan, town)
-			cursor += (bh if vertical else bw) + rng.randi_range(2, 4)
+			if town >= 0:
+				_left[town] -= 1
+				if not forced.is_empty():
+					forced.pop_front()
+			cursor += (bh if vertical else bw) + rng.randi_range(1, 2)
 		else:
 			cursor += 2
 
@@ -495,7 +524,7 @@ func _make_street() -> void:
 func _make_cars() -> void:
 	for seg in segments:
 		var town: bool = seg["kind"] == "street"
-		var gap_min := 9 if town else 22
+		var gap_min := 9 if town else 34
 		var gap_max := 20 if town else 45
 		var i: int = seg["from"] + rng.randi_range(3, 12)
 		while i < int(seg["to"]) - 6:
@@ -627,8 +656,8 @@ func _make_nature() -> void:
 				props.append({"pos": pos, "tex": "nat_flower_%d" % rng.randi_range(1, 6), "flip": rng.randf() < 0.5, "tall": false})
 			elif r < 0.066:
 				props.append({"pos": pos, "tex": "nat_mushroom_%d" % rng.randi_range(1, 3), "flip": rng.randf() < 0.5, "tall": false})
-			elif r < 0.071:
-				wild_spots.append(c)
+			elif r < 0.0675:
+				wild_spots.append(c) # rare finds (the map is big - keep them rare)
 			elif r < 0.085:
 				stick_spots.append(c)
 

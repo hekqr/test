@@ -1,14 +1,15 @@
 extends Node2D
 ## Builds a run: world, loot, player, zombies, day/night, HUD.
 
-const MAX_ZOMBIES_DAY := 110
-const MAX_ZOMBIES_NIGHT := 160
+const MAX_ZOMBIES_DAY := 30
+const MAX_ZOMBIES_NIGHT := 45
+const ZOMBIE_SPAWN_EVERY := 12.0 # seconds between new zombies (when below the cap)
 const DAY_LENGTH := 480.0 # seconds for a full day/night cycle
 const AUTOSAVE_EVERY := 20.0
 const MAX_RABBITS := 22
 const MAX_DEER := 11
 const MAX_WOLVES := 9 # in packs of 2-3
-const MAX_SURVIVORS := 8 # hostile bandits alive at once
+const MAX_SURVIVORS := 6 # hostile bandits alive at once
 ## Zombie mix: [type, weight]. Runners show up more at night, armed zombies more in the city.
 const ZOMBIE_MIX := [["walker", 62.0], ["runner", 12.0], ["brute", 10.0], ["axe", 7.0], ["armed", 9.0]]
 
@@ -301,7 +302,7 @@ func _process(delta: float) -> void:
 
 	_spawn_t -= delta
 	if _spawn_t <= 0.0:
-		_spawn_t = 3.0
+		_spawn_t = ZOMBIE_SPAWN_EVERY
 		var cap := int(lerpf(MAX_ZOMBIES_DAY, MAX_ZOMBIES_NIGHT, 1.0 - light))
 		if get_tree().get_nodes_in_group("zombies").size() < cap:
 			spawn_zombie(900.0)

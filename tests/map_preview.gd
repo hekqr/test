@@ -10,8 +10,9 @@ func _ready() -> void:
 	var t0 := Time.get_ticks_msec()
 	w.generate(int(args[1]) if args.size() > 1 else 12345, ent)
 	print("generated in %d ms, %d buildings, %d settlements, %d containers, %d segments" % [Time.get_ticks_msec() - t0, w.buildings.size(), w.settlements.size(), w.containers.size(), w.segments.size()])
-	for st in w.settlements:
-		print("  ", st["type"], " ", st["name"], " ", st["rect"])
+	for i in w.settlements.size():
+		var st: Dictionary = w.settlements[i]
+		print("  ", st["type"], " ", st["name"], " ", st["rect"], " buildings: ", w.building_town.count(i), " left: ", w._left[i])
 	var water := 0
 	for t in w.tiles:
 		if t == World.WATER:

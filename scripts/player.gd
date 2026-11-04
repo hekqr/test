@@ -5,8 +5,8 @@ extends CharacterBody2D
 signal died
 
 const RADIUS := 11.0
-const WALK_SPEED := 140.0
-const SPRINT_SPEED := 195.0
+const WALK_SPEED := 84.0
+const SPRINT_SPEED := 117.0
 const HAND := Vector2(0, -8)
 
 var world: World
@@ -68,11 +68,7 @@ func _ready() -> void:
 	add_to_group("player")
 	collision_layer = Game.LAYER_PLAYER
 	collision_mask = Game.LAYER_WALL | Game.LAYER_ZOMBIE | Game.LAYER_NPC | Game.LAYER_WATER
-	var circle := CircleShape2D.new()
-	circle.radius = RADIUS
-	var cs := CollisionShape2D.new()
-	cs.shape = circle
-	add_child(cs)
+	add_child(Game.foot_shape(RADIUS, 7.0))
 
 	_sprite = AnimatedSprite2D.new()
 	_sprite.sprite_frames = Game.frames("player", sprite_spec())
@@ -1094,6 +1090,8 @@ func _animate() -> void:
 		if keep:
 			_sprite.frame = f
 	_sprite.modulate = Color(1, 0.55, 0.55) if _hurt_t > 0.0 else Color.WHITE
+	# Slower legs to match the slower walking speed
+	_sprite.speed_scale = (0.95 if _sprinting else 0.7) if anim.begins_with("run") else 1.0
 
 	# Held weapon sprite in front of the body.
 	var held: String = weapon()["held"]

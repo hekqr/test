@@ -21,11 +21,11 @@ const RADIUS := 11.0
 const THINK_INTERVAL := 0.25
 ## walk / chase = base speeds, dmg = damage per hit (min, max), armour = points (1 = 10% less damage)
 const TYPES := {
-	"walker": {"name": "Zombie", "health": 100.0, "walk": 38.0, "chase": 112.0, "dmg": [8.0, 14.0], "cd": 1.1, "reach": 8.0, "knock": 220.0, "armour": 0.0},
-	"runner": {"name": "Runner", "health": 80.0, "walk": 50.0, "chase": 190.0, "dmg": [7.0, 12.0], "cd": 0.9, "reach": 8.0, "knock": 260.0, "armour": 0.0},
-	"brute": {"name": "Brute", "health": 300.0, "walk": 34.0, "chase": 100.0, "dmg": [12.0, 21.0], "cd": 1.4, "reach": 12.0, "knock": 90.0, "armour": 0.0},
-	"axe": {"name": "Axe zombie", "health": 100.0, "walk": 36.0, "chase": 100.0, "dmg": [16.0, 24.0], "cd": 1.3, "reach": 12.0, "knock": 150.0, "armour": 0.0},
-	"armed": {"name": "Armed zombie", "health": 100.0, "walk": 36.0, "chase": 96.0, "dmg": [8.0, 14.0], "cd": 1.1, "reach": 8.0, "knock": 200.0, "armour": 3.0},
+	"walker": {"name": "Zombie", "health": 100.0, "walk": 23.0, "chase": 67.0, "dmg": [8.0, 14.0], "cd": 1.1, "reach": 8.0, "knock": 220.0, "armour": 0.0},
+	"runner": {"name": "Runner", "health": 80.0, "walk": 30.0, "chase": 114.0, "dmg": [7.0, 12.0], "cd": 0.9, "reach": 8.0, "knock": 260.0, "armour": 0.0},
+	"brute": {"name": "Brute", "health": 300.0, "walk": 20.0, "chase": 60.0, "dmg": [12.0, 21.0], "cd": 1.4, "reach": 12.0, "knock": 90.0, "armour": 0.0},
+	"axe": {"name": "Axe zombie", "health": 100.0, "walk": 22.0, "chase": 60.0, "dmg": [16.0, 24.0], "cd": 1.3, "reach": 12.0, "knock": 150.0, "armour": 0.0},
+	"armed": {"name": "Armed zombie", "health": 100.0, "walk": 22.0, "chase": 58.0, "dmg": [8.0, 14.0], "cd": 1.1, "reach": 8.0, "knock": 200.0, "armour": 3.0},
 }
 const VARIANCE := 0.1 # each zombie's stats vary by up to 10%
 ## Armed zombies: [damage min, max, aim time, shots per burst, range]
@@ -59,6 +59,8 @@ var gun := ""
 var mag := 0
 
 var _t: Dictionary
+var max_health := 100.0
+var _top := -32.0 # top of the sprite (for the health bar)
 var _dmg_mult := 1.0
 var _path_i := 0
 var _think_t := randf() * THINK_INTERVAL
@@ -95,12 +97,9 @@ func _ready() -> void:
 	_t = TYPES[type]
 	collision_layer = Game.LAYER_ZOMBIE
 	collision_mask = Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_ZOMBIE | Game.LAYER_NPC | Game.LAYER_WATER | Game.LAYER_DOOR
-	var circle := CircleShape2D.new()
-	circle.radius = RADIUS + (3.0 if type == "brute" else 0.0)
-	var cs := CollisionShape2D.new()
-	cs.shape = circle
-	add_child(cs)
+	add_child(Game.foot_shape(RADIUS + (3.0 if type == "brute" else 0.0), 9.0 if type == "brute" else 7.0))
 	health = float(_t["health"]) * _vary()
+	max_health = health
 	walk_speed = float(_t["walk"]) * _vary()
 	chase_speed = float(_t["chase"]) * _vary()
 	_dmg_mult = _vary()
@@ -173,6 +172,7 @@ func _fit_offset() -> void:
 	var tex := _sprite.sprite_frames.get_frame_texture(_sprite.animation, 0)
 	if tex:
 		_sprite.offset = Vector2(0, -tex.get_height() / 2.0 + 1.0)
+		_top = 2.0 - tex.get_height() * _sprite.scale.y
 
 
 func _physics_process(delta: float) -> void:
@@ -224,7 +224,7 @@ func _physics_process(delta: float) -> void:
 			"armed":
 				_try_shoot(delta)
 	_animate(move_dir != Vector2.ZERO)
-	if _held or _shot_t > -0.1:
+	if _held or _shot_t > -0.1 or health < max_health:
 		queue_redraw()
 
 
@@ -238,7 +238,7 @@ func _animate(moving: bool) -> void:
 	if _sprite.animation != anim:
 		_sprite.play(anim)
 		_fit_offset()
-	_sprite.speed_scale = 1.6 if state == State.CHASE and anim.contains("walk") else 1.0
+	_sprite.speed_scale = 1.15 if state == State.CHASE and anim.contains("walk") else 0.8
 	_sprite.modulate = Color(1, 0.45, 0.45) if _flash_t > 0.0 else _tint
 	if _held:
 		_held.visible = mag > 0
@@ -470,6 +470,12 @@ func _fire(g: Array) -> void:
 
 
 func _draw() -> void:
+	# Health bar once it's been hurt
+	if not dead and health < max_health:
+		var w := 26.0
+		var y := minf(_top, -30.0) - 6.0
+		draw_rect(Rect2(-w / 2.0 - 1, y - 1, w + 2, 5), Color(0.08, 0.04, 0.07, 0.8))
+		draw_rect(Rect2(-w / 2.0, y, w * clampf(health / max_health, 0.0, 1.0), 3), Color(0.85, 0.22, 0.18))
 	if _shot_t > 0.0 and not _shots.is_empty():
 		var aim := (to_local(_shots[0]) - Vector2(0, -8)).normalized()
 		var muzzle := Vector2(0, -8) + aim * 22.0
@@ -494,6 +500,7 @@ func take_damage(amount: float, dir: Vector2, from: Node2D = null) -> void:
 	_special_t = 0.0
 	_lose_t = 5.0
 	Game.hit_fx(get_parent(), global_position, dir)
+	queue_redraw()
 	if health <= 0.0:
 		_die(dir)
 

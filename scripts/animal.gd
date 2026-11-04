@@ -9,10 +9,10 @@ extends CharacterBody2D
 signal died(animal: Animal)
 
 const SPECIES := {
-	"rabbit": {"health": 15.0, "walk": 30.0, "run": 165.0, "fear": 150.0, "meat": 1, "leather": 0, "radius": 7.0, "anim_fps": 8.0},
-	"deer": {"health": 80.0, "walk": 35.0, "run": 175.0, "fear": 230.0, "meat": 3, "leather": 1, "radius": 12.0, "anim_fps": 7.0},
+	"rabbit": {"health": 15.0, "walk": 18.0, "run": 99.0, "fear": 150.0, "meat": 1, "leather": 0, "radius": 7.0, "anim_fps": 8.0},
+	"deer": {"health": 80.0, "walk": 21.0, "run": 105.0, "fear": 230.0, "meat": 3, "leather": 1, "radius": 12.0, "anim_fps": 7.0},
 	# Wolves: faster than runners (and than you), bite a bit harder than a walker, fragile
-	"wolf": {"health": 40.0, "walk": 48.0, "run": 210.0, "fear": 0.0, "meat": 2, "leather": 1, "radius": 10.0, "anim_fps": 10.0,
+	"wolf": {"health": 40.0, "walk": 29.0, "run": 126.0, "fear": 0.0, "meat": 2, "leather": 1, "radius": 10.0, "anim_fps": 10.0,
 		"predator": true, "bite": [9.0, 16.0], "sight": 300.0, "sight_night": 380.0},
 }
 
@@ -118,7 +118,7 @@ func _physics_process(delta: float) -> void:
 		_sprite.flip_h = dir.x < 0.0
 		if _sprite.animation != "move":
 			_sprite.play("move")
-		_sprite.speed_scale = 2.0 if speed > float(s["walk"]) * 1.5 else 1.0
+		_sprite.speed_scale = 1.4 if speed > float(s["walk"]) * 1.5 else 0.7
 	elif _sprite.animation != "idle":
 		_sprite.play("idle")
 	_sprite.modulate = Color(1, 0.5, 0.5) if _flash_t > 0.0 else Color.WHITE

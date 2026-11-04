@@ -45,7 +45,8 @@ func _physics_process(_delta: float) -> void:
 			check(w.buildings.size() > 20, "buildings generated (%d)" % w.buildings.size())
 			check(w.roofs.size() == w.buildings.size(), "every building has a roof")
 			check(get_tree().get_nodes_in_group("loot").size() > 30, "loot containers placed")
-			check(get_tree().get_nodes_in_group("zombies").size() >= 50, "zombies spawned")
+			var zn0 := get_tree().get_nodes_in_group("zombies").size()
+			check(zn0 >= 20 and zn0 <= main.MAX_ZOMBIES_DAY, "zombies spawned - far fewer than before (%d)" % zn0)
 			check(w.is_walkable(w.cell_of(p.global_position)), "player spawns on walkable tile")
 			check(SaveGame.can_continue(), "new game is saved straight away")
 			check(w.find_path(p.global_position, w.center_of(w.building_floors[0][0])).size() > 1, "pathfinding into a building works")
@@ -58,7 +59,39 @@ func _physics_process(_delta: float) -> void:
 			var kinds := {}
 			for c in w.containers:
 				kinds[c["kind"]] = kinds.get(c["kind"], 0) + 1
-			check(kinds.has("fridge") and kinds.has("wardrobe") and kinds.has("cupboard"), "houses have kitchens and bedrooms")
+			check(kinds.has("fridge") and kinds.has("wardrobe") and kinds.has("medicine") and kinds.has("trash"), "houses: fridge, wardrobe, medicine cabinet, trash can")
+			check(not kinds.has("cupboard") and not kinds.has("desk") and not kinds.has("box") and not kinds.has("washer"), "kitchen counters, desks, boxes and washers can't be searched")
+			check(Loot.CONTAINERS["fridge"]["rolls"].x >= 1 and Loot.CONTAINERS["wardrobe"]["rolls"].x >= 1, "fridges and wardrobes give more")
+			for k in ["house_small", "house_large"]:
+				var rows: Array = Buildings.TEMPLATES[k]["rows"]
+				check(String(rows[0]).length() <= 11 and rows.size() <= 8, "%s is small (%dx%d)" % [k, String(rows[0]).length(), rows.size()])
+			print("Clusters")
+			var per := {}
+			for i in w.buildings.size():
+				per[w.building_town[i]] = per.get(w.building_town[i], 0) + 1
+			check(not per.has(-1), "no buildings out on the roads between clusters")
+			var sizes_ok := true
+			for i in w.settlements.size():
+				if per.get(i, 0) < 3 or per.get(i, 0) > 7:
+					sizes_ok = false
+			check(sizes_ok, "each cluster has 4-7 buildings close together (%s)" % str(per))
+			var min_gap := 9999
+			for i in w.settlements.size():
+				for j in range(i + 1, w.settlements.size()):
+					var a: Rect2i = w.settlements[i]["rect"]
+					var b: Rect2i = w.settlements[j]["rect"]
+					var gx := maxi(b.position.x - a.end.x, a.position.x - b.end.x)
+					var gy := maxi(b.position.y - a.end.y, a.position.y - b.end.y)
+					min_gap = mini(min_gap, maxi(gx, gy))
+			check(min_gap >= World.CLUSTER_GAP, "clusters are far apart (closest gap %d tiles)" % min_gap)
+			print("Speed / hitbox")
+			check(Player.WALK_SPEED <= 90.0 and Player.SPRINT_SPEED <= 125.0, "everyone moves much slower (walk %d, sprint %d)" % [Player.WALK_SPEED, Player.SPRINT_SPEED])
+			var feet: CollisionShape2D = null
+			for ch in p.get_children():
+				if ch is CollisionShape2D:
+					feet = ch
+			var cap := feet.shape as CapsuleShape2D
+			check(cap != null and absf(feet.position.y + cap.radius - 2.0) < 0.5, "the player's hitbox sits at the feet (bottom at +2)")
 			check(kinds.get("car", 0) >= 5, "cars on the roads (%d)" % kinds.get("car", 0))
 			check(kinds.get("bin", 0) >= 3, "garbage bins on sidewalks (%d)" % kinds.get("bin", 0))
 			var lights := w.props.filter(func(pr): return String(pr["tex"]).begins_with("prop_light")).size()
@@ -491,6 +524,8 @@ func _physics_process(_delta: float) -> void:
 		140:
 			check(hp_before - z_test.health >= 33.0, "bat attacks automatically and hits hard (%.0f)" % (hp_before - z_test.health))
 			z_test.set_physics_process(true)
+			z_test.global_position = p.global_position + Vector2(24, 0) # zombies are slow now: start it in reach
+			z_test._knock = Vector2.ZERO
 			print("Zombie attacks")
 			z_test.health = 999.0
 			hp_before = p.health
@@ -650,7 +685,7 @@ func _physics_process(_delta: float) -> void:
 				var z: Zombie = main.add_zombie(p2.global_position + Vector2(0, 900), t)
 				hp[t] = z.health
 				if t == "runner":
-					check(z.chase_speed >= 171.0 - 0.01 and z.chase_speed <= 209.0 + 0.01, "runners run 190 (+-10%%): about as fast as you sprint (%.0f)" % z.chase_speed)
+					check(z.chase_speed >= 114.0 * 0.9 - 0.01 and z.chase_speed <= 114.0 * 1.1 + 0.01, "runners run 114 (+-10%%): about as fast as you sprint (%.0f)" % z.chase_speed)
 			var in_range := func(v: float, base: float): return v >= base * 0.9 - 0.01 and v <= base * 1.1 + 0.01
 			check(in_range.call(hp["walker"], 100.0) and in_range.call(hp["runner"], 80.0) and in_range.call(hp["brute"], 300.0) and in_range.call(hp["axe"], 100.0) and in_range.call(hp["armed"], 100.0),
 				"zombie health: walker 100, runner 80, brute 300, axe 100, armed 100 (+-10%%) (%s)" % str(hp))
@@ -666,6 +701,7 @@ func _physics_process(_delta: float) -> void:
 			var before_a := za.health
 			za.take_damage(10.0, Vector2.RIGHT, p2)
 			check(absf(before_a - za.health - 7.0) < 0.01, "armed zombies wear armour (10 damage -> 7)")
+			check(za.health < za.max_health, "hurt zombies show a health bar")
 			check(int(Items.WEAPONS["pistol"]["noise"]) <= 400 and int(Items.WEAPONS["hunting_rifle"]["noise"]) <= 550, "gunshots carry about half as far")
 			var seen := {}
 			for i in 3000:
@@ -777,7 +813,7 @@ func _physics_process(_delta: float) -> void:
 				"dead wolf: 2 meat + 1 leather")
 			check(int(Animal.SPECIES["deer"]["leather"]) >= 1, "deer give leather too")
 			var ws: Dictionary = Animal.SPECIES["wolf"]
-			check(float(ws["run"]) == 210.0 and float(ws["run"]) > float(Zombie.TYPES["runner"]["chase"]) and float(ws["run"]) > Player.SPRINT_SPEED, "wolves run 210: faster than runners and than you")
+			check(float(ws["run"]) == 126.0 and float(ws["run"]) > float(Zombie.TYPES["runner"]["chase"]) and float(ws["run"]) > Player.SPRINT_SPEED, "wolves run 126: faster than runners and than you")
 			check(float(ws["health"]) == 40.0 and float(ws["bite"][1]) > float(Zombie.TYPES["walker"]["dmg"][1]), "wolves: 40 hp, bite a bit harder than walkers")
 			_water_tests()
 			if failures.is_empty():
