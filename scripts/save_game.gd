@@ -2,7 +2,7 @@ class_name SaveGame
 ## One automatic save file. When the survivor dies the file is kept but marked dead,
 ## so it can't be continued (a dev "revive" may be added later).
 
-const VERSION := 3 # bumped when the world/item format changes; older saves cannot be continued
+const VERSION := 4 # bumped when the world/item format changes; older saves cannot be continued
 
 
 static func path() -> String:
