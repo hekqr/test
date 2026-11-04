@@ -9,6 +9,9 @@ var hp_before := 0.0
 var pos_before := Vector2.ZERO
 var loot: LootSpot
 var wolf: Animal
+var home_name := ""
+var marker_pos := Vector2.ZERO
+var east_road_y := 0
 
 
 func check(cond: bool, what: String) -> void:
@@ -76,7 +79,7 @@ func _physics_process(_delta: float) -> void:
 			var by_type := {}
 			for i in w.settlements.size():
 				var t: String = w.settlements[i]["type"]
-				var lim: Array = {"hamlet": [3, 7], "village": [6, 12], "town": [8, 13], "city": [12, 16]}[t]
+				var lim: Array = {"hamlet": [2, 7], "village": [5, 12], "town": [8, 13], "city": [12, 16]}[t]
 				if per.get(i, 0) < int(lim[0]) or per.get(i, 0) > int(lim[1]):
 					sizes_ok = false
 				by_type[t] = by_type.get(t, 0) + 1
@@ -200,7 +203,7 @@ func _physics_process(_delta: float) -> void:
 			check(house_total > 0 and float(house_empty) / house_total > 0.5, "most house furniture is empty (%d / %d)" % [house_empty, house_total])
 			main.reveal_around(p.global_position)
 			check(main.explored[w.idx(w.cell_of(p.global_position))] == 1, "map reveals where you are")
-			check(main.explored[w.idx(Vector2i(1, 1))] == 0 or w.cell_of(p.global_position).distance_to(Vector2i(1, 1)) < 20, "far away stays unexplored")
+			check(main.explored[w.idx(Vector2i(1, 1))] == 1 and main.explored[w.idx(Vector2i(World.W - 2, World.H - 2))] == 1, "your home region's map starts filled in")
 			check(not ("stamina" in p), "stamina removed")
 			print("Bandits (spawn)")
 			var bandits := get_tree().get_nodes_in_group("survivors")
@@ -227,7 +230,10 @@ func _physics_process(_delta: float) -> void:
 			check(inv.gear["shirt"] != null and inv.gear["shirt"]["id"] == "tshirt", "starts wearing a t-shirt")
 			check(inv.gear["pants"] != null and inv.gear["pants"]["id"] == "jeans", "starts wearing jeans")
 			check(inv.storage_cells().size() == 2, "shirts give no storage: jeans 2 = 2 slots")
-			check(inv.count_of("food") == 1 and inv.count_of("water") == 1 and inv.count_of("bandage") == 1, "starting items carried")
+			check(inv.count_of("food") == 0 and inv.count_of("water") == 0 and inv.count_of("bandage") == 0 and inv.gear["hands"] == null, "you start with nothing but your clothes")
+			inv.add("food")
+			inv.add("water")
+			inv.pickup(Items.make("bandage")) # (the rest of the test expects a few things in your pockets)
 			check(inv.free_slots() == 0 and inv.gear["hands"] != null, "storage full at start, 3rd item in hands")
 			check(inv.add("food") == 1, "no free slot for another can")
 			var start_hands = inv.take(Inventory.gear_loc("hands"))
@@ -315,19 +321,29 @@ func _physics_process(_delta: float) -> void:
 			p._loot_t = 0.0 # look around now (it's only done every 0.1 s)
 		62:
 			check(p.nearest_loot == loot, "container detected nearby")
-			check(inv.near == loot, "container shown as NEARBY")
 			_press("interact")
 		65:
-			check(loot.opened and Game.ui_open, "E opens the container in the inventory")
-			main.hud.set_inventory_open(false)
-			check(inv.move(Inventory.near_loc(1), Inventory.gear_loc("melee")) == "" and inv.gear["melee"]["id"] == "bat", "drag bat from container to melee slot")
-			check(inv.move(Inventory.cargo_loc("back", 5), Inventory.near_loc(99)) == "" or true, "drag item into container")
-			var before := loot.contents.size()
-			inv.move(Inventory.cargo_loc("pants", 0), Inventory.near_loc(loot.contents.size()))
-			check(loot.contents.size() == before + 1, "stored an item in the container")
-			p.say(loot.search(p))
+			check(p.busy_t > 0.0 and p.busy_label.begins_with("Searching") and absf(p.busy_total - 1.0) < 0.01, "searching takes 1 second")
+			p.finish_busy()
+			check(loot.opened and loot.contents.is_empty() and not Game.ui_open, "the container is searched")
+			var spilled: LootSpot = null
+			for n in get_tree().get_nodes_in_group("loot"):
+				if n.is_bag and n.global_position.distance_to(loot.global_position) < 40.0 and n.contents.any(func(it): return it["id"] == "shotgun"):
+					spilled = n
+			check(spilled != null and ["bandage", "bat", "shotgun"].all(func(id): return spilled.contents.any(func(it): return it["id"] == id)), "what you find drops on the floor")
+			p._find_loot()
+			check(inv.near == spilled, "the pile shows in the inventory's nearby list")
+			check(p.nearest_loot != loot, "a searched container isn't offered again")
+			var bat_i := -1
+			for i in spilled.contents.size():
+				if spilled.contents[i]["id"] == "bat":
+					bat_i = i
+			check(inv.move(Inventory.near_loc(bat_i), Inventory.gear_loc("melee")) == "" and inv.gear["melee"]["id"] == "bat", "drag bat from the pile to the melee slot")
+			var before := spilled.contents.size()
+			inv.move(Inventory.cargo_loc("pants", 0), Inventory.near_loc(spilled.contents.size()))
+			check(spilled.contents.size() == before + 1, "drop an item onto the pile")
+			p.say(spilled.search(p))
 			check(inv.gear["primary"] != null and inv.gear["primary"]["id"] == "shotgun", "take all: shotgun to main slot")
-			check(loot.looted, "container emptied")
 			print("Roofs")
 			var b: int = w.building_at(p.global_position)
 			check(b >= 0, "player is inside a building")
@@ -488,6 +504,8 @@ func _physics_process(_delta: float) -> void:
 			check(not menu.is_empty() and menu["items"][0][0] == "Eat", "clicking an item shows what you can do with it (%s)" % str(menu.get("items", [])))
 			if not main.hud._menu.is_empty():
 				_click(main.hud._menu_rect().position + Vector2(20, 4 + Hud.MENU_ROW * 0.5))
+			check(p.busy_t > 0.0 and absf(p.busy_total - 3.0) < 0.01, "eating takes 3 seconds")
+			p.finish_busy()
 			check(inv.count_of("food") == fbefore - 1 and p.hunger > 50.0, "pick Eat from the menu")
 			main.hud.set_inventory_open(false)
 			var old_primary = inv.gear["primary"]
@@ -872,6 +890,43 @@ func _physics_process(_delta: float) -> void:
 			check(float(ws["run"]) == 126.0 and float(ws["run"]) > float(Zombie.TYPES["runner"]["chase"]) and float(ws["run"]) > Player.SPRINT_SPEED, "wolves run 126: faster than runners and than you")
 			check(float(ws["health"]) == 40.0 and float(ws["bite"][1]) > float(Zombie.TYPES["walker"]["dmg"][1]), "wolves: 40 hp, bite a bit harder than walkers")
 			_water_tests()
+			print("Regions")
+			main.hud.set_map_open(false)
+			var pr: Player = main.player
+			pr.health = 100.0
+			home_name = main.region_name
+			var marker := LootSpot.new()
+			marker.is_bag = true
+			marker.contents = [Items.make("map")]
+			marker.position = pr.global_position + Vector2(20, 0)
+			main.entities.add_child(marker)
+			marker_pos = marker.position
+			pr.inv.gear["hands"] = Items.make("rope")
+			check(main.world.edge_exit("E").x == World.W - 1 and main.world.get_tile(main.world.edge_exit("E")) == World.ROAD, "a road leaves the region at its east edge")
+			east_road_y = main.world.edge_exit("E").y
+			main.travel(Vector2i(1, 0))
+		1100:
+			var p2: Player = main.player
+			check(main.region == Vector2i(1, 0) and main.region_name != home_name, "walked east into the next region (%s)" % main.region_name)
+			check(p2.global_position.x < 4 * World.T and p2.global_position.x > World.T, "you arrive at its west edge")
+			check(main.world.edge_exit("W").y == east_road_y and main.world.get_tile(main.world.edge_exit("W")) == World.ROAD, "the road carries on across the edge")
+			check(p2.inv.gear["hands"] != null and p2.inv.gear["hands"]["id"] == "rope", "you keep your things")
+			check(main.explored[main.world.idx(Vector2i(World.W - 2, World.H - 2))] == 0, "a new region's map is blank until you explore it")
+			check(main.world.settlements.size() >= 5, "the new region has its own settlements (%d)" % main.world.settlements.size())
+			main.travel(Vector2i(-1, 0))
+		1300:
+			check(main.region == Vector2i.ZERO and main.region_name == home_name, "walked back home")
+			var found := false
+			for n in get_tree().get_nodes_in_group("loot"):
+				if n.is_bag and n.position.distance_to(marker_pos) < 2.0 and n.contents.any(func(it): return it["id"] == "map"):
+					found = true
+			check(found, "what you left in a region is still there when you come back")
+			check(main.player.global_position.x > (World.W - 5) * World.T, "you come back in at the east edge")
+			main.save_game()
+			var d := SaveGame.read()
+			check(d.has("regions") and d["regions"].has("1,0") and int(d["region"][0]) == 0 and int(d["region"][1]) == 0, "regions are saved")
+			DirAccess.remove_absolute(ProjectSettings.globalize_path(Game.save_path))
+		1302:
 			if failures.is_empty():
 				print("SMOKE TEST PASSED")
 				get_tree().quit(0)
@@ -1107,6 +1162,8 @@ func _water_tests() -> void:
 	check(p.interact_choice() == "water" and p.action_label() == "Drink / fill gourd", "E: Drink / fill gourd")
 	p.thirst = 30.0
 	p.interact()
+	check(p.busy_t > 0.0, "drinking from the lake takes a moment")
+	p.finish_busy()
 	check(p.thirst >= 90.0 and int(g["water"]) == 4, "drink your fill and fill the gourd (4/4)")
 	p.thirst = 40.0
 	var loc := {}

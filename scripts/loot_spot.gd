@@ -153,6 +153,8 @@ func label() -> String:
 		elif int(it["count"]) > 1:
 			n += " x%d" % it["count"]
 		return "Pick up " + n
+	if opened and contents.is_empty():
+		return title() + " (searched)"
 	return "Search " + title().to_lower()
 
 
@@ -179,6 +181,40 @@ func search(p: Player) -> String:
 	if not left.is_empty():
 		msg = (msg + "  -  " if msg != "" else "") + "No free slots!"
 	return msg
+
+
+## Searching a container (or skinning a carcass): what's inside drops on the ground in front of it,
+## as a pile you can pick up. Returns what was found.
+func spill(p: Player) -> String:
+	opened = true
+	if contents.is_empty():
+		queue_redraw()
+		return "Nothing here" if kind != "carcass" else "Nothing left"
+	var names := PackedStringArray()
+	for it in contents:
+		names.append(Items.display_name(it) + ("" if int(it["count"]) == 1 else " x%d" % it["count"]))
+	var toward := (p.global_position - global_position)
+	var at := global_position + (toward.normalized() * minf(toward.length(), 22.0) if toward.length() > 1.0 else Vector2(0, 18))
+	var pile: LootSpot = null
+	for n in get_tree().get_nodes_in_group("loot"):
+		var l := n as LootSpot
+		if l != self and l.is_bag and not l.is_queued_for_deletion() and l.global_position.distance_to(at) < 26.0:
+			pile = l
+			break
+	if pile == null:
+		pile = LootSpot.new()
+		pile.is_bag = true
+		pile.loaded = true
+		pile.position = at
+		pile.contents = contents.duplicate()
+		get_parent().add_child(pile)
+	else:
+		pile.contents.append_array(contents)
+		pile.refresh()
+	contents = []
+	refresh()
+	queue_redraw()
+	return "Found: " + ", ".join(names)
 
 
 func _draw() -> void:

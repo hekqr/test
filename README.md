@@ -15,8 +15,9 @@ The game saves automatically (every 20 s, when you quit, and when you die) to
 |---|---|
 | WASD | Move |
 | Shift | Sprint (louder — attracts zombies) |
-| Left click | Shoot (guns aim by themselves — stand still to steady the aim; melee attacks automatically) |
-| E (or the on-screen button) | Search container / pick up item / skin animal / use campfire / drink & fill gourd at water or taps |
+| Space | Shoot — guns aim at the nearest enemy by themselves (stand still to steady the aim); melee attacks automatically |
+| T | Switch between auto aim (Space, no mouse needed) and mouse aim (aim with the mouse, click to shoot) |
+| E (or the on-screen button) | Search (1 s — what you find drops on the floor) / pick up / skin / cook / drink & fill gourd at water or taps |
 | C | Build campfire (3 sticks + 1 match) |
 | K | Crafting |
 | M | Map (scroll to zoom, drag to move) |

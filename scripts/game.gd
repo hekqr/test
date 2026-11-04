@@ -8,6 +8,7 @@ const LAYER_ANIMAL := 8
 const LAYER_NPC := 16 # hostile survivors
 const LAYER_WATER := 32 # lakes & rivers: block walking, not bullets or sight
 const LAYER_DOOR := 64 # closed doors: block zombies and animals, not people
+const LAYER_EDGE := 128 # the edge of a region: creatures stay in, you can walk on to the next region
 
 signal noise_made(pos: Vector2, radius: float)
 
@@ -26,8 +27,27 @@ var open_inventory := false
 ## Set when a click was used by a UI button, so it doesn't also fire a gun. Cleared on release.
 var click_used := false
 
+## "auto": guns lock onto the nearest enemy by themselves, Space shoots, no mouse needed while walking.
+## "mouse": aim with the mouse, click to shoot. T switches; remembered between games.
+var aim_mode := "auto"
+const SETTINGS_PATH := "user://settings.cfg"
+
+
+func load_settings() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) == OK:
+		aim_mode = String(cfg.get_value("controls", "aim_mode", "auto"))
+
+
+func save_settings() -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(SETTINGS_PATH)
+	cfg.set_value("controls", "aim_mode", aim_mode)
+	cfg.save(SETTINGS_PATH)
+
 
 func _ready() -> void:
+	load_settings()
 	_key("move_up", [KEY_W, KEY_UP])
 	_key("move_down", [KEY_S, KEY_DOWN])
 	_key("move_left", [KEY_A, KEY_LEFT])
@@ -45,6 +65,8 @@ func _ready() -> void:
 	_key("weapon_secondary", [KEY_2])
 	_key("weapon_melee", [KEY_3])
 	# (The mouse wheel zooms the camera / the map; weapons are on 1 / 2 / 3.)
+	_key("fire", [KEY_SPACE])
+	_key("aim_mode", [KEY_T], false)
 	_key("inventory", [KEY_TAB, KEY_I], false)
 	_key("help", [KEY_F1])
 	_key("pause", [KEY_ESCAPE])

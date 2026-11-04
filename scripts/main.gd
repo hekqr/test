@@ -47,24 +47,56 @@ const REVEAL_RADIUS := 15
 func _ready() -> void:
 	randomize()
 	get_tree().set_auto_accept_quit(false)
-	Game.ui_open = false
-	Game.click_used = false
+	Game.noise_made.connect(_on_noise)
 	var save: Dictionary = Game.pending_load
 	Game.pending_load = {}
+	_setup(save)
+
+
+## The world is a chain of regions. Region (0, 0) is where you start; walk off an edge of the map to
+## travel to the next one. Each region remembers what you left there (searched containers, piles,
+## fires, tap water, the map you've explored).
+var region := Vector2i.ZERO
+var region_name := ""
+var regions_state := {} # "x,y" -> {loot, taps, fires, explored} for the regions you're not in
+var _travelling := false
+
+
+static func _rkey(r: Vector2i) -> String:
+	return "%d,%d" % [r.x, r.y]
+
+
+func region_seed() -> int:
+	return world_seed if region == Vector2i.ZERO else hash([world_seed, region.x, region.y])
+
+
+## Builds the current region and everything in it from a save (empty = a new game).
+func _setup(save: Dictionary) -> void:
+	Game.ui_open = false
+	Game.click_used = false
 	world_seed = int(save["seed"]) if not save.is_empty() else randi()
+	var rr: Array = save.get("region", [0, 0])
+	region = Vector2i(int(rr[0]), int(rr[1]))
+	regions_state = save.get("regions", {})
+	region_name = World.region_name(world_seed, region)
+	var fresh: bool = save.is_empty() or save.get("fresh_region", false)
 	world = World.new()
+	world.region = region
+	world.edge_seed = world_seed
 	add_child(world)
 	entities = Node2D.new()
 	entities.name = "Entities"
 	entities.y_sort_enabled = true
 	entities.add_to_group("entities")
 	add_child(entities)
-	world.generate(world_seed, entities)
+	world.generate(region_seed(), entities)
 	explored.resize(World.W * World.H)
-	explored.fill(0)
 	explored_coarse.resize((World.W >> 2) * (World.H >> 2))
-	explored_coarse.fill(0)
-	if save.is_empty():
+	# You know your home region: its map starts filled in. Other regions you have to explore.
+	var known := 1 if (save.is_empty() and region == Vector2i.ZERO) else 0
+	explored.fill(known)
+	explored_coarse.fill(known)
+	if fresh:
 		_spawn_loot()
 	else:
 		var saved_at := {}
@@ -103,14 +135,17 @@ func _ready() -> void:
 	survivors.y_sort_enabled = true
 	entities.add_child(survivors)
 
-	if save.is_empty():
+	if not save.is_empty():
+		_apply_save(save)
+	if save.has("arrive"):
+		_arrive(String(save["arrive"]["side"]), float(save["arrive"]["along"]))
+		player.say("Entering " + region_name)
+	if fresh:
 		for i in MAX_ZOMBIES_DAY:
 			spawn_zombie(700.0)
 		for k in 6:
 			if not spawn_survivor_group(1300.0, 3200.0).is_empty():
 				break
-	else:
-		_apply_save(save)
 	for i in MAX_RABBITS:
 		spawn_animal("rabbit", 500.0)
 	for i in MAX_DEER:
@@ -140,11 +175,76 @@ func _ready() -> void:
 	hud.main = self
 	layer.add_child(hud)
 
-	Game.noise_made.connect(_on_noise)
 	Input.set_default_cursor_shape(Input.CURSOR_CROSS)
 	hud.prepare_map() # build the paper map now, not when it's first opened
 	if save.is_empty():
 		save_game() # a new survivor replaces the old save straight away
+
+
+## Puts you just inside the edge of the region you arrived at (`side`), across from where you left.
+func _arrive(side: String, along: float) -> void:
+	var a := clampi(int(along / World.T), 3, World.W - 4)
+	for depth in range(2, 60):
+		for k in 25:
+			var off := (k + 1) / 2 * (1 if k % 2 == 1 else -1)
+			var c: Vector2i
+			match side:
+				"W":
+					c = Vector2i(depth, a + off)
+				"E":
+					c = Vector2i(World.W - 1 - depth, a + off)
+				"N":
+					c = Vector2i(a + off, depth)
+				_:
+					c = Vector2i(a + off, World.H - 1 - depth)
+			if world.is_walkable(c) and world.building_at(world.center_of(c)) < 0:
+				player.position = world.center_of(c)
+				return
+
+
+## Walks you into the neighbouring region (dir = which way you went off the map).
+func travel(dir: Vector2i) -> void:
+	if _travelling or player.dead:
+		return
+	_travelling = true
+	var data: Dictionary = to_save().duplicate(true)
+	regions_state[_rkey(region)] = {"loot": data["loot"], "taps": data["taps"], "fires": data["fires"],
+		"explored": Marshalls.raw_to_base64(explored.compress(FileAccess.COMPRESSION_DEFLATE))}
+	var nr := region + dir
+	var nk := _rkey(nr)
+	data.erase("explored_raw")
+	data.erase("explored")
+	data["zombies"] = []
+	data["survivors"] = []
+	if regions_state.has(nk):
+		var st: Dictionary = regions_state[nk]
+		data["loot"] = st["loot"]
+		data["taps"] = st["taps"]
+		data["fires"] = st["fires"]
+		data["explored"] = st["explored"]
+		regions_state.erase(nk)
+		data.erase("fresh_region")
+	else:
+		data["loot"] = []
+		data["taps"] = []
+		data["fires"] = []
+		data["fresh_region"] = true
+	data["region"] = [nr.x, nr.y]
+	data["regions"] = regions_state.duplicate(true)
+	var sides := {Vector2i(1, 0): "W", Vector2i(-1, 0): "E", Vector2i(0, 1): "N", Vector2i(0, -1): "S"}
+	data["arrive"] = {"side": sides[dir], "along": player.position.y if dir.x != 0 else player.position.x}
+	hud.travel_text = "Travelling to %s..." % World.region_name(world_seed, nr)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if _save_task != -1:
+		WorkerThreadPool.wait_for_task_completion(_save_task)
+		_save_task = -1
+	for c in get_children():
+		remove_child(c)
+		c.free()
+	_setup(data)
+	_travelling = false
+	save_game()
 
 
 ## Marks the area around a position as explored on the map.
@@ -219,6 +319,7 @@ func to_save() -> Dictionary:
 	var p := player
 	return {
 		"seed": world_seed, "dead": p.dead, "day": day, "time_of_day": time_of_day,
+		"region": [region.x, region.y], "regions": regions_state,
 		"survived": survived, "kills": kills,
 		"player": {
 			"pos": [p.position.x, p.position.y], "health": p.health, "hunger": p.hunger,
@@ -298,6 +399,18 @@ func quit_to_menu() -> void:
 func _process(delta: float) -> void:
 	if not player.dead:
 		survived += delta
+		# Walked off the edge of the map: on to the next region
+		var pp := player.position
+		var szp := world.size_px()
+		if not _travelling:
+			if pp.x < 6.0:
+				travel(Vector2i(-1, 0))
+			elif pp.x > szp.x - 6.0:
+				travel(Vector2i(1, 0))
+			elif pp.y < 6.0:
+				travel(Vector2i(0, -1))
+			elif pp.y > szp.y - 6.0:
+				travel(Vector2i(0, 1))
 	world.update_roofs(player.global_position, delta)
 	time_of_day += delta / DAY_LENGTH
 	if time_of_day >= 1.0:

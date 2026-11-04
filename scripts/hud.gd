@@ -50,6 +50,7 @@ var _menu := {} # right-click menu: {"loc", "pos", "items": [[label, action], ..
 var _near_scroll := 0
 var left_tab := "near" # "near" or "craft"
 var map_open := false
+var travel_text := "" # "Travelling to ..." while the next region is built
 var _map_tex: ImageTexture # terrain: paper, forests, water (1 px = 2x2 tiles)
 var _fog_img: Image
 var _fog_tex: ImageTexture # unexplored areas (1 px = 4x4 tiles)
@@ -75,6 +76,11 @@ func _process(_delta: float) -> void:
 		Game.open_inventory = false
 		set_inventory_open(true)
 	_mouse = get_viewport().get_mouse_position()
+	# Auto aim needs no mouse while walking around: hide the cursor (it comes back in menus)
+	var hide: bool = Game.aim_mode == "auto" and not Game.ui_open and not get_tree().paused and main != null and main.player != null and not main.player.dead
+	var want := Input.MOUSE_MODE_HIDDEN if hide else Input.MOUSE_MODE_VISIBLE
+	if Input.mouse_mode != want:
+		Input.mouse_mode = want
 	queue_redraw()
 
 
@@ -342,7 +348,7 @@ func _input(event: InputEvent) -> void:
 		if left_tab == "craft":
 			for i in Crafting.RECIPES.size():
 				if craft_row(i).has_point(mb.position):
-					p.craft(Crafting.RECIPES[i]["id"])
+					p.craft_timed(Crafting.RECIPES[i]["id"])
 					get_viewport().set_input_as_handled()
 					return
 	if left_tab == "craft" and NEAR_RECT.has_point(mb.position) and _drag.is_empty():
@@ -565,6 +571,11 @@ func _temp_color(t: float) -> Color:
 # ---------------------------------------------------------------- draw
 
 func _draw() -> void:
+	if travel_text != "":
+		var vs0 := get_viewport_rect().size
+		draw_rect(Rect2(Vector2.ZERO, vs0), Color("1a1016"))
+		draw_string(_font, Vector2(0, vs0.y / 2.0), travel_text, HORIZONTAL_ALIGNMENT_CENTER, vs0.x, 28, Color("e8dcc0"))
+		return
 	if main == null or main.player == null:
 		return
 	var p: Player = main.player
@@ -595,10 +606,23 @@ func _draw() -> void:
 	if p.poison_t > 0.0:
 		_text(Vector2(bx + 186, by + 70), "Sick (%ds)" % int(ceil(p.poison_t)), 15, Color(0.7, 0.9, 0.4))
 
+	# Timed action (eating, bandaging, searching...): a progress bar
+	if p.busy_t > 0.0 and not p.dead:
+		var bw := 260.0
+		var by2 := vs.y - 222.0 if not inventory_open else 70.0
+		var bx2 := (vs.x - bw) / 2.0
+		var frac := 1.0 - p.busy_t / maxf(p.busy_total, 0.01)
+		_text(Vector2(0, by2 - 8), "%s %.1fs" % [p.busy_label.trim_suffix(".."), p.busy_t], 16, C_TEXT, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		draw_rect(Rect2(bx2 - 2, by2 - 2, bw + 4, 14), C_EDGE)
+		draw_rect(Rect2(bx2, by2, bw * frac, 10), Color("e0c070"))
+
 	# Weapon slots 1 / 2 / 3 (bottom-centre)
 	var cs := Game.tex("ui_cell").get_size() * UI_SCALE
 	var hx := vs.x / 2.0 - cs.x * 1.5 - 8
 	var hy := vs.y - cs.y - 12.0
+	if not inventory_open:
+		var aim_txt := "AUTO AIM  -  Space: shoot  -  T: mouse aim" if Game.aim_mode == "auto" else "MOUSE AIM  -  click: shoot  -  T: auto aim"
+		_text(Vector2(0, hy - 8), aim_txt, 12, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	for i in (0 if inventory_open else 3):
 		var slot: String = Inventory.WEAPON_SLOTS[i]
 		var r := Rect2(Vector2(hx + i * (cs.x + 8), hy), cs)
@@ -641,9 +665,10 @@ func _draw() -> void:
 	# Clock / stats (top-right)
 	_text(Vector2(vs.x - 20, 32), "Day %d  %s" % [main.day, main.clock_text()], 20, Color.WHITE, HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	_text(Vector2(vs.x - 20, 54), "Survived %d:%02d   Kills %d" % [st / 60, st % 60, main.kills], 14, Color(0.85, 0.85, 0.85), HORIZONTAL_ALIGNMENT_RIGHT, 0)
+	_text(Vector2(vs.x - 20, 74), main.region_name, 14, Color(0.95, 0.85, 0.6), HORIZONTAL_ALIGNMENT_RIGHT, 0)
 
 	# Action button: appears automatically near containers / items / fires / carcasses
-	if _has_action(p) and not p.dead and not inventory_open:
+	if _has_action(p) and not p.dead and not inventory_open and p.busy_t <= 0.0:
 		var ar := action_rect()
 		var pressed := _btn_down and ar.has_point(_mouse)
 		_tex(Game.tex("ui_button_pressed" if pressed else "ui_button"), ar.position + Vector2(0, 6 if pressed else 0), UI_SCALE)
@@ -657,8 +682,8 @@ func _draw() -> void:
 	# Help
 	if show_help and not inventory_open and not map_open:
 		var lines := [
-			"WASD move   Shift sprint   Melee is automatic   Guns aim for you - stand still, then click",
-			"E / button: search, pick up, skin, cook, drink   R reload   X lower weapon   C campfire",
+			"WASD move   Shift sprint   Melee is automatic   Space shoot (aims for you - stand still to steady)",
+			"E search, pick up, skin, cook, drink   R reload   X lower weapon   C campfire   T auto / mouse aim",
 			"1 / 2 / 3: main / secondary / melee   Mouse wheel: zoom   K crafting   M map",
 			"Tab inventory: click an item to eat, drink, bandage, wear...   Esc pause   F1 hide help",
 		]
@@ -957,6 +982,22 @@ func _draw_map(p: Player, vs: Vector2) -> void:
 		for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
 			draw_string(_font, tp + o, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(MAP_PAPER, 0.9))
 		draw_string(_font, tp, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, MAP_INK)
+	# Roads out of the region: arrows to the neighbouring regions
+	for side in ["N", "S", "W", "E"]:
+		var ep: Vector2i = w.edge_exit(side)
+		var spos: Vector2 = to_screen.call(Vector2(ep) + Vector2(0.5, 0.5))
+		var out: Vector2 = {"N": Vector2.UP, "S": Vector2.DOWN, "W": Vector2.LEFT, "E": Vector2.RIGHT}[side]
+		spos = spos.clamp(r.position + Vector2(18, 18), r.end - Vector2(18, 18))
+		if not r.grow(-2).has_point(to_screen.call(Vector2(ep))) and _map_zoom > 1.01:
+			continue
+		var nb: String = World.region_name(main.world_seed, main.region + Vector2i(out))
+		var tip := spos + out * 8.0
+		draw_colored_polygon(PackedVector2Array([tip, spos - out * 4.0 + out.orthogonal() * 7.0, spos - out * 4.0 - out.orthogonal() * 7.0]), Color("6e5038"))
+		var lbl := "to " + nb
+		var lw := _font.get_string_size(lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 12).x
+		var lp := spos - out * 16.0 + Vector2(-lw / 2.0, 4)
+		lp.x = clampf(lp.x, r.position.x + 4, r.end.x - lw - 4)
+		draw_string(_font, lp, lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("6e5038"))
 	# You are here
 	var me: Vector2 = to_screen.call(p.global_position / World.T)
 	if r.has_point(me):
@@ -985,7 +1026,7 @@ func _draw_map(p: Player, vs: Vector2) -> void:
 	var lx := r.end.x + 30.0
 	var ly := r.position.y + 4.0
 	draw_rect(Rect2(lx - 10, ly - 4, 190, 330), Color(0.12, 0.08, 0.1, 0.85))
-	_text(Vector2(lx, ly + 18), "MAP", 18, C_TEXT)
+	_text(Vector2(lx, ly + 18), main.region_name.to_upper(), 16, C_TEXT)
 	var rows := [["city", "City"], ["town", "Town"], ["village", "Village"], ["hamlet", "Hamlet"]]
 	for i in rows.size():
 		var y := ly + 46 + i * 26

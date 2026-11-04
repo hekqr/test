@@ -236,6 +236,29 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
   - Ground items and containers no longer redraw every frame
 - 🔧 Dev tools: `tests/perf_probe.tscn` (startup, autosave, frame spikes), `tests/loot_census.tscn`
 
+## Milestone 10 — Regions, auto aim, timed actions
+- ✅ **Endless chain of regions**: walk off any edge of the map into the next region (each 512 × 512, its own
+  name, settlements, lakes and forests). Roads cross the edges at the same point on both sides. Each region
+  remembers what you left there (searched containers, piles, fires, tap water, the map you explored).
+  The paper map shows arrows to the neighbouring regions
+- ✅ **Your home region's map starts filled in**; other regions start blank
+- ✅ **You start with nothing** but your t-shirt and jeans
+- ✅ **Auto aim (default)**: Space shoots, the gun locks onto the nearest enemy you can actually hit (not behind
+  walls, trees or cars), you face where you walk, the mouse cursor is hidden. **T** switches to mouse aim
+  (aim with the mouse, click to shoot); the choice is remembered
+- ✅ **Timed actions** with a progress bar (you can only shuffle along meanwhile): searching 1 s, picking up a
+  pile 1 s, eating / drinking 3 s, bandage / first aid 5 s, skinning 3 s, crafting 2 s, repairing 3 s, tearing
+  2 s, building a fire 2 s
+- ✅ **Searching drops the loot on the floor** in front of the container (a pile you pick up); searched
+  containers aren't offered again. Skinning drops the meat and leather too
+- ✅ Zombies after you inside a building wait at its door (no more map-wide path searches)
+
+## Ideas for endless play (next)
+- 📌 Base building (walls, gates, storage, garden beds, rain collector, workbench)
+- 📌 Renewable food: fishing, snares, gardens, berries / mushrooms, slow loot respawn
+- 📌 Military camps (fenced, tents, watchtowers, military crates, armed zombies)
+- 📌 Region biomes (snow, plains, coast) and danger rising with distance from home
+
 ## Planned
 - 📌 **Base building** (wooden & reinforced walls and gates are in the art pack)
 

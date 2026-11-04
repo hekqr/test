@@ -96,7 +96,7 @@ func _ready() -> void:
 		type = "walker"
 	_t = TYPES[type]
 	collision_layer = Game.LAYER_ZOMBIE
-	collision_mask = Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_ZOMBIE | Game.LAYER_NPC | Game.LAYER_WATER | Game.LAYER_DOOR
+	collision_mask = Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_ZOMBIE | Game.LAYER_NPC | Game.LAYER_WATER | Game.LAYER_DOOR | Game.LAYER_EDGE
 	add_child(Game.foot_shape(RADIUS + (3.0 if type == "brute" else 0.0), 9.0 if type == "brute" else 7.0))
 	health = float(_t["health"]) * _vary()
 	max_health = health
@@ -343,10 +343,9 @@ func _set_path(to: Vector2) -> void:
 					if p.distance_to(global_position) < best.distance_to(global_position):
 						best = p
 		if best != Vector2.INF:
-			if global_position.distance_to(best) < 20.0 and world.door_closed[world.idx(world.cell_of(best))] == 0:
-				pass # at the (open) door: go on in
-			elif not _door_open_for(b):
-				to = best
+			# Wait outside the door; once it's open and they can see you, they come straight in (chasing
+			# by sight needs no path search).
+			to = best
 	path = world.find_path(global_position, to, true)
 	_path_i = 0
 

@@ -54,6 +54,22 @@ const WALK_SPREAD := 0.22 # extra cone while walking
 const SPRINT_SPREAD := 0.5 # extra cone while sprinting
 var _shot_t := 0.0
 var _hunger_msg_t := 0.0
+# Timed actions: eating, bandaging, searching... take a while (you can only shuffle along meanwhile).
+var busy_t := 0.0
+var busy_total := 0.0
+var busy_label := ""
+var _busy_done := Callable()
+const T_SEARCH := 1.0
+const T_PICKUP := 1.0
+const T_EAT := 3.0
+const T_DRINK := 3.0
+const T_BANDAGE := 5.0
+const T_FIRSTAID := 5.0
+const T_SKIN := 3.0
+const T_CRAFT := 2.0
+const T_REPAIR := 3.0
+const T_TEAR := 2.0
+const T_FIRE := 2.0
 var _thirst_msg_t := 0.0
 var _hurt_t := 0.0
 var _noise_t := 0.0
@@ -108,9 +124,7 @@ func _ready() -> void:
 	inv.pickup(Items.make("tshirt"))
 	inv.pickup(Items.make("jeans"))
 	update_outfit()
-	inv.pickup(Items.make("food"))
-	inv.pickup(Items.make("water"))
-	inv.pickup(Items.make("bandage"))
+	# You start with nothing but the clothes you're wearing.
 	say("Find food, water and a weapon. Stay alive.")
 
 
@@ -230,7 +244,7 @@ func do_action(loc: Dictionary, action: String) -> void:
 	var id: String = it["id"]
 	match action:
 		"use":
-			_consume(loc, id)
+			_consume_timed(loc, id)
 		"equip":
 			var err := inv.equip(loc)
 			say(err if err != "" else ("Wearing " if Items.is_clothing(id) else "Equipped ") + Items.display_name(it).to_lower())
@@ -242,13 +256,28 @@ func do_action(loc: Dictionary, action: String) -> void:
 				inv.put(loc, taken)
 				say("No room to put it away")
 		"tear":
-			tear(loc)
+			start_busy("Tearing..", T_TEAR, func():
+				var it2 = inv.get_at(loc)
+				if it2 != null and it2["id"] == id:
+					tear(loc))
 		"repair":
-			repair(loc)
+			if Items.is_ruined(it) or float(it.get("cond", 100.0)) >= 100.0 or inv.find("sewing_kit" if Items.repair_kind(id) == "sew" else "toolbox").is_empty():
+				repair(loc) # just says why it can't
+			else:
+				start_busy("Repairing..", T_REPAIR, func():
+					var it2 = inv.get_at(loc)
+					if it2 != null and it2["id"] == id:
+						repair(loc))
 		"drink_gourd":
-			drink_gourd(loc)
+			if int(it.get("water", 0)) <= 0 or thirst > 97.0:
+				drink_gourd(loc) # just says why not
+			else:
+				start_busy("Drinking..", T_DRINK, func():
+					var it2 = inv.get_at(loc)
+					if it2 != null and it2["id"] == id:
+						drink_gourd(loc))
 		"fire":
-			build_fire()
+			build_fire_timed()
 		"take":
 			var left := inv.pickup(it)
 			var taken: Dictionary = inv.take(loc)
@@ -259,6 +288,35 @@ func do_action(loc: Dictionary, action: String) -> void:
 				say("No free slots")
 		"drop":
 			drop(loc)
+
+
+## Starts a timed action. `done` runs when the time is up. Only one at a time.
+func start_busy(label: String, secs: float, done: Callable) -> bool:
+	if busy_t > 0.0:
+		say("Busy: " + busy_label.trim_suffix("..").to_lower())
+		return false
+	busy_label = label
+	busy_total = secs
+	busy_t = secs
+	_busy_done = done
+	reloading = false
+	return true
+
+
+## Completes the current timed action right away (also what the timer calls).
+func finish_busy() -> void:
+	busy_t = 0.0
+	var f := _busy_done
+	_busy_done = Callable()
+	if f.is_valid() and not dead:
+		f.call()
+
+
+func cancel_busy() -> void:
+	if busy_t > 0.0:
+		busy_t = 0.0
+		_busy_done = Callable()
+		say("Stopped")
 
 
 ## Old one-click behaviour, still used for quick right-click without a menu (tests).
@@ -406,6 +464,46 @@ func craft(recipe_id: String) -> bool:
 	return true
 
 
+## Eat / drink / bandage from the inventory: takes a few seconds, then the item is used up.
+func _consume_timed(loc: Dictionary, id: String) -> void:
+	var why := _not_needed(id)
+	if why != "":
+		say(why)
+		return
+	var d := Items.def(id)
+	var label := "Eating.."
+	var secs := T_EAT
+	if Items.kind(id) == "medical":
+		label = "Bandaging.." if id == "bandage" else "Using first aid kit.."
+		secs = T_BANDAGE if id == "bandage" else T_FIRSTAID
+	elif d.get("thirst", 0.0) > d.get("hunger", 0.0):
+		label = "Drinking.."
+		secs = T_DRINK
+	start_busy(label, secs, func():
+		var it2 = inv.get_at(loc)
+		if it2 != null and it2["id"] == id:
+			_consume(loc, id)
+		elif inv.count_of(id) > 0:
+			use_item(id)
+		else:
+			say("It's gone"))
+
+
+## "" if using the item would do something, otherwise why not.
+func _not_needed(id: String) -> String:
+	var d := Items.def(id)
+	if Items.kind(id) == "medical":
+		var cures: Array = d.get("cures", [])
+		if (bleeding and "bleeding" in cures) or (poison_t > 0.0 and "poison" in cures) or (d.get("heal", 0.0) > 0.0 and health < 100.0):
+			return ""
+		return "You don't need that"
+	var h: float = d.get("hunger", 0.0)
+	var t: float = d.get("thirst", 0.0)
+	if (h <= 0.0 or hunger > 97.0) and (t <= 0.0 or thirst > 97.0):
+		return "Not hungry" if h > t else "Not thirsty"
+	return ""
+
+
 func _consume(loc: Dictionary, id: String) -> void:
 	if not _apply_consumable(id):
 		return
@@ -434,6 +532,10 @@ func _physics_process(delta: float) -> void:
 
 
 func _timers(delta: float) -> void:
+	if busy_t > 0.0:
+		busy_t -= delta
+		if busy_t <= 0.0:
+			finish_busy()
 	if cook_t > 0.0:
 		cook_t -= delta
 		if cook_t <= 0.0:
@@ -461,19 +563,24 @@ func _move(delta: float) -> void:
 	var dir := Vector2.ZERO
 	if not Game.ui_open:
 		dir = Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	var sprinting := Input.is_action_pressed("sprint") and dir != Vector2.ZERO
+	var sprinting := Input.is_action_pressed("sprint") and dir != Vector2.ZERO and busy_t <= 0.0
 	_sprinting = sprinting
 	var speed := SPRINT_SPEED if sprinting else WALK_SPEED
 	if health < 30.0:
 		speed *= 0.8
+	if busy_t > 0.0:
+		speed *= 0.5 # eating / bandaging / searching: you can only shuffle along
 	velocity = dir * speed
 	move_and_slide()
 	_moving = dir != Vector2.ZERO
 
-	if not Game.ui_open:
-		var m := get_global_mouse_position() - (global_position + HAND)
-		if m.length() > 2.0:
-			aim = m.normalized()
+	if Game.aim_mode == "mouse":
+		if not Game.ui_open:
+			var m := get_global_mouse_position() - (global_position + HAND)
+			if m.length() > 2.0:
+				aim = m.normalized()
+	elif dir != Vector2.ZERO:
+		aim = aim.lerp(dir.normalized(), 0.35).normalized() # auto aim: face where you walk
 	_update_aim(delta)
 
 	if _moving:
@@ -570,7 +677,9 @@ func _actions() -> void:
 	var w := weapon()
 	if w["melee"]:
 		_auto_melee()
-	elif Input.is_action_pressed("attack") and not Game.click_used and _attack_cd <= 0.0 and not reloading:
+		return
+	var pull := Input.is_action_pressed("fire") or (Game.aim_mode == "mouse" and Input.is_action_pressed("attack") and not Game.click_used)
+	if pull and _attack_cd <= 0.0 and not reloading and busy_t <= 0.0:
 		shoot()
 
 
@@ -585,7 +694,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		return
 	# These also work with the inventory open. (Eating, drinking and bandaging are done from the inventory.)
-	if event.is_action_pressed("weapon_primary"):
+	if event.is_action_pressed("aim_mode"):
+		Game.aim_mode = "mouse" if Game.aim_mode == "auto" else "auto"
+		Game.save_settings()
+		say("Auto aim: Space shoots the nearest enemy" if Game.aim_mode == "auto" else "Mouse aim: click to shoot")
+	elif event.is_action_pressed("weapon_primary"):
 		switch_weapon("primary")
 	elif event.is_action_pressed("weapon_secondary"):
 		switch_weapon("secondary")
@@ -600,7 +713,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("interact"):
 		interact()
 	elif event.is_action_pressed("build_fire"):
-		build_fire()
+		build_fire_timed()
 	else:
 		return
 	get_viewport().set_input_as_handled()
@@ -646,20 +759,30 @@ func interact() -> void:
 			use_fire(nearest_fire)
 			return
 		"water":
-			use_water(nearest_tap)
+			var tap := nearest_tap
+			if tap != null and tap.water <= 0:
+				use_water(tap) # "The tap is dry"
+			else:
+				start_busy("Drinking..", T_DRINK, func(): use_water(tap))
 			return
 		"":
 			return
-	if nearest_loot.kind == "carcass":
+	var spot := nearest_loot
+	if spot.kind == "carcass":
 		if not has_blade():
 			say("You need a knife or an axe to skin it")
 			return
-		say(nearest_loot.search(self).replace("Took:", "Skinned:"))
-	elif nearest_loot.is_bag:
-		say(nearest_loot.search(self))
+		start_busy("Skinning..", T_SKIN, func():
+			if is_instance_valid(spot):
+				say(spot.spill(self).replace("Found:", "Skinned:")))
+	elif spot.is_bag:
+		start_busy("Picking up..", T_PICKUP, func():
+			if is_instance_valid(spot) and not spot.is_queued_for_deletion():
+				say(spot.search(self)))
 	else:
-		nearest_loot.opened = true
-		Game.open_inventory = true
+		start_busy("Searching..", T_SEARCH, func():
+			if is_instance_valid(spot):
+				say(spot.spill(self)))
 
 
 func has_blade() -> bool:
@@ -667,6 +790,29 @@ func has_blade() -> bool:
 		return true
 	var m = inv.gear["melee"]
 	return m != null and m["id"] in ["knife", "axe"]
+
+
+## Building a fire takes a moment.
+func build_fire_timed() -> void:
+	if indoors() or inv.count_of("sticks") < 3 or inv.count_of("matches") < 1:
+		build_fire() # just says why not
+		return
+	start_busy("Building a fire..", T_FIRE, build_fire)
+
+
+## Crafting from the menu takes a moment.
+func craft_timed(recipe_id: String) -> void:
+	var r := Crafting.get_recipe(recipe_id)
+	if r.is_empty():
+		return
+	var miss := Crafting.missing(r, inv)
+	if miss != "":
+		say("Missing: " + miss)
+		return
+	if recipe_id == "campfire":
+		build_fire_timed()
+		return
+	start_busy("Crafting %s.." % String(r["name"]).to_lower(), T_CRAFT, func(): craft(recipe_id))
 
 
 ## C / right-click sticks: build a campfire (3 sticks + 1 match) at your feet.
@@ -804,7 +950,7 @@ func _update_aim(delta: float) -> void:
 			# Keep the current target unless something is clearly closer (no flickering).
 			if t == aim_target:
 				d *= 0.75
-			if d < best_d and world.has_los(global_position + HAND, t.global_position + Vector2(0, -8)):
+			if d < best_d and _clear_shot(t):
 				best_d = d
 				best = t
 		if best != null:
@@ -824,6 +970,15 @@ func _update_aim(delta: float) -> void:
 		aim_spread = maxf(aim_spread - (smax - smin) / float(w["aim_time"]) * delta, target_spread)
 	else:
 		aim_spread = minf(aim_spread + 2.5 * delta, target_spread)
+
+
+## Only lock onto something a bullet can actually reach (no walls, trees or cars in the way).
+func _clear_shot(t: Node2D) -> bool:
+	var to := t.global_position + Vector2(0, -8)
+	if not world.has_los(global_position + HAND, to):
+		return false
+	var q := PhysicsRayQueryParameters2D.create(global_position + HAND, to, Game.LAYER_WALL, [get_rid()])
+	return get_world_2d().direct_space_state.intersect_ray(q).is_empty()
 
 
 ## How settled the aim is: 0 = wide open, 1 = fully steady.
@@ -992,16 +1147,22 @@ func take_damage(amount: float, can_bleed := true) -> void:
 func _find_loot() -> void:
 	nearest_loot = null
 	var best := INF
+	var best_pile: LootSpot = null
 	for n in get_tree().get_nodes_in_group("loot"):
 		var l := n as LootSpot
 		if l.is_queued_for_deletion():
 			continue
+		if not l.is_bag and l.kind != "carcass" and l.opened and l.contents.is_empty():
+			continue # already searched
 		var d := l.global_position.distance_to(global_position)
 		# Closest relative to its reach, so a big car doesn't beat a box right next to you.
 		if d < l.reach and d / l.reach < best:
 			best = d / l.reach
 			nearest_loot = l
-	inv.near = nearest_loot if nearest_loot == null or nearest_loot.kind != "carcass" else null
+		if l.is_bag and d < l.reach and (best_pile == null or d < best_pile.global_position.distance_to(global_position)):
+			best_pile = l
+	# The inventory's nearby list shows what's lying on the ground (searching a container drops its loot there).
+	inv.near = best_pile
 	nearest_tap = null
 	var best_t := 46.0
 	for n in get_tree().get_nodes_in_group("taps"):

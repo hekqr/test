@@ -44,6 +44,39 @@ var building_id := PackedInt32Array() # per cell: building index, or -1
 var facades: Array[Sprite2D] = [] # front wall of each building (3/4 view), fades with the roof
 var _face_windows: Array = [] # [{cell, tex}] windows on interior wall faces
 var timing := false # print how long each generation step takes (dev)
+## The world is an endless chain of regions; this is one of them. Roads leave it at one point on each
+## edge, and the neighbouring region's road starts at the same point, so they join up.
+var region := Vector2i.ZERO
+var edge_seed := 0 # the game's seed (edges are shared by two regions, so they can't use the region's seed)
+
+const REGION_NAMES := ["Ashen Vale", "Coldwater Basin", "Greyridge", "Northmarch", "Hollow Plains", "Blackpine",
+	"Ironwood", "Mistfen", "Stonereach", "Redmoor", "Silverbrook", "Wolfden Hills", "Duskmarsh", "Highcairn",
+	"Emberfield", "Frostmere", "Oakshade", "Thornvale", "Lowfield", "Ravenscar", "Brightwater", "Fallowmark",
+	"Saltmere", "Briarwood", "Kestrel Heath", "Larchmoor", "Elderglen", "Westerling", "Cinderfall", "Rookmoor"]
+
+
+static func region_name(game_seed: int, r: Vector2i) -> String:
+	if r == Vector2i.ZERO:
+		return REGION_NAMES[posmod(game_seed, 8)]
+	return REGION_NAMES[posmod(hash([game_seed, "region", r.x, r.y]), REGION_NAMES.size())]
+
+
+## Where the road crosses an edge of this region ("N", "S", "W", "E"): a border cell.
+func edge_exit(side: String) -> Vector2i:
+	var h := 0
+	match side:
+		"W":
+			h = hash([edge_seed, "v", region.x, region.y])
+			return Vector2i(0, 40 + posmod(h, H - 80))
+		"E":
+			h = hash([edge_seed, "v", region.x + 1, region.y])
+			return Vector2i(W - 1, 40 + posmod(h, H - 80))
+		"N":
+			h = hash([edge_seed, "h", region.x, region.y])
+			return Vector2i(40 + posmod(h, W - 80), 0)
+		_:
+			h = hash([edge_seed, "h", region.x, region.y + 1])
+			return Vector2i(40 + posmod(h, W - 80), H - 1)
 var taps: Array[Vector2] = [] # bathroom taps (at house baths) - some still have water
 var door_cells: Array = [] # every door: {"cell": Vector2i, "b": building index}
 var door_closed := PackedByteArray() # per cell: 1 = a closed door (blocks zombies and sight)
@@ -354,9 +387,32 @@ func _make_roads() -> void:
 		edges.append([best[0], best[1]])
 	if settlements.size() > 3:
 		edges.append([settlements.size() - 1, settlements.size() - 2])
+	# Roads to the four edges of the region (they carry on in the next region)
+	for side in ["N", "S", "W", "E"]:
+		var ep := edge_exit(side)
+		var inward: Vector2i = ep + {"N": Vector2i(0, 14), "S": Vector2i(0, -14), "W": Vector2i(14, 0), "E": Vector2i(-14, 0)}[side]
+		var nearest := 0
+		for i in settlements.size():
+			if Vector2(settlements[i]["center"]).distance_to(Vector2(inward)) < Vector2(settlements[nearest]["center"]).distance_to(Vector2(inward)):
+				nearest = i
+		if side in ["W", "E"]:
+			_add_segment(false, ep.y - 1, mini(ep.x, inward.x), maxi(ep.x, inward.x) + 2, "highway", -1)
+		else:
+			_add_segment(true, ep.x - 1, mini(ep.y, inward.y), maxi(ep.y, inward.y) + 2, "highway", -1)
+		edges.append([nearest, -1, inward])
 	# Each road leaves a settlement straight along its main street (so it never cuts through the building
 	# lots), then bends once out in the wild.
 	for e in edges:
+		if int(e[1]) == -1:
+			var ex := _cluster_exit(e[0], e[2])
+			var ip: Vector2i = e[2]
+			if rng.randf() < 0.5:
+				_add_segment(false, ex.y - 1, mini(ex.x, ip.x) - 1, maxi(ex.x, ip.x) + 2, "highway", -1)
+				_add_segment(true, ip.x - 1, mini(ex.y, ip.y) - 1, maxi(ex.y, ip.y) + 2, "highway", -1)
+			else:
+				_add_segment(true, ex.x - 1, mini(ex.y, ip.y) - 1, maxi(ex.y, ip.y) + 2, "highway", -1)
+				_add_segment(false, ip.y - 1, mini(ex.x, ip.x) - 1, maxi(ex.x, ip.x) + 2, "highway", -1)
+			continue
 		var ea := _cluster_exit(e[0], settlements[e[1]]["center"])
 		var eb := _cluster_exit(e[1], settlements[e[0]]["center"])
 		var h_first := _road_overlaps(ea, eb, true) <= _road_overlaps(ea, eb, false)
@@ -415,8 +471,8 @@ func _road_overlaps(a: Vector2i, b: Vector2i, horizontal_first: bool) -> int:
 
 ## Paints a 3-wide road from `from` to `to` along x (vertical = false) or y.
 func _add_segment(vertical: bool, at: int, from: int, to: int, kind: String, town: int) -> void:
-	from = clampi(from, 1, (H if vertical else W) - 2)
-	to = clampi(to, 1, (H if vertical else W) - 1)
+	from = clampi(from, 0, (H if vertical else W) - 1)
+	to = clampi(to, 0, H if vertical else W) # roads may run right up to the region's edge
 	at = clampi(at, 1, (W if vertical else H) - 4)
 	segments.append({"vertical": vertical, "at": at, "from": from, "to": to, "kind": kind, "town": town})
 	for i in range(from, to):
@@ -495,11 +551,12 @@ func _mask_of(types: Array) -> PackedByteArray:
 ## A few buildings close together on both sides of each cluster's street(s). Nothing along the highways:
 ## between clusters it's a long walk through the wild.
 func _make_buildings() -> void:
-	for pass_i in 2:
+	# Both sides of every street, then two more passes to fill gaps where a building didn't fit
+	for pass_i in 4:
 		for seg in segments:
 			if seg["kind"] == "street":
 				var mix: Dictionary = TOWN_MIX[settlements[seg["town"]]["type"]]
-				_line_of_buildings(seg, -1 if pass_i == 0 else 1, mix, 0.04, seg["town"])
+				_line_of_buildings(seg, -1 if pass_i % 2 == 0 else 1, mix, 0.04, seg["town"])
 
 
 func _line_of_buildings(seg: Dictionary, side: int, mix: Dictionary, empty_lot: float, town: int) -> void:
@@ -930,12 +987,10 @@ func water_near(p: Vector2, reach := 26.0) -> bool:
 	return false
 
 
+## The region's edge is open: you walk on into the next region. Zombies, animals and bandits stay in
+## (an invisible wall on their own physics layer, see _build_collision).
 func _make_border() -> void:
-	for i in W:
-		set_tile(Vector2i(i, 0), WALL)
-		set_tile(Vector2i(i, H - 1), WALL)
-		set_tile(Vector2i(0, i), WALL)
-		set_tile(Vector2i(W - 1, i), WALL)
+	pass
 
 
 ## You start on the main street of a village.
@@ -986,6 +1041,19 @@ func _build_collision() -> void:
 		cs.shape = rs
 		cs.position = r.get_center()
 		walls.add_child(cs)
+	# Region edge: keeps creatures in; you can walk out (into the next region)
+	var edge := StaticBody2D.new()
+	edge.collision_layer = Game.LAYER_EDGE
+	edge.collision_mask = 0
+	add_child(edge)
+	var sz := size_px()
+	for rr in [Rect2(-32, -32, sz.x + 64, 32), Rect2(-32, sz.y, sz.x + 64, 32), Rect2(-32, 0, 32, sz.y), Rect2(sz.x, 0, 32, sz.y)]:
+		var rs := RectangleShape2D.new()
+		rs.size = rr.size
+		var cs := CollisionShape2D.new()
+		cs.shape = rs
+		cs.position = rr.get_center()
+		edge.add_child(cs)
 	# Water blocks walking, not bullets or sight (its own layer).
 	var water := StaticBody2D.new()
 	water.collision_layer = Game.LAYER_WATER
