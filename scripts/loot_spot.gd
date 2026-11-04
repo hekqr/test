@@ -12,6 +12,7 @@ var loaded := false # restored from a save: don't roll new contents
 var tex_name := "" # sprite override (cars, bins)
 var flip := false
 var reach := 44.0 # how close the player must be
+var animal := "" # for carcasses: "rabbit" / "deer"
 var _sprite: Sprite2D
 
 
@@ -34,7 +35,13 @@ func _ready() -> void:
 		elif contents.is_empty():
 			contents = Loot.roll(kind)
 	_sprite = Sprite2D.new()
-	if is_bag:
+	if kind == "carcass":
+		# A dead animal lying on its side
+		_sprite.texture = Game.pixel_icon(animal + "_1")
+		_sprite.scale = Vector2(2, 2)
+		_sprite.rotation = PI * 0.5 * (-1.0 if flip else 1.0)
+		_sprite.modulate = Color(0.85, 0.7, 0.7)
+	elif is_bag:
 		_sprite.scale = Vector2(1.5, 1.5)
 		_sprite.rotation = randf_range(-0.4, 0.4)
 	else:
@@ -51,6 +58,10 @@ func _ready() -> void:
 
 ## Call after contents change.
 func refresh() -> void:
+	if kind == "carcass" and contents.is_empty():
+		remove_from_group("loot")
+		queue_free()
+		return
 	if is_bag:
 		if contents.is_empty():
 			remove_from_group("loot")
@@ -68,7 +79,7 @@ func title() -> String:
 
 func to_save() -> Dictionary:
 	return {"pos": [position.x, position.y], "bag": is_bag, "kind": kind, "opened": opened,
-		"contents": contents, "tex": tex_name, "flip": flip, "reach": reach}
+		"contents": contents, "tex": tex_name, "flip": flip, "reach": reach, "animal": animal}
 
 
 static func from_save(d: Dictionary) -> LootSpot:
@@ -81,12 +92,15 @@ static func from_save(d: Dictionary) -> LootSpot:
 	l.tex_name = d.get("tex", "")
 	l.flip = d.get("flip", false)
 	l.reach = d.get("reach", 44.0)
+	l.animal = d.get("animal", "")
 	for it in d["contents"]:
 		l.contents.append(SaveGame.fix_item(it))
 	return l
 
 
 func label() -> String:
+	if kind == "carcass":
+		return "Skin " + animal
 	if is_bag and not contents.is_empty():
 		var it: Dictionary = contents[0]
 		var n := Items.display_name(it)
@@ -124,6 +138,11 @@ func search(p: Player) -> String:
 
 
 func _draw() -> void:
+	if kind == "carcass":
+		draw_set_transform(Vector2(0, 4), 0.0, Vector2(1.0, 0.5))
+		draw_circle(Vector2.ZERO, 16.0 if animal == "deer" else 9.0, Color(0.45, 0.05, 0.08, 0.7))
+		draw_set_transform(Vector2.ZERO)
+		return
 	if is_bag:
 		draw_set_transform(Vector2(0, 5), 0.0, Vector2(1.0, 0.4))
 		draw_circle(Vector2.ZERO, 10.0, Color(0, 0, 0, 0.3))

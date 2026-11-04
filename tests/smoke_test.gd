@@ -170,9 +170,8 @@ func _physics_process(_delta: float) -> void:
 		62:
 			check(p.nearest_loot == loot, "container detected nearby")
 			check(inv.near == loot, "container shown as NEARBY")
-			Input.action_press("interact")
+			_press("interact")
 		65:
-			Input.action_release("interact")
 			check(loot.opened and Game.ui_open, "E opens the container in the inventory")
 			main.hud.set_inventory_open(false)
 			check(inv.move(Inventory.near_loc(1), Inventory.gear_loc("melee")) == "" and inv.gear["melee"]["id"] == "bat", "drag bat from container to melee slot")
@@ -285,8 +284,84 @@ func _physics_process(_delta: float) -> void:
 						food -= 100
 					else:
 						food += 1
-			check(guns > 40, "police lockers have guns & ammo (%d)" % guns)
-			check(food > 40, "fridges have food & drink only")
+			check(guns > 12, "police lockers have guns & ammo (%d)" % guns)
+			check(food > 20, "fridges have food & drink only")
+			var total := 0
+			for i in 100:
+				total += Loot.roll("cupboard").size()
+			check(total < 100, "loot nerfed: kitchen cupboards average under 1 item (%d / 100)" % total)
+			print("Stacking")
+			var st := Inventory.new()
+			st.pickup(Items.make("backpack_small"))
+			st.add("bandage", 7)
+			check(st.count_of("bandage") == 7 and st.free_slots() == 4, "bandages stack to 5 (7 = 2 slots)")
+			st.add("sticks", 10)
+			st.add("matches", 4)
+			check(st.free_slots() == 2, "sticks (10) and matches stack")
+			st.add("meat", 3)
+			check(st.free_slots() == 1, "meat stacks")
+			print("Keys")
+			p.hunger = 50.0
+			inv.add("food")
+			var fbefore := inv.count_of("food")
+			_press("eat")
+			check(inv.count_of("food") == fbefore - 1 and p.hunger > 50.0, "F key eats (key events)")
+			var old_primary = inv.gear["primary"]
+			p.inv.gear["primary"] = Items.make("shotgun")
+			_press("weapon_primary")
+			check(p.weapon_id() == "shotgun", "1 key selects main gun")
+			_press("weapon_primary")
+			check(p.weapon_id() == "fists", "1 again lowers it")
+			inv.gear["primary"] = old_primary
+			print("Double-click")
+			inv.gear["hands"] = Items.make("cap")
+			p.double_click(Inventory.gear_loc("hands"))
+			check(inv.gear["head"] != null and inv.gear["head"]["id"] == "cap", "double-click wears a cap")
+			inv.gear["hands"] = Items.make("knife")
+			var old_melee = inv.gear["melee"]
+			p.double_click(Inventory.gear_loc("hands"))
+			check(inv.gear["melee"] != null and inv.gear["melee"]["id"] == "knife", "double-click equips a knife")
+			inv.gear["hands"] = null
+			inv.gear["melee"] = old_melee
+			print("Animals")
+			check(get_tree().get_nodes_in_group("animals").size() >= 10, "rabbits & deer spawned (%d)" % get_tree().get_nodes_in_group("animals").size())
+			var deer: Animal = main.add_animal("deer", p.global_position + Vector2(200, 0))
+			deer.take_damage(999.0, Vector2.RIGHT)
+		97:
+			var carc: LootSpot = null
+			for n in get_tree().get_nodes_in_group("loot"):
+				if n.kind == "carcass":
+					carc = n
+			check(carc != null and carc.animal == "deer" and carc.contents[0]["count"] == 3, "dead deer leaves a carcass with 3 meat")
+			p.global_position = carc.global_position + Vector2(0, 20)
+			var blade_m = inv.gear["melee"]
+			inv.gear["melee"] = null
+			var knives := inv.count_of("knife") + inv.count_of("axe")
+			inv.remove("knife", 9)
+			inv.remove("axe", 9)
+			p._find_loot()
+			check(p.nearest_loot == carc and inv.near == null, "carcass nearby (not shown as a container)")
+			p.interact()
+			check(not carc.contents.is_empty(), "can't skin without a knife")
+			inv.gear["hands"] = Items.make("knife")
+			var meat0 := inv.count_of("meat")
+			p.interact()
+			check(inv.count_of("meat") + _pile_count("meat") >= meat0 + 3 or carc.contents.size() < 1, "skinning gives raw meat")
+			inv.gear["hands"] = null
+			inv.gear["melee"] = blade_m
+			print("Campfire")
+			p.global_position = w.center_of(w.spawn_cell)
+			inv.add("sticks", 4)
+			inv.add("matches", 2)
+			var outside_target := p.target_temp()
+			p.build_fire()
+			check(get_tree().get_nodes_in_group("fires").size() == 1, "campfire built")
+			check(inv.count_of("sticks") <= 1 and inv.count_of("matches") <= 1, "used 3 sticks + 1 match")
+			p._find_loot()
+			check(p.near_fire() and p.target_temp() > outside_target + 15.0, "fire warms you up")
+			inv.add("meat", 2)
+			p.use_fire(p.nearest_fire)
+			check(p.cook_t > 0.0, "cooking started")
 			var car_max := 0
 			for i in 100:
 				car_max = maxi(car_max, Loot.roll("car").size())
@@ -334,6 +409,7 @@ func _physics_process(_delta: float) -> void:
 			check(p.reloading, "reload starts")
 		280:
 			check(int(p.gun()["mag"]) == 8 and inv.count_of("ammo_9mm") == 2, "reload fills magazine from storage")
+			check(inv.count_of("cooked_meat") + _pile_count("cooked_meat") >= 2 and inv.count_of("meat") == 0, "raw meat cooked on the fire")
 			print("Shotgun")
 			inv.add("ammo_12ga", 10)
 			inv.pickup({"id": "shotgun", "count": 1, "mag": 5})
@@ -489,3 +565,15 @@ func _window_see_through(w: World) -> bool:
 			if w.get_tile(c) == World.WINDOW:
 				return not w.blocks_sight(c)
 	return false
+
+
+## Sends a real key press through the input system (like a player pressing the key).
+func _press(action: String) -> void:
+	var ev := InputEventAction.new()
+	ev.action = action
+	ev.pressed = true
+	get_viewport().push_input(ev)
+	var up := InputEventAction.new()
+	up.action = action
+	up.pressed = false
+	get_viewport().push_input(up)

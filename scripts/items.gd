@@ -19,14 +19,19 @@ const DEFS := {
 	"soup": {"name": "Canned soup", "icon": "icon_soup", "stack": 1, "kind": "consumable", "hunger": 20.0, "thirst": 20.0},
 	"chips_salted": {"name": "Salted chips", "icon": "item_chips_red", "stack": 1, "kind": "consumable", "hunger": 15.0, "thirst": -5.0},
 	"chips_cheese": {"name": "Cheese chips", "icon": "item_chips_yellow", "stack": 1, "kind": "consumable", "hunger": 15.0, "thirst": -5.0},
-	"meat": {"name": "Raw meat", "icon": "px:meat", "stack": 1, "kind": "consumable", "hunger": 20.0, "poison": 0.35},
+	"meat": {"name": "Raw meat", "icon": "px:meat", "stack": 4, "kind": "consumable", "hunger": 20.0, "poison": 0.35},
+	"cooked_meat": {"name": "Cooked meat", "icon": "px:cooked_meat", "stack": 4, "kind": "consumable", "hunger": 40.0},
 	"water": {"name": "Water bottle", "icon": "item_water", "stack": 1, "kind": "consumable", "thirst": 40.0},
 	"soda": {"name": "Soda can", "icon": "px:soda", "stack": 1, "kind": "consumable", "thirst": 25.0, "hunger": 5.0,
 		"colors": ["red", "blue", "green", "orange", "purple", "yellow", "black"]},
 
 	# --- medical
-	"bandage": {"name": "Bandage", "icon": "icon_bandage", "stack": 1, "kind": "medical", "cures": ["bleeding"]},
+	"bandage": {"name": "Bandage", "icon": "icon_bandage", "stack": 5, "kind": "medical", "cures": ["bleeding"]},
 	"firstaid": {"name": "First aid kit", "icon": "icon_firstaid", "stack": 1, "kind": "medical", "cures": ["bleeding", "poison"], "heal": 20.0},
+
+	# --- survival (campfires: 3 sticks + 1 match)
+	"sticks": {"name": "Sticks", "icon": "nat_stick_1", "stack": 10, "kind": "material"},
+	"matches": {"name": "Matches", "icon": "px:matches", "stack": 10, "kind": "material"},
 
 	# --- ammo (each gun takes exactly one type)
 	"ammo_9mm": {"name": "9mm rounds", "icon": "icon_ammo_pistol", "stack": 30, "kind": "ammo"},

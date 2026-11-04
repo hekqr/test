@@ -111,6 +111,18 @@ func gear_cell(slot: String) -> Rect2:
 	return Rect2()
 
 
+func _has_action(p: Player) -> bool:
+	return p.nearest_loot != null or p.nearest_fire != null
+
+
+func _action_label(p: Player) -> String:
+	if p.cook_t > 0.0:
+		return "Cooking... %ds" % int(ceil(p.cook_t))
+	var fire_d := p.global_position.distance_to(p.nearest_fire.global_position) if p.nearest_fire else INF
+	var loot_d := p.global_position.distance_to(p.nearest_loot.global_position) if p.nearest_loot else INF
+	return p.nearest_fire.label(p) if fire_d <= loot_d else p.nearest_loot.label()
+
+
 func action_rect() -> Rect2:
 	var vs := get_viewport_rect().size
 	var sz := Game.tex("ui_button").get_size() * UI_SCALE
@@ -152,7 +164,7 @@ func _input(event: InputEvent) -> void:
 	var p: Player = main.player
 	if not inventory_open:
 		# Action button (search / pick up)
-		if mb.button_index == MOUSE_BUTTON_LEFT and p.nearest_loot and not p.dead and action_rect().has_point(mb.position):
+		if mb.button_index == MOUSE_BUTTON_LEFT and _has_action(p) and not p.dead and action_rect().has_point(mb.position):
 			if mb.pressed:
 				_btn_down = true
 				Game.click_used = true
@@ -174,7 +186,11 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if mb.button_index == MOUSE_BUTTON_LEFT:
-		if mb.pressed:
+		if mb.pressed and mb.double_click and not loc.is_empty():
+			# Double-click: wear / equip / use / take
+			_drag = {}
+			p.double_click(loc)
+		elif mb.pressed:
 			if inv.near and not inv.near.contents.is_empty() and take_all_rect().has_point(mb.position):
 				p.say(inv.near.search(p))
 			elif not loc.is_empty() and inv.get_at(loc) != null:
@@ -358,6 +374,8 @@ func _draw() -> void:
 	_text(Vector2(bx + 176, by + 162), status + arrow, 14, tcol.lightened(0.3) if status != "Warm" else C_DIM)
 	if p.indoors():
 		_text(Vector2(bx + 176, by + 146), "indoors", 11, C_DIM)
+	elif p.near_fire():
+		_text(Vector2(bx + 176, by + 146), "near fire", 11, Color(1, 0.75, 0.4))
 	if not p.can_heal() and p.health < 100.0 and not p.dead and not p.bleeding:
 		_text(Vector2(bx + 176, by + 26), "not healing", 11, C_DIM)
 	if p.bleeding:
@@ -412,12 +430,12 @@ func _draw() -> void:
 	_text(Vector2(vs.x - 20, 32), "Day %d  %s" % [main.day, main.clock_text()], 20, Color.WHITE, HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	_text(Vector2(vs.x - 20, 54), "Survived %d:%02d   Kills %d" % [st / 60, st % 60, main.kills], 14, Color(0.85, 0.85, 0.85), HORIZONTAL_ALIGNMENT_RIGHT, 0)
 
-	# Action button: appears automatically near containers / items
-	if p.nearest_loot and not p.dead and not inventory_open:
+	# Action button: appears automatically near containers / items / fires / carcasses
+	if _has_action(p) and not p.dead and not inventory_open:
 		var ar := action_rect()
 		var pressed := _btn_down and ar.has_point(_mouse)
 		_tex(Game.tex("ui_button_pressed" if pressed else "ui_button"), ar.position + Vector2(0, 6 if pressed else 0), UI_SCALE)
-		var label := p.nearest_loot.label()
+		var label := _action_label(p)
 		_text(Vector2(ar.position.x, ar.position.y + (44 if pressed else 38)), label, 16, C_EDGE, HORIZONTAL_ALIGNMENT_CENTER, ar.size.x)
 		_text(Vector2(ar.end.x + 8, ar.position.y + 38), "[E]", 14, C_DIM)
 
@@ -425,7 +443,7 @@ func _draw() -> void:
 	if show_help and not inventory_open:
 		var lines := [
 			"WASD move   Shift sprint   Melee is automatic   Click to shoot",
-			"E / button: search, pick up   R reload   X lower weapon   Heal: warm, fed, watered",
+			"E / button: search, pick up, skin, cook   R reload   X lower weapon   C campfire",
 			"1 / 2 / 3 or wheel: main / secondary / melee   Tab inventory",
 			"F eat   G drink   H bandage / first aid   Esc pause   F1 hide help",
 		]
@@ -512,7 +530,7 @@ func _draw_inventory(p: Player, vs: Vector2) -> void:
 		if it != null and it.has("cond"):
 			_text(Vector2(r.position.x, r.end.y + 14), _cond_text(it), 11, _cond_color(it), HORIZONTAL_ALIGNMENT_CENTER, r.size.x)
 
-	_text(Vector2(0, vs.y - 30), "Drag to move   -   Right-click for actions (use, wear, tear, drop...)   -   Drag outside to drop   -   Tab to close", 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+	_text(Vector2(0, vs.y - 30), "Drag to move   -   Double-click: equip / wear / use   -   Right-click for more   -   Drag outside to drop   -   Tab to close", 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 
 	# Right-click menu
 	if not _menu.is_empty():

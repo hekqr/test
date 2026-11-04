@@ -50,8 +50,21 @@ func _process(_delta: float) -> void:
 		p.hunger = 62.0
 		p.thirst = 45.0
 		p.health = 78.0
-		main.add_zombie(p.global_position + Vector2(140, 60))
-		main.add_zombie(p.global_position + Vector2(160, -60), true)
+		main.add_zombie(p.global_position + Vector2(260, 120))
+		# Animals and a campfire next to the player
+		for a in get_tree().get_nodes_in_group("animals"):
+			a.queue_free()
+		var deer: Animal = main.add_animal("deer", p.global_position + Vector2(-150, 70))
+		var rab: Animal = main.add_animal("rabbit", p.global_position + Vector2(110, -70))
+		deer.set_physics_process(false)
+		rab.set_physics_process(false)
+		main.add_fire(p.global_position + Vector2(-40, 30), 200.0)
+		var c := LootSpot.new()
+		c.kind = "carcass"
+		c.animal = "rabbit"
+		c.contents = [Items.make("meat")]
+		c.position = p.global_position + Vector2(60, 60)
+		main.entities.add_child(c)
 	if frame == 60:
 		_shot("outside")
 		var l: LootSpot = null

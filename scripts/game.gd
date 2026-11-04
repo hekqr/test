@@ -4,6 +4,7 @@ extends Node
 const LAYER_WALL := 1
 const LAYER_PLAYER := 2
 const LAYER_ZOMBIE := 4
+const LAYER_ANIMAL := 8
 
 signal noise_made(pos: Vector2, radius: float)
 
@@ -29,9 +30,12 @@ func _ready() -> void:
 	_key("move_left", [KEY_A, KEY_LEFT])
 	_key("move_right", [KEY_D, KEY_RIGHT])
 	_key("sprint", [KEY_SHIFT])
-	_key("interact", [KEY_E])
-	_key("reload", [KEY_R])
-	_key("holster", [KEY_X])
+	# Letter keys use the printed key label (so they work on any keyboard layout);
+	# movement and number keys use the physical key position.
+	_key("interact", [KEY_E], false)
+	_key("reload", [KEY_R], false)
+	_key("holster", [KEY_X], false)
+	_key("build_fire", [KEY_C], false)
 	_key("weapon_primary", [KEY_1])
 	_key("weapon_secondary", [KEY_2])
 	_key("weapon_melee", [KEY_3])
@@ -41,14 +45,14 @@ func _ready() -> void:
 			var wb := InputEventMouseButton.new()
 			wb.button_index = pair[1]
 			InputMap.action_add_event(pair[0], wb)
-	_key("inventory", [KEY_TAB, KEY_I])
-	_key("eat", [KEY_F])
-	_key("drink", [KEY_G])
-	_key("bandage", [KEY_H])
+	_key("inventory", [KEY_TAB, KEY_I], false)
+	_key("eat", [KEY_F], false)
+	_key("drink", [KEY_G], false)
+	_key("bandage", [KEY_H], false)
 	_key("help", [KEY_F1])
 	_key("pause", [KEY_ESCAPE])
 	_key("fullscreen", [KEY_F11])
-	_key("quit", [KEY_Q])
+	_key("quit", [KEY_Q], false)
 	if not InputMap.has_action("attack"):
 		InputMap.add_action("attack")
 		var mb := InputEventMouseButton.new()
@@ -56,13 +60,16 @@ func _ready() -> void:
 		InputMap.action_add_event("attack", mb)
 
 
-func _key(action: String, keys: Array) -> void:
+func _key(action: String, keys: Array, physical := true) -> void:
 	if InputMap.has_action(action):
 		return
 	InputMap.add_action(action)
 	for k in keys:
 		var ev := InputEventKey.new()
-		ev.physical_keycode = k
+		if physical:
+			ev.physical_keycode = k
+		else:
+			ev.keycode = k
 		InputMap.action_add_event(action, ev)
 
 
@@ -332,7 +339,79 @@ const _MEAT := [
 
 ## [rows, palette, checker, default base colour]. Palette values: hex, or a shade of the item's colour:
 ## "base", "light", "dark", "darker".
+const _MATCHES := [
+	"ooooooooo",
+	"oaaaaaaao",
+	"oabbbbbao",
+	"oabwwwbao",
+	"oabbbbbao",
+	"oaaaaaaao",
+	"ooooooooo",
+]
+const _RABBIT_1 := [
+	".......o.o..",
+	"......oaoao.",
+	"......oaoao.",
+	"..oooooaaaao",
+	".oaaaaaaaeao",
+	"oaaaaaaaaaao",
+	"obaaaaaaaao.",
+	".oaaaaaaao..",
+	"..oo.o.oo...",
+]
+const _RABBIT_2 := [
+	"........o.o.",
+	".......oaoao",
+	"...ooooaaaao",
+	".ooaaaaaaeao",
+	"obaaaaaaaaao",
+	".oaaaaaaaao.",
+	"..oo....oo..",
+	".o........o.",
+	"............",
+]
+const _DEER_1 := [
+	"............o..o..",
+	"............oo.oo.",
+	".............oooo.",
+	"............oaaao.",
+	"............oaaeao",
+	"...........oaaaaoo",
+	"..oooooooooaaaoo..",
+	".oaaaaaaaaaaaao...",
+	"obaaaaaaaaaaaao...",
+	"oaaaaaaaaaaaaao...",
+	".oaccaaaaaacao....",
+	"..oaoo....oaoo....",
+	"..oao.....oao.....",
+	"..oao.....oao.....",
+	"..oo......oo......",
+]
+const _DEER_2 := [
+	"............o..o..",
+	"............oo.oo.",
+	".............oooo.",
+	"............oaaao.",
+	"............oaaeao",
+	"...........oaaaaoo",
+	"..oooooooooaaaoo..",
+	".oaaaaaaaaaaaao...",
+	"obaaaaaaaaaaaao...",
+	"oaaaaaaaaaaaaao...",
+	".oaccaaaaaacao....",
+	"..oaoo....oaoo....",
+	".oao.......oao....",
+	".oao........oao...",
+	".oo..........oo...",
+]
+
 const ICONS := {
+	"matches": [_MATCHES, {"a": "a83838", "b": "e8e0c8", "w": "c84a2a"}, false, "a83838"],
+	"cooked_meat": [_MEAT, {"a": "7a4a2a", "b": "a06a3a", "c": "c8a070", "w": "e8e0d0"}, false, "7a4a2a"],
+	"rabbit_1": [_RABBIT_1, {"a": "9a8a7a", "b": "e8e4dc", "e": "1a1016"}, false, "9a8a7a"],
+	"rabbit_2": [_RABBIT_2, {"a": "9a8a7a", "b": "e8e4dc", "e": "1a1016"}, false, "9a8a7a"],
+	"deer_1": [_DEER_1, {"a": "8a6040", "b": "e8e0d0", "c": "b08a60", "e": "1a1016"}, false, "8a6040"],
+	"deer_2": [_DEER_2, {"a": "8a6040", "b": "e8e0d0", "c": "b08a60", "e": "1a1016"}, false, "8a6040"],
 	"tshirt": [_SHIRT, {"a": "base", "b": "dark"}, false, "6b7a4a"],
 	"flannel": [_SHIRT, {"a": "base", "b": "dark", "c": "darker"}, true, "8c3b3b"],
 	"hoodie": [_COAT, {"a": "base", "b": "light", "d": "dark"}, false, "5a5f6e"],

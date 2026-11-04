@@ -5,6 +5,8 @@ const MAX_ZOMBIES_DAY := 60
 const MAX_ZOMBIES_NIGHT := 95
 const DAY_LENGTH := 480.0 # seconds for a full day/night cycle
 const AUTOSAVE_EVERY := 20.0
+const MAX_RABBITS := 14
+const MAX_DEER := 7
 
 var world: World
 var player: Player
@@ -19,6 +21,7 @@ var kills := 0
 var world_seed := 0
 var _spawn_t := 0.0
 var _save_t := AUTOSAVE_EVERY
+var _animal_t := 0.0
 
 
 func _ready() -> void:
@@ -58,6 +61,10 @@ func _ready() -> void:
 			spawn_zombie(500.0)
 	else:
 		_apply_save(save)
+	for i in MAX_RABBITS:
+		spawn_animal("rabbit", 400.0)
+	for i in MAX_DEER:
+		spawn_animal("deer", 400.0)
 
 	night_tint = CanvasModulate.new()
 	add_child(night_tint)
@@ -100,11 +107,18 @@ func _spawn_loot() -> void:
 	# Loose items lying on building floors
 	for i in world.buildings.size():
 		var floors: Array = world.building_floors[i]
-		if floors.is_empty() or randf() > 0.5:
+		if floors.is_empty() or randf() > 0.25:
 			continue
 		var g := LootSpot.new()
 		g.is_bag = true
 		g.position = world.center_of(floors[randi() % floors.size()]) + Vector2(randf_range(-8, 8), randf_range(-8, 8))
+		entities.add_child(g)
+	# Sticks in the woods
+	for c in world.stick_spots:
+		var g := LootSpot.new()
+		g.is_bag = true
+		g.contents = [Items.make("sticks", randi_range(1, 3))]
+		g.position = world.center_of(c) + Vector2(randf_range(-8, 8), randf_range(-8, 8))
 		entities.add_child(g)
 	# Rare finds out in the wild
 	for c in world.wild_spots:
@@ -136,6 +150,7 @@ func to_save() -> Dictionary:
 			"inv": p.inv.to_save(),
 		},
 		"loot": loot, "zombies": zs,
+		"fires": get_tree().get_nodes_in_group("fires").map(func(f): return f.to_save()),
 	}
 
 
@@ -159,6 +174,8 @@ func _apply_save(s: Dictionary) -> void:
 	player.update_outfit()
 	if ps.has("inv"):
 		player.inv.load_save(ps["inv"])
+	for fd in s.get("fires", []):
+		add_fire(SaveGame.vec(fd["pos"]), fd["fuel"])
 	for zd in s["zombies"]:
 		var z := add_zombie(SaveGame.vec(zd["pos"]), zd["big"])
 		z.health = zd["health"]
@@ -198,6 +215,17 @@ func _process(delta: float) -> void:
 		if _save_t <= 0.0:
 			_save_t = AUTOSAVE_EVERY
 			save_game()
+
+	_animal_t -= delta
+	if _animal_t <= 0.0:
+		_animal_t = 15.0
+		var n := {"rabbit": 0, "deer": 0}
+		for a in get_tree().get_nodes_in_group("animals"):
+			n[a.species] += 1
+		if n["rabbit"] < MAX_RABBITS:
+			spawn_animal("rabbit", 900.0)
+		if n["deer"] < MAX_DEER:
+			spawn_animal("deer", 900.0)
 
 	_spawn_t -= delta
 	if _spawn_t <= 0.0:
@@ -240,7 +268,53 @@ func add_zombie(p: Vector2, big := false) -> Zombie:
 	return z
 
 
+## Animals live in the wilderness, away from roads and buildings.
+func spawn_animal(species: String, min_dist: float) -> Animal:
+	for attempt in 60:
+		var c := Vector2i(randi_range(3, World.W - 4), randi_range(3, World.H - 4))
+		if not world._is_wild(c):
+			continue
+		var p := world.center_of(c)
+		if p.distance_to(player.position) < min_dist:
+			continue
+		return add_animal(species, p)
+	return null
+
+
+func add_animal(species: String, p: Vector2) -> Animal:
+	var a := Animal.new()
+	a.species = species
+	a.world = world
+	a.player = player
+	a.position = p
+	a.died.connect(_on_animal_died)
+	entities.add_child(a)
+	return a
+
+
+## Dead animals leave a carcass to skin.
+func _on_animal_died(a: Animal) -> void:
+	var c := LootSpot.new()
+	c.kind = "carcass"
+	c.animal = a.species
+	c.flip = randf() < 0.5
+	c.contents = [Items.make("meat", Animal.SPECIES[a.species]["meat"])]
+	c.position = a.global_position
+	entities.call_deferred("add_child", c)
+
+
+func add_fire(p: Vector2, fuel: float) -> Campfire:
+	var f := Campfire.new()
+	f.position = p
+	f.fuel = fuel
+	entities.add_child(f)
+	return f
+
+
 func _on_noise(pos: Vector2, radius: float) -> void:
+	for n in get_tree().get_nodes_in_group("animals"):
+		if (n as Animal).global_position.distance_to(pos) <= radius * 1.3:
+			(n as Animal).scare(pos)
 	for n in get_tree().get_nodes_in_group("zombies"):
 		var z := n as Zombie
 		if z.position.distance_to(pos) <= radius:

@@ -22,6 +22,7 @@ var building_floors: Array = [] # per building: walkable floor cells
 var containers: Array = [] # {"pos": Vector2, "kind": String, "tex": String, "flip": bool, "reach": float}
 var furniture: Array = [] # {"cell": Vector2i, "name": String} (non-searchable furniture)
 var wild_spots: Array[Vector2i] = []
+var stick_spots: Array[Vector2i] = [] # sticks lying in the woods (for campfires)
 var tree_cells: Array[Vector2i] = []
 var tree_tex: Array[String] = []
 var props: Array = [] # street props / nature: {"pos": Vector2, "tex": String, "flip": bool, "tall": bool}
@@ -440,6 +441,8 @@ func _make_nature() -> void:
 				props.append({"pos": pos, "tex": "nat_mushroom_%d" % rng.randi_range(1, 3), "flip": rng.randf() < 0.5, "tall": false})
 			elif r < 0.071:
 				wild_spots.append(c)
+			elif r < 0.085:
+				stick_spots.append(c)
 
 
 func _make_border() -> void:

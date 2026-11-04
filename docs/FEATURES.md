@@ -87,9 +87,23 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
   medicine cabinets = bandages/first aid, police lockers = guns/ammo/vests, garages = tools/melee/hunting rifle,
   shops = food & drinks, clinics = medical, bins/cars = little, wilderness = rare
 
+## Milestone 2.6 — Hunting & fire
+- ✅ **Animals**: rabbits and deer (drawn — the packs have none) wander the wilderness, run from you
+  (walking lets you get closer than sprinting) and from noise; they respawn over time
+- ✅ **Hunting & skinning**: shoot or hit an animal; skin the carcass with a knife or axe for raw meat
+  (rabbit 1, deer 3)
+- ✅ **Campfires**: 3 sticks + 1 match (C key, or right-click sticks/matches). Burns 60 s per stick (max 5 min),
+  add wood to keep it going, relight with a match. Warms you a lot nearby and lights up the night
+- ✅ **Cooking**: use a lit fire to cook all your raw meat into cooked meat (more food, never poisons)
+- ✅ Sticks lie around in the woods; matches in kitchens, desks, garages, cars
+- ✅ **Stacking**: bandages 5, sticks 10, matches 10, raw/cooked meat 4 (plus ammo)
+- ✅ **Loot nerfed**: most containers now often hold nothing; fewer loose items; smaller ammo finds
+- ✅ **Double-click** an item: wear / equip / use (or take it from a nearby container)
+- ✅ **Keybind fix**: key presses are handled as events (never missed between frames); letter keys follow the
+  printed key on any keyboard layout; F/G/H/1/2/3/R/X also work with the inventory open
+
 ## Planned
 - 📌 **Base building** (wooden & reinforced walls and gates are in the art pack)
-- 📌 Animals to hunt & skin for meat, campfires to cook it (cooked meat = no poisoning)
 
 ## Ideas to borrow (inspired by other survival games, built our own way)
 - 💭 Show worn clothing / helmet on the character sprite

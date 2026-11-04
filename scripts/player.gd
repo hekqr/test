@@ -30,6 +30,8 @@ var inv := Inventory.new()
 var aim := Vector2.RIGHT # mouse aim (guns)
 var facing := Vector2.RIGHT # where the body looks (aim, or the melee target)
 var nearest_loot: LootSpot = null
+var nearest_fire: Campfire = null
+var cook_t := 0.0 # cooking in progress (seconds left)
 var message := ""
 var message_t := 0.0
 var reloading := false
@@ -183,6 +185,8 @@ func actions_for(loc: Dictionary) -> Array:
 			out.append(["Take off" if Items.is_clothing(id) else "Put away", "unequip"])
 	if d.has("tear"):
 		out.append(["Tear into bandages", "tear"])
+	if id == "sticks" or id == "matches":
+		out.append(["Build campfire", "fire"])
 	if loc["t"] == "near":
 		out.append(["Take", "take"])
 	else:
@@ -210,6 +214,8 @@ func do_action(loc: Dictionary, action: String) -> void:
 				say("No room to put it away")
 		"tear":
 			tear(loc)
+		"fire":
+			build_fire()
 		"take":
 			var left := inv.pickup(it)
 			var taken: Dictionary = inv.take(loc)
@@ -271,6 +277,10 @@ func _physics_process(delta: float) -> void:
 
 
 func _timers(delta: float) -> void:
+	if cook_t > 0.0:
+		cook_t -= delta
+		if cook_t <= 0.0:
+			_finish_cooking()
 	_attack_cd -= delta
 	_swing_t -= delta
 	_shot_t -= delta
@@ -348,7 +358,17 @@ func target_temp() -> float:
 	var air := lerpf(TEMP_DAY, TEMP_NIGHT, Game.night)
 	if indoors():
 		air += TEMP_INDOORS
-	return clampf(air + inv.warmth(), 0.0, 100.0)
+	var fire := 0.0
+	for f in get_tree().get_nodes_in_group("fires"):
+		fire = maxf(fire, (f as Campfire).warmth_at(global_position))
+	return clampf(air + inv.warmth() + fire, 0.0, 100.0)
+
+
+func near_fire() -> bool:
+	for f in get_tree().get_nodes_in_group("fires"):
+		if (f as Campfire).warmth_at(global_position) > 0.0:
+			return true
+	return false
 
 
 ## Healing needs: warm enough, hunger & thirst at least 75%, not bleeding.
@@ -366,21 +386,9 @@ func temp_status() -> String:
 	return "Warm"
 
 
+## Held actions (attack) are polled every physics frame; everything that happens once per key
+## press goes through _unhandled_input so a press can never be missed between physics frames.
 func _actions() -> void:
-	if Input.is_action_just_pressed("reload"):
-		start_reload()
-	if Input.is_action_just_pressed("holster") and inv.active != "":
-		holster()
-	if Input.is_action_just_pressed("weapon_primary"):
-		switch_weapon("primary")
-	if Input.is_action_just_pressed("weapon_secondary"):
-		switch_weapon("secondary")
-	if Input.is_action_just_pressed("weapon_melee"):
-		switch_weapon("melee")
-	if Input.is_action_just_pressed("weapon_next"):
-		cycle_weapon(1)
-	if Input.is_action_just_pressed("weapon_prev"):
-		cycle_weapon(-1)
 	if Game.click_used and not Input.is_action_pressed("attack"):
 		Game.click_used = false
 	var w := weapon()
@@ -388,25 +396,136 @@ func _actions() -> void:
 		_auto_melee()
 	elif Input.is_action_pressed("attack") and not Game.click_used and _attack_cd <= 0.0 and not reloading:
 		shoot()
-	if Input.is_action_just_pressed("interact"):
-		interact()
-	if Input.is_action_just_pressed("eat"):
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if dead or get_tree().paused or not event.is_pressed() or event.is_echo():
+		return
+	# These also work with the inventory open.
+	if event.is_action_pressed("eat"):
 		quick_eat()
-	if Input.is_action_just_pressed("drink"):
+	elif event.is_action_pressed("drink"):
 		quick_drink()
-	if Input.is_action_just_pressed("bandage"):
+	elif event.is_action_pressed("bandage"):
 		quick_heal()
+	elif event.is_action_pressed("weapon_primary"):
+		switch_weapon("primary")
+	elif event.is_action_pressed("weapon_secondary"):
+		switch_weapon("secondary")
+	elif event.is_action_pressed("weapon_melee"):
+		switch_weapon("melee")
+	elif event.is_action_pressed("reload"):
+		start_reload()
+	elif event.is_action_pressed("holster") and inv.active != "":
+		holster()
+	elif Game.ui_open:
+		return
+	elif event.is_action_pressed("weapon_next"):
+		cycle_weapon(1)
+	elif event.is_action_pressed("weapon_prev"):
+		cycle_weapon(-1)
+	elif event.is_action_pressed("interact"):
+		interact()
+	elif event.is_action_pressed("build_fire"):
+		build_fire()
+	else:
+		return
+	get_viewport().set_input_as_handled()
 
 
-## E / action button: search the nearby container or pick up the nearby item.
+## E / action button: whatever is closest — a fire, a carcass, a container or an item on the ground.
 func interact() -> void:
+	var fire_d := global_position.distance_to(nearest_fire.global_position) if nearest_fire else INF
+	var loot_d := global_position.distance_to(nearest_loot.global_position) if nearest_loot else INF
+	if nearest_fire and fire_d <= loot_d:
+		use_fire(nearest_fire)
+		return
 	if nearest_loot == null:
 		return
-	if nearest_loot.is_bag:
+	if nearest_loot.kind == "carcass":
+		if not has_blade():
+			say("You need a knife or an axe to skin it")
+			return
+		say(nearest_loot.search(self).replace("Took:", "Skinned:"))
+	elif nearest_loot.is_bag:
 		say(nearest_loot.search(self))
 	else:
 		nearest_loot.opened = true
 		Game.open_inventory = true
+
+
+func has_blade() -> bool:
+	if inv.count_of("knife") > 0 or inv.count_of("axe") > 0:
+		return true
+	var m = inv.gear["melee"]
+	return m != null and m["id"] in ["knife", "axe"]
+
+
+## C / right-click sticks: build a campfire (3 sticks + 1 match) at your feet.
+func build_fire() -> void:
+	if indoors():
+		say("You can't build a fire indoors")
+		return
+	if inv.count_of("sticks") < 3 or inv.count_of("matches") < 1:
+		say("A campfire needs 3 sticks and a match")
+		return
+	var pos := global_position + facing * 26.0
+	if not world.is_walkable(world.cell_of(pos)):
+		pos = global_position + Vector2(0, 20)
+	for f in get_tree().get_nodes_in_group("fires"):
+		if (f as Campfire).global_position.distance_to(pos) < 40.0:
+			say("There's already a fire here")
+			return
+	inv.remove("sticks", 3)
+	inv.remove("matches", 1)
+	var fire := Campfire.new()
+	fire.position = pos
+	fire.add_sticks(3)
+	get_parent().add_child(fire)
+	say("You light a campfire")
+
+
+## Using a fire: cook raw meat, add wood, or relight it.
+func use_fire(fire: Campfire) -> void:
+	if fire.lit and inv.count_of("meat") > 0:
+		if cook_t <= 0.0:
+			cook_t = 3.0
+			say("Cooking meat...")
+		return
+	if inv.count_of("sticks") <= 0:
+		say("You need sticks to keep the fire going")
+		return
+	if not fire.lit:
+		if inv.count_of("matches") <= 0:
+			say("You need a match to light it")
+			return
+		inv.remove("matches", 1)
+	inv.remove("sticks", 1)
+	fire.add_sticks(1)
+	say("The fire burns for %d more seconds" % int(fire.fuel))
+
+
+func _finish_cooking() -> void:
+	if nearest_fire == null or not nearest_fire.lit:
+		say("You moved away from the fire")
+		return
+	var n := inv.count_of("meat")
+	inv.remove("meat", n)
+	var left := inv.pickup(Items.make("cooked_meat", n))
+	if left > 0:
+		drop_item(Items.make("cooked_meat", left))
+	say("Cooked %d meat" % n)
+
+
+## Double-click in the inventory: wear / equip / select / use, or take it if it's lying nearby.
+func double_click(loc: Dictionary) -> void:
+	var it = inv.get_at(loc)
+	if it == null:
+		return
+	if loc["t"] == "near" and Items.equip_of(it["id"]) == "":
+		do_action(loc, "take")
+	else:
+		quick_use(loc)
 
 
 ## Melee fights for you: swing at the nearest zombie in reach.
@@ -422,8 +541,15 @@ func _auto_melee() -> void:
 		if d < best_d and world.has_los(global_position, z.global_position):
 			best_d = d
 			best = z
-	if best:
-		melee((best.global_position - global_position).normalized())
+	var target: Node2D = best
+	for n in get_tree().get_nodes_in_group("animals"):
+		var a := n as Animal
+		var d := a.global_position.distance_to(global_position)
+		if d < best_d:
+			best_d = d
+			target = a
+	if target:
+		melee((target.global_position - global_position).normalized())
 
 
 func melee(dir: Vector2) -> void:
@@ -437,6 +563,11 @@ func melee(dir: Vector2) -> void:
 		var d := z.global_position - global_position
 		if d.length() <= reach + Zombie.RADIUS + 4.0 and absf(dir.angle_to(d)) < deg_to_rad(65.0):
 			z.take_damage(w["damage"], d.normalized())
+	for n in get_tree().get_nodes_in_group("animals"):
+		var a := n as Animal
+		var d := a.global_position - global_position
+		if d.length() <= reach + 16.0 and absf(dir.angle_to(d)) < deg_to_rad(65.0):
+			a.take_damage(w["damage"], d.normalized())
 	Game.make_noise(global_position, w["noise"])
 
 
@@ -459,7 +590,7 @@ func shoot() -> void:
 		var dir := aim.rotated(randf_range(-w["spread"], w["spread"]) * (1.0 if w["pellets"] > 1 else 0.5))
 		var from := origin + dir * 14.0
 		var to := origin + dir * float(w["range"]) * randf_range(0.85, 1.0)
-		var q := PhysicsRayQueryParameters2D.create(from, to, Game.LAYER_WALL | Game.LAYER_ZOMBIE, [get_rid()])
+		var q := PhysicsRayQueryParameters2D.create(from, to, Game.LAYER_WALL | Game.LAYER_ZOMBIE | Game.LAYER_ANIMAL, [get_rid()])
 		var hit := space.intersect_ray(q)
 		var end := to
 		if not hit.is_empty():
@@ -467,6 +598,8 @@ func shoot() -> void:
 			var col: Object = hit["collider"]
 			if col is Zombie:
 				(col as Zombie).take_damage(w["damage"], dir)
+			elif col is Animal:
+				(col as Animal).take_damage(w["damage"], dir)
 		_shots.append(end)
 	_shot_t = 0.07
 	Game.make_noise(global_position, w["noise"])
@@ -617,10 +750,19 @@ func _find_loot() -> void:
 		if l.is_queued_for_deletion():
 			continue
 		var d := l.global_position.distance_to(global_position)
-		if d < l.reach and d - l.reach < best:
-			best = d - l.reach
+		# Closest relative to its reach, so a big car doesn't beat a box right next to you.
+		if d < l.reach and d / l.reach < best:
+			best = d / l.reach
 			nearest_loot = l
-	inv.near = nearest_loot
+	inv.near = nearest_loot if nearest_loot == null or nearest_loot.kind != "carcass" else null
+	nearest_fire = null
+	var best_f := 56.0
+	for n in get_tree().get_nodes_in_group("fires"):
+		var f := n as Campfire
+		var d := f.global_position.distance_to(global_position)
+		if d < best_f:
+			best_f = d
+			nearest_fire = f
 
 
 # ---------------------------------------------------------------- visuals
