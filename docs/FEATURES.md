@@ -169,7 +169,7 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ **Zombie stats** (each zombie varies ±10% in health, speed and damage):
   walker 100 hp · runner 80 hp, hits a bit softer · brute 300 hp, a bit slower, hits 50% harder ·
   axe zombie 100 hp · armed zombie 100 hp + vest (armour 3 = 30% less damage, sometimes drops it)
-- ✅ **Wolves**: packs of 2–3 roam the wilderness. They hunt you (and bandits) on sight — further at
+- ✅ **Wolves** (40 hp, faster than runners, bite 9–16): packs of 2–3 roam the wilderness. They hunt you (and bandits) on sight — further at
   night — bite and back off, call the pack when one is hurt, and run when badly wounded.
   Bandits shoot them. Skin a dead wolf for **2 meat + 1 leather** (deer now give 1 leather too)
 - ✅ **Leather crafting**: 2 leather = sack, 1 leather = **water gourd**

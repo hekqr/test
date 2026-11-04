@@ -751,6 +751,9 @@ func _physics_process(_delta: float) -> void:
 			check(carcass != null and carcass.contents.any(func(it): return it["id"] == "meat" and int(it["count"]) == 2) and carcass.contents.any(func(it): return it["id"] == "leather"),
 				"dead wolf: 2 meat + 1 leather")
 			check(int(Animal.SPECIES["deer"]["leather"]) >= 1, "deer give leather too")
+			var ws: Dictionary = Animal.SPECIES["wolf"]
+			check(float(ws["run"]) > float(Zombie.TYPES["runner"]["chase"]) * 1.1 and float(ws["run"]) < Player.SPRINT_SPEED, "wolves are faster than runners (you can still outsprint them)")
+			check(float(ws["health"]) == 40.0 and float(ws["bite"][1]) > float(Zombie.TYPES["walker"]["dmg"][1]), "wolves: 40 hp, bite a bit harder than walkers")
 			_water_tests()
 			if failures.is_empty():
 				print("SMOKE TEST PASSED")

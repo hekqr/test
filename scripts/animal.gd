@@ -11,8 +11,9 @@ signal died(animal: Animal)
 const SPECIES := {
 	"rabbit": {"health": 15.0, "walk": 30.0, "run": 165.0, "fear": 150.0, "meat": 1, "leather": 0, "radius": 7.0, "anim_fps": 8.0},
 	"deer": {"health": 80.0, "walk": 35.0, "run": 175.0, "fear": 230.0, "meat": 3, "leather": 1, "radius": 12.0, "anim_fps": 7.0},
-	"wolf": {"health": 60.0, "walk": 48.0, "run": 182.0, "fear": 0.0, "meat": 2, "leather": 1, "radius": 10.0, "anim_fps": 10.0,
-		"predator": true, "bite": [8.0, 12.0], "sight": 300.0, "sight_night": 380.0},
+	# Wolves: faster than runners (but you can still outrun them sprinting), bite a bit harder than a walker, fragile
+	"wolf": {"health": 40.0, "walk": 48.0, "run": 188.0, "fear": 0.0, "meat": 2, "leather": 1, "radius": 10.0, "anim_fps": 10.0,
+		"predator": true, "bite": [9.0, 16.0], "sight": 300.0, "sight_night": 380.0},
 }
 
 var species := "rabbit"
