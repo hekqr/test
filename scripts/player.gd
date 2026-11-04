@@ -63,22 +63,15 @@ var _melee_dir := Vector2.RIGHT
 func _ready() -> void:
 	add_to_group("player")
 	collision_layer = Game.LAYER_PLAYER
-	collision_mask = Game.LAYER_WALL | Game.LAYER_ZOMBIE
+	collision_mask = Game.LAYER_WALL | Game.LAYER_ZOMBIE | Game.LAYER_NPC
 	var circle := CircleShape2D.new()
 	circle.radius = RADIUS
 	var cs := CollisionShape2D.new()
 	cs.shape = circle
 	add_child(cs)
 
-	var spec := {}
-	for d in Game.DIRS:
-		spec["idle_" + d] = ["player_idle_" + d, 6, 8.0, true]
-		spec["run_" + d] = ["player_run_" + d, 6, 12.0, true]
-		spec["punch_" + d] = ["player_punch_" + d, 4, 20.0, false]
-	for d in ["side", "side-left"]:
-		spec["death_" + d] = ["player_death_" + d, 6, 10.0, false]
 	_sprite = AnimatedSprite2D.new()
-	_sprite.sprite_frames = Game.frames("player", spec)
+	_sprite.sprite_frames = Game.frames("player", sprite_spec())
 	_sprite.scale = Vector2(2, 2)
 	_sprite.offset = Vector2(0, -7)
 	_sprite.play("idle_down")
@@ -116,6 +109,18 @@ func _ready() -> void:
 	say("Find food, water and a weapon. Stay alive.")
 
 
+## Animations of the survivor sprite (also used by bandits).
+static func sprite_spec() -> Dictionary:
+	var spec := {}
+	for d in Game.DIRS:
+		spec["idle_" + d] = ["player_idle_" + d, 6, 8.0, true]
+		spec["run_" + d] = ["player_run_" + d, 6, 12.0, true]
+		spec["punch_" + d] = ["player_punch_" + d, 4, 20.0, false]
+	for d in ["side", "side-left"]:
+		spec["death_" + d] = ["player_death_" + d, 6, 10.0, false]
+	return spec
+
+
 func say(text: String) -> void:
 	message = text
 	message_t = 3.5
@@ -127,10 +132,10 @@ func set_night(_n: float) -> void:
 
 # ---------------------------------------------------------------- weapons
 
-## Selected weapon (1/2/3), or "fists".
+## Selected weapon (1/2/3), or "fists" (also when the selected weapon is broken).
 func weapon_id() -> String:
 	var w = inv.weapon_item()
-	return "fists" if w == null else String(w["id"])
+	return "fists" if w == null or Items.is_ruined(w) else String(w["id"])
 
 
 func weapon() -> Dictionary:
@@ -145,6 +150,9 @@ func gun() -> Dictionary:
 ## 1/2/3 and mouse wheel: switch between main gun, secondary and melee.
 func switch_weapon(slot: String) -> void:
 	reloading = false
+	if inv.gear[slot] != null and Items.is_ruined(inv.gear[slot]) and inv.active != slot:
+		say("Your %s is broken" % Items.name_of(inv.gear[slot]["id"]).to_lower())
+		return
 	var err := inv.switch_to(slot)
 	say(err if err != "" else weapon()["name"])
 
@@ -191,6 +199,12 @@ func actions_for(loc: Dictionary) -> Array:
 			out.append(["Wear", "equip"])
 		if worn:
 			out.append(["Take off" if Items.is_clothing(id) else "Put away", "unequip"])
+	var fix := Items.repair_kind(id)
+	if fix != "" and it.has("cond") and loc["t"] != "near":
+		var c := float(it["cond"])
+		if c > 0.0 and c < 100.0:
+			var kit := "sewing_kit" if fix == "sew" else "toolbox"
+			out.append(["Repair (%s)" % Items.name_of(kit).to_lower() if inv.count_of(kit) > 0 else "Repair - needs a " + Items.name_of(kit).to_lower(), "repair"])
 	if d.has("tear"):
 		out.append(["Tear into rags", "tear"])
 	if id == "sticks" or id == "matches":
@@ -222,6 +236,8 @@ func do_action(loc: Dictionary, action: String) -> void:
 				say("No room to put it away")
 		"tear":
 			tear(loc)
+		"repair":
+			repair(loc)
 		"fire":
 			build_fire()
 		"take":
@@ -237,10 +253,58 @@ func do_action(loc: Dictionary, action: String) -> void:
 
 
 ## Old one-click behaviour, still used for quick right-click without a menu (tests).
+## Never drops anything by accident.
 func quick_use(loc: Dictionary) -> void:
 	var acts := actions_for(loc)
-	if not acts.is_empty():
+	if not acts.is_empty() and acts[0][1] != "drop":
 		do_action(loc, acts[0][1])
+
+
+## Sewing kit (clothing) or toolbox (weapons, helmets, metal armour): +40% condition per use.
+## Ruined things are beyond repair.
+func repair(loc: Dictionary) -> bool:
+	var it = inv.get_at(loc)
+	if it == null or not it.has("cond"):
+		return false
+	var fix := Items.repair_kind(it["id"])
+	if fix == "":
+		say("That can't be repaired")
+		return false
+	if Items.is_ruined(it):
+		say("It's ruined - beyond repair")
+		return false
+	if float(it["cond"]) >= 100.0:
+		say("It's in perfect condition")
+		return false
+	var kit_id := "sewing_kit" if fix == "sew" else "toolbox"
+	var kit_loc := inv.find(kit_id)
+	if kit_loc.is_empty():
+		say("You need a " + Items.name_of(kit_id).to_lower())
+		return false
+	var kit: Dictionary = inv.get_at(kit_loc)
+	it["cond"] = minf(float(it["cond"]) + Items.REPAIR_AMOUNT, 100.0)
+	kit["uses"] = int(kit.get("uses", 1)) - 1
+	var msg := "Repaired the %s (%d%%)" % [Items.name_of(it["id"]).to_lower(), int(it["cond"])]
+	if int(kit["uses"]) <= 0:
+		inv.take(kit_loc)
+		msg += " - the %s is used up" % Items.name_of(kit_id).to_lower()
+	inv.changed.emit()
+	say(msg)
+	return true
+
+
+## Weapons wear out with use. Returns true if it just broke.
+func _wear_weapon(amount: float) -> bool:
+	var it = inv.weapon_item()
+	if it == null or not it.has("cond") or amount <= 0.0 or Items.is_ruined(it):
+		return false
+	it["cond"] = maxf(float(it["cond"]) - amount, 0.0)
+	if Items.is_ruined(it):
+		reloading = false
+		say("Your %s broke!" % Items.name_of(it["id"]).to_lower())
+		inv.changed.emit()
+		return true
+	return false
 
 
 ## Tear a shirt into rags (rags craft into bandages and rope). Anything stored in it drops to the ground.
@@ -560,20 +624,19 @@ func double_click(loc: Dictionary) -> void:
 		quick_use(loc)
 
 
-## Melee fights for you: swing at the nearest zombie in reach.
+## Melee fights for you: swing at the nearest zombie / bandit in reach (or an animal).
 func _auto_melee() -> void:
 	if _attack_cd > 0.0:
 		return
 	var reach: float = weapon()["range"] + Zombie.RADIUS + 4.0
-	var best: Zombie = null
+	var target: Node2D = null
 	var best_d := reach
-	for n in get_tree().get_nodes_in_group("zombies"):
-		var z := n as Zombie
-		var d := z.global_position.distance_to(global_position)
-		if d < best_d and world.has_los(global_position, z.global_position):
+	for n in get_tree().get_nodes_in_group("zombies") + get_tree().get_nodes_in_group("survivors"):
+		var t := n as Node2D
+		var d := t.global_position.distance_to(global_position)
+		if d < best_d and world.has_los(global_position, t.global_position):
 			best_d = d
-			best = z
-	var target: Node2D = best
+			target = t
 	for n in get_tree().get_nodes_in_group("animals"):
 		var a := n as Animal
 		var d := a.global_position.distance_to(global_position)
@@ -590,16 +653,22 @@ func melee(dir: Vector2) -> void:
 	_swing_t = 0.22
 	_melee_dir = dir
 	var reach: float = w["range"]
-	for n in get_tree().get_nodes_in_group("zombies"):
-		var z := n as Zombie
-		var d := z.global_position - global_position
+	var dmg: float = float(w["damage"]) * Items.weapon_factor(inv.weapon_item())
+	var hits := 0
+	for n in get_tree().get_nodes_in_group("zombies") + get_tree().get_nodes_in_group("survivors"):
+		var t := n as Node2D
+		var d := t.global_position - global_position
 		if d.length() <= reach + Zombie.RADIUS + 4.0 and absf(dir.angle_to(d)) < deg_to_rad(65.0):
-			z.take_damage(w["damage"], d.normalized())
+			Zombie.hit(t, dmg, d.normalized(), self)
+			hits += 1
 	for n in get_tree().get_nodes_in_group("animals"):
 		var a := n as Animal
 		var d := a.global_position - global_position
 		if d.length() <= reach + 16.0 and absf(dir.angle_to(d)) < deg_to_rad(65.0):
-			a.take_damage(w["damage"], d.normalized())
+			a.take_damage(dmg, d.normalized())
+			hits += 1
+	if hits > 0:
+		_wear_weapon(float(w.get("wear", 0.0)))
 	Game.make_noise(global_position, w["noise"])
 
 
@@ -613,8 +682,8 @@ func _update_aim(delta: float) -> void:
 	var reach: float = w["range"] * 0.85
 	var best: Node2D = null
 	var best_d := reach
-	for group in ["zombies", "animals"]:
-		for n in get_tree().get_nodes_in_group(group):
+	for groups in [["zombies", "survivors"], ["animals"]]:
+		for n in get_tree().get_nodes_in_group(groups[0]) + (get_tree().get_nodes_in_group(groups[1]) if groups.size() > 1 else []):
 			var t := n as Node2D
 			var d := t.global_position.distance_to(global_position)
 			# Keep the current target unless something is clearly closer (no flickering).
@@ -624,7 +693,7 @@ func _update_aim(delta: float) -> void:
 				best_d = d
 				best = t
 		if best != null:
-			break # zombies first; animals only when no zombie is around
+			break # zombies / bandits first; animals only when no one is around
 	if best != aim_target:
 		aim_spread = maxf(aim_spread, lerpf(w["spread_min"], w["spread_max"], 0.6))
 		aim_target = best
@@ -660,6 +729,12 @@ func shoot() -> void:
 		else:
 			say("Out of ammo")
 		return
+	# Worn guns can jam (below 50% condition)
+	var cond := float(g.get("cond", 100.0))
+	if cond < 50.0 and randf() < (50.0 - cond) / 50.0 * 0.15:
+		_attack_cd = 0.9
+		say("Jammed! (%d%% condition)" % int(cond))
+		return
 	g["mag"] -= 1
 	_attack_cd = w["cooldown"]
 	_shots.clear()
@@ -671,20 +746,21 @@ func shoot() -> void:
 		var dir := shot_dir.rotated(randf_range(-w["spread"], w["spread"]))
 		var from := origin + dir * 14.0
 		var to := origin + dir * float(w["range"]) * randf_range(0.85, 1.0)
-		var q := PhysicsRayQueryParameters2D.create(from, to, Game.LAYER_WALL | Game.LAYER_ZOMBIE | Game.LAYER_ANIMAL, [get_rid()])
+		var q := PhysicsRayQueryParameters2D.create(from, to, Game.LAYER_WALL | Game.LAYER_ZOMBIE | Game.LAYER_ANIMAL | Game.LAYER_NPC, [get_rid()])
 		var hit := space.intersect_ray(q)
 		var end := to
 		if not hit.is_empty():
 			end = hit["position"]
 			var col: Object = hit["collider"]
-			if col is Zombie:
-				(col as Zombie).take_damage(w["damage"], dir)
+			if col is Zombie or col is Survivor:
+				Zombie.hit(col as Node2D, w["damage"], dir, self)
 			elif col is Animal:
 				(col as Animal).take_damage(w["damage"], dir)
 		_shots.append(end)
 	_shot_t = 0.07
 	aim_spread = minf(aim_spread + float(w["recoil"]), float(w["spread_max"]) + 0.2)
 	Game.make_noise(global_position, w["noise"])
+	_wear_weapon(float(w.get("wear", 0.0)))
 
 
 func start_reload() -> void:
@@ -855,7 +931,11 @@ const HAIR_LIGHT := Color("704f48")
 
 
 func _cloth_color(slot: String) -> Variant:
-	var g = inv.gear[slot]
+	return cloth_color(inv.gear, slot)
+
+
+static func cloth_color(gear: Dictionary, slot: String) -> Variant:
+	var g = gear.get(slot)
 	if g == null:
 		return null
 	return Color(g.get("color", Items.ICON_DEFAULTS.get(g["id"], "7a7a80")))
@@ -866,20 +946,24 @@ func _cloth_color(slot: String) -> Variant:
 func update_outfit() -> void:
 	if _sprite == null:
 		return
-	var mat := _sprite.material as ShaderMaterial
-	var shirt = _cloth_color("shirt")
-	var coat = _cloth_color("coat")
+	paint_outfit(_sprite.material as ShaderMaterial, inv.gear)
+	if _pack:
+		_pack.queue_redraw()
+
+
+## Sets the outfit shader colours from worn clothing (player and bandits).
+static func paint_outfit(mat: ShaderMaterial, gear: Dictionary) -> void:
+	var shirt = cloth_color(gear, "shirt")
+	var coat = cloth_color(gear, "coat")
 	var inner: Color = shirt if shirt != null else (coat if coat != null else SKIN)
 	var outer: Color = coat if coat != null else (shirt if shirt != null else SKIN)
 	mat.set_shader_parameter("shirt_col", inner)
 	mat.set_shader_parameter("coat_col", outer.darkened(0.12) if coat != null else outer)
 	mat.set_shader_parameter("coat_hi", outer.lightened(0.25))
 	mat.set_shader_parameter("zip_col", Color("9eafad") if coat != null else inner.lightened(0.15))
-	var hat = _cloth_color("head")
+	var hat = cloth_color(gear, "head")
 	mat.set_shader_parameter("hair_dark", hat.darkened(0.2) if hat != null else HAIR_DARK)
 	mat.set_shader_parameter("hair_light", hat.lightened(0.1) if hat != null else HAIR_LIGHT)
-	if _pack:
-		_pack.queue_redraw()
 
 
 ## Backpack on the character's back (drawn over the body when facing away / sideways).

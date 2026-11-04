@@ -8,7 +8,7 @@ const OUTLINE := Color("1a1016")
 
 const NAMES := ["tshirt", "flannel", "hoodie", "jacket", "jeans", "cargo_pants", "boots", "vest",
 	"helmet", "cap", "beanie", "backpack_small", "backpack_large", "soda", "meat", "cooked_meat", "matches", "water",
-	"rags", "rope", "sack", "sack_backpack", "spear", "map"]
+	"rags", "rope", "sack", "sack_backpack", "spear", "map", "sewing_kit", "toolbox", "scrap_metal", "scrap_armour"]
 
 ## Default colours for items without a random colour.
 const DEFAULT := {
@@ -17,6 +17,7 @@ const DEFAULT := {
 	"beanie": "3a4a5a", "backpack_small": "5a6a3a", "backpack_large": "6a4a30", "soda": "a83838",
 	"meat": "a83a3a", "cooked_meat": "7a4a2a", "matches": "a83838", "water": "7ab8e0",
 	"rags": "b8ae98", "rope": "a08458", "sack": "a08a60", "sack_backpack": "8a7450", "spear": "7a5a38", "map": "d8ccaa",
+	"sewing_kit": "5a7aa8", "toolbox": "b83a3a", "scrap_metal": "8a8e94", "scrap_armour": "767a80",
 }
 
 ## Slot symbol shapes (drawn as silhouettes)
@@ -263,6 +264,55 @@ static func _draw_item(img: Image, name: String, c: Color, silhouette: bool) -> 
 				return
 			_rect(img, 5, 16, 22, 6, Color("e8e0c8"))
 			_line(img, Vector2i(8, 19), Vector2i(23, 19), c)
+		"sewing_kit":
+			# Round biscuit tin with a spool of thread and a needle on top
+			_circle(img, Vector2(16, 18), 12.5, c)
+			if silhouette:
+				return
+			_ring(img, Vector2(16, 18), 10.0, 1.2, l)
+			_rect(img, 10, 13, 9, 10, Color("e8e0c8"))
+			_rect(img, 10, 15, 9, 6, Color("c83a4a"))
+			_line(img, Vector2i(10, 16), Vector2i(18, 16), Color("e05a6a"))
+			_line(img, Vector2i(10, 19), Vector2i(18, 19), Color("a02a3a"))
+			_line(img, Vector2i(19, 9), Vector2i(26, 26), Color("d8dce4"))
+			_px(img, 19, 9, Color("8a8e94"))
+			_line(img, Vector2i(18, 18), Vector2i(22, 16), Color("c83a4a"))
+		"toolbox":
+			# Red metal toolbox with a handle
+			_ring(img, Vector2(16, 10), 5.0, 2.0, Color("4a4a52"))
+			_rect(img, 3, 12, 26, 16, c)
+			_poly(img, [Vector2(3, 12), Vector2(6, 9), Vector2(26, 9), Vector2(29, 12)], l)
+			if silhouette:
+				return
+			_line(img, Vector2i(3, 16), Vector2i(28, 16), d)
+			_rect(img, 7, 15, 3, 3, Color("c8ccd4"))
+			_rect(img, 22, 15, 3, 3, Color("c8ccd4"))
+			_line(img, Vector2i(4, 26), Vector2i(27, 26), dd)
+		"scrap_metal":
+			# Two bent, riveted metal plates
+			_poly(img, [Vector2(3, 10), Vector2(19, 5), Vector2(22, 19), Vector2(6, 24)], d)
+			_poly(img, [Vector2(10, 14), Vector2(28, 11), Vector2(29, 27), Vector2(12, 29)], c)
+			if silhouette:
+				return
+			for r in [Vector2(7, 12), Vector2(17, 9), Vector2(14, 17), Vector2(25, 14), Vector2(26, 24)]:
+				_px(img, int(r.x), int(r.y), Color("3a3a42"))
+			_line(img, Vector2i(12, 20), Vector2i(27, 18), l)
+			_rect(img, 19, 23, 3, 2, Color("9a5a32"))
+			_rect(img, 8, 19, 2, 2, Color("9a5a32"))
+		"scrap_armour":
+			# Metal plates strapped together with rope, worn like a vest
+			_poly(img, [Vector2(8, 3), Vector2(12, 3), Vector2(16, 8), Vector2(20, 3), Vector2(24, 3), Vector2(27, 9), Vector2(27, 29), Vector2(5, 29), Vector2(5, 9)], c)
+			if silhouette:
+				return
+			_rect(img, 7, 11, 8, 8, l)
+			_rect(img, 17, 11, 8, 8, d)
+			_rect(img, 7, 20, 18, 7, c.darkened(0.12))
+			_line(img, Vector2i(5, 19), Vector2i(27, 19), Color("a08458"))
+			_line(img, Vector2i(5, 10), Vector2i(27, 10), Color("a08458"))
+			_line(img, Vector2i(16, 10), Vector2i(16, 28), Color("a08458"))
+			for r in [Vector2(9, 13), Vector2(13, 17), Vector2(19, 13), Vector2(23, 17), Vector2(10, 24), Vector2(22, 24)]:
+				_px(img, int(r.x), int(r.y), Color("2e2a30"))
+			_rect(img, 20, 21, 3, 2, Color("9a5a32"))
 		# --- symbols only
 		"hand":
 			_rect(img, 10, 13, 13, 14, c)

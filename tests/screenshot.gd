@@ -4,6 +4,7 @@ extends Node
 var main: Node
 var frame := 0
 var out := "user://"
+var _enemies: Array = []
 
 
 func _ready() -> void:
@@ -46,6 +47,11 @@ func _process(_delta: float) -> void:
 		p.inv.add("firstaid")
 		p.inv.pickup({"id": "rifle", "count": 1, "mag": 22})
 		p.inv.add("cargo_pants")
+		p.inv.add("sewing_kit")
+		p.inv.add("toolbox")
+		p.inv.add("scrap_metal", 3)
+		p.inv.gear["hands"] = Items.make("scrap_armour")
+		p.inv.gear["melee"]["cond"] = 42.0
 		p.switch_weapon("primary")
 		p.hunger = 62.0
 		p.thirst = 45.0
@@ -65,6 +71,34 @@ func _process(_delta: float) -> void:
 		c.contents = [Items.make("meat")]
 		c.position = p.global_position + Vector2(60, 60)
 		main.entities.add_child(c)
+	if frame == 30:
+		# Every zombie type and two bandits lined up (frozen) for a look
+		_enemies = []
+		var at := _open_row(w) + Vector2(-210, 0)
+		var row := 0
+		for t in ["walker", "runner", "brute", "axe", "armed"]:
+			var z: Zombie = main.add_zombie(at + Vector2(row * 70, 0), t)
+			z.facing = Vector2.DOWN
+			_enemies.append(z)
+			row += 1
+		for i in 2:
+			var b := Survivor.new()
+			b.position = at + Vector2(row * 70, 0)
+			main.add_survivor(b)
+			_enemies.append(b)
+			row += 1
+		for e in _enemies:
+			e.set_physics_process(false)
+		p.global_position = at + Vector2(210, 110)
+	if frame == 45:
+		for e in _enemies:
+			e._animate(false) if e is Zombie else e._animate()
+		await get_tree().process_frame
+		_shot("enemies")
+		for e in _enemies:
+			e.queue_free()
+		var b2: Rect2i = w.buildings[0]
+		p.global_position = w.center_of(Vector2i(b2.end.x + 1, b2.position.y + b2.size.y / 2))
 	if frame == 60:
 		_shot("outside")
 		var l: LootSpot = null
@@ -99,3 +133,20 @@ func _process(_delta: float) -> void:
 		main.save_game()
 		main.queue_free()
 		add_child(load("res://scenes/menu.tscn").instantiate())
+
+
+## Left end of a 16x6 tile strip of open ground (for the enemy line-up).
+func _open_row(w: World) -> Vector2:
+	for y in range(6, World.H - 8):
+		for x in range(10, World.W - 10):
+			var ok := true
+			for dy in range(-2, 4):
+				for dx in range(-8, 8):
+					if w.get_tile(Vector2i(x + dx, y + dy)) != World.GROUND:
+						ok = false
+						break
+				if not ok:
+					break
+			if ok:
+				return w.center_of(Vector2i(x, y))
+	return w.center_of(w.spawn_cell)

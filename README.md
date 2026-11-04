@@ -23,7 +23,7 @@ The game saves automatically (every 20 s, when you quit, and when you die) to
 | R | Reload (restart when dead) |
 | 1 / 2 / 3, mouse wheel | Primary / secondary / melee weapon |
 | X | Lower weapon (fists) |
-| Tab or I | Inventory: nearby / storage / gear (drag to move, double-click to equip/use, right-click for actions, drag outside to drop) |
+| Tab or I | Inventory: nearby / storage / gear (drag to move, double-click to equip/use, right-click for actions like Repair / Tear into rags, drag outside to drop) |
 | F / G / H | Eat / Drink / Bandage or first aid |
 | Esc | Pause (Q = save & quit to menu) |
 | F11 | Fullscreen |

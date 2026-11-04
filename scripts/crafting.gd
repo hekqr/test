@@ -7,6 +7,7 @@ const RECIPES := [
 	{"id": "sack_backpack", "name": "Sack backpack", "makes": "sack_backpack", "count": 1, "needs": {"sack": 1, "rope": 1}, "tools": []},
 	{"id": "spear", "name": "Wooden spear", "makes": "spear", "count": 1, "needs": {"sticks": 3, "rope": 1}, "tools": ["knife", "axe"]},
 	{"id": "campfire", "name": "Campfire", "makes": "", "count": 0, "needs": {"sticks": 3, "matches": 1}, "tools": []},
+	{"id": "scrap_armour", "name": "Improvised armour", "makes": "scrap_armour", "count": 1, "needs": {"scrap_metal": 3, "rope": 2}, "tools": []},
 ]
 
 ## Ideas for later recipes (shown in the docs, not in game yet).
@@ -15,9 +16,8 @@ const PLANNED := [
 	"Splint (sticks + rags) for broken legs",
 	"Torch (stick + rags + match) to carry light",
 	"Barricade planks (axe + wood) for doors and windows",
-	"Sewing kit repairs for clothing, toolbox repairs for weapons",
 	"Boiling dirty water on a campfire",
-	"Improvised armour (metal plates + rope)",
+	"Scrap helmet (scrap metal + rags)",
 ]
 
 

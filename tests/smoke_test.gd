@@ -108,6 +108,16 @@ func _physics_process(_delta: float) -> void:
 			check(main.explored[w.idx(w.cell_of(p.global_position))] == 1, "map reveals where you are")
 			check(main.explored[w.idx(Vector2i(1, 1))] == 0 or w.cell_of(p.global_position).distance_to(Vector2i(1, 1)) < 20, "far away stays unexplored")
 			check(not ("stamina" in p), "stamina removed")
+			print("Bandits (spawn)")
+			var bandits := get_tree().get_nodes_in_group("survivors")
+			check(bandits.size() >= 4, "hostile survivors spawned (%d)" % bandits.size())
+			var dressed := bandits.all(func(b): return b.gear["shirt"] != null and b.gear["pants"] != null)
+			var armed := bandits.all(func(b): return b.weapon_id() != "fists" or b.gear["melee"] == null)
+			check(dressed and armed, "bandits wear clothes and carry weapons")
+			var far := bandits.all(func(b): return b.global_position.distance_to(p.global_position) > 600.0)
+			check(far, "bandits don't spawn on top of you")
+			for b in bandits:
+				b.set_physics_process(false) # keep them out of the other tests
 			_clear_zombies()
 			pos_before = p.global_position
 			Input.action_press("move_right")
@@ -445,7 +455,7 @@ func _physics_process(_delta: float) -> void:
 			z_test.health = 200.0
 			hp_before = z_test.health
 		140:
-			check(hp_before - z_test.health >= 42.0, "bat attacks automatically and hits hard")
+			check(hp_before - z_test.health >= 33.0, "bat attacks automatically and hits hard (%.0f)" % (hp_before - z_test.health))
 			z_test.set_physics_process(true)
 			print("Zombie attacks")
 			z_test.health = 999.0
@@ -491,7 +501,7 @@ func _physics_process(_delta: float) -> void:
 			p._sprinting = false
 			check(_settle_time("pistol") < _settle_time("rifle") and _settle_time("rifle") < _settle_time("shotgun") and _settle_time("shotgun") < _settle_time("hunting_rifle"), "pistol settles fastest, hunting rifle slowest")
 			check(Items.damage_text("shotgun") == "24 - 144 damage (1 - 6 pellets)", "shotgun lists min (1 pellet) and max damage")
-			check(Items.damage_text("pistol") == "45 damage" and Items.damage_text("bat") == "42 damage", "weapons list their damage")
+			check(Items.damage_text("pistol") == "45 damage" and Items.damage_text("bat") == "34 damage", "weapons list their damage")
 			p.aim_spread = 0.0
 			hp_before = z_test.health
 			p.shoot()
@@ -540,7 +550,7 @@ func _physics_process(_delta: float) -> void:
 			check(not saved_alive.is_empty() and not saved_alive["dead"], "save written (alive)")
 			check(SaveGame.can_continue(), "alive save can be continued")
 			print("Death")
-			var zk: Zombie = main.add_zombie(p.global_position + Vector2(0, 300), true)
+			var zk: Zombie = main.add_zombie(p.global_position + Vector2(0, 300), "brute")
 			zk.take_damage(999.0, Vector2.RIGHT)
 			check(zk.dead and not zk.is_in_group("zombies"), "zombie dies and leaves a corpse")
 			p.take_damage(999.0)
@@ -583,8 +593,111 @@ func _physics_process(_delta: float) -> void:
 			var zn := get_tree().get_nodes_in_group("zombies").size()
 			var zs: int = saved_alive["zombies"].size()
 			check(zn >= zs and zn <= zs + 2, "zombies restored (%d saved, %d now)" % [zs, zn])
+			var typed: bool = saved_alive["zombies"].all(func(zd): return Zombie.TYPES.has(String(zd.get("type", ""))))
+			check(typed, "zombie types saved")
+			var sn := get_tree().get_nodes_in_group("survivors").size()
+			var ss: int = saved_alive["survivors"].size()
+			check(ss > 0 and sn >= ss, "bandits restored (%d saved, %d now)" % [ss, sn])
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(Game.save_path))
 		292:
+			_wear_and_repair_tests()
+			print("Zombie types")
+			main._spawn_t = 9999.0
+			main._survivor_t = 9999.0
+			_clear_zombies()
+			for b in get_tree().get_nodes_in_group("survivors"):
+				b.free()
+			var p2: Player = main.player
+			p2.global_position = _open_spot(main.world, 8)
+			p2.health = 100.0
+			p2.holster()
+			var hp := {}
+			for t in Zombie.TYPES:
+				var z: Zombie = main.add_zombie(p2.global_position + Vector2(0, 900), t)
+				hp[t] = z.health
+				if t == "runner":
+					check(z.chase_speed > Player.WALK_SPEED and z.chase_speed < Player.SPRINT_SPEED, "runners are faster than walking, slower than sprinting")
+			check(hp["runner"] < hp["walker"] and hp["walker"] < hp["axe"] and hp["axe"] < hp["brute"], "zombie types have different health")
+			var seen := {}
+			for i in 3000:
+				seen[main.pick_zombie_type(0)] = true
+			check(seen.size() == Zombie.TYPES.size(), "every zombie type can spawn")
+			_clear_zombies()
+			z_test = main.add_zombie(p2.global_position + Vector2(200, 0), "axe")
+			z_test._throw_cd = 0.0
+			hp_before = p2.health
+		390:
+			var p2: Player = main.player
+			check(not z_test.has_axe, "axe zombie throws its axe")
+			check(z_test._axe_waiting(), "the axe lands on the ground")
+			print("     player hp %.0f -> %.0f" % [hp_before, p2.health])
+			var spot: LootSpot = z_test.axe_spot
+			if spot:
+				z_test.global_position = spot.global_position
+				z_test._pick_up_axe()
+			check(z_test.has_axe and (spot == null or not spot.contents.any(func(it): return it["id"] == "axe")), "it walks over and picks the axe back up")
+			z_test.free()
+			_clear_zombies()
+			z_test = main.add_zombie(p2.global_position + Vector2(170, 0), "armed", "pistol", 6)
+			p2.health = 100.0
+			hp_before = p2.health
+		560:
+			var p2: Player = main.player
+			check(z_test.mag < 6, "armed zombie shoots at you (%d rounds left, hp %.0f)" % [z_test.mag, p2.health])
+			var k: int = main.kills
+			z_test.take_damage(999.0, Vector2.RIGHT, p2)
+		562:
+			var p2: Player = main.player
+			check(_pile_with("pistol") != null, "armed zombie drops its gun")
+			check(main.kills >= 1, "your kills count")
+			_clear_zombies()
+			print("Bandits")
+			var b := Survivor.new()
+			b.gear = {}
+			for slot in Inventory.GEAR:
+				b.gear[slot] = null
+			b.gear["shirt"] = Items.make("tshirt")
+			b.gear["pants"] = Items.make("jeans")
+			var g := Items.make("pistol")
+			g["mag"] = 8
+			b.gear["secondary"] = g
+			b.items = [Items.make("ammo_9mm", 16), Items.make("water")]
+			b.position = p2.global_position + Vector2(-180, 0)
+			main.add_survivor(b)
+			p2.health = 100.0
+			hp_before = p2.health
+		740:
+			var p2: Player = main.player
+			var b: Survivor = get_tree().get_nodes_in_group("survivors")[0]
+			check(b.state == Survivor.State.FIGHT and b.foe == p2, "bandit attacks you on sight")
+			check(int(b.gear["secondary"]["mag"]) < 8 or b._ammo_count("ammo_9mm") < 16, "bandit fires at you (hp %.0f -> %.0f)" % [hp_before, p2.health])
+			p2.inv.gear["secondary"] = {"id": "pistol", "count": 1, "mag": 8, "cond": 100.0}
+			p2.switch_weapon("secondary")
+			p2._update_aim(0.016)
+			check(p2.aim_target == b, "your gun auto-aims at bandits too")
+			var k: int = main.kills
+			var hb := b.health
+			b.take_damage(20.0, Vector2.RIGHT, p2)
+			check(b.health < hb, "bandits can be hurt")
+			b.take_damage(999.0, Vector2.RIGHT, p2)
+			check(b.dead and main.kills == k + 1, "bandit killed (counts as a kill)")
+		742:
+			var p2: Player = main.player
+			var has_all := func(l): return l.is_bag and ["pistol", "tshirt", "jeans", "ammo_9mm", "water"].all(func(id): return l.contents.any(func(it): return it["id"] == id))
+			check(get_tree().get_nodes_in_group("loot").any(has_all), "dead bandit drops everything: gun, clothes, ammo, supplies")
+			print("Zombies vs bandits")
+			var b2 := Survivor.new()
+			b2.position = p2.global_position + Vector2(0, 0)
+			p2.global_position = main.world.center_of(main.world.spawn_cell)
+			main.add_survivor(b2)
+			var zb: Zombie = main.add_zombie(b2.position + Vector2(90, 0), "walker")
+			b2.player = null
+			zb.player = null
+			zb._think()
+			b2._think()
+			check(zb.foe == b2 and zb.state == Zombie.State.CHASE, "zombies go after bandits")
+			check(b2.foe == zb and b2.state == Survivor.State.FIGHT, "bandits fight zombies")
+		744:
 			if failures.is_empty():
 				print("SMOKE TEST PASSED")
 				get_tree().quit(0)
@@ -680,13 +793,13 @@ func _settle_time(id: String) -> float:
 	return float(w["aim_time"])
 
 
-## Centre of a 7x7 patch of open ground (nothing that blocks bullets).
-func _open_spot(w: World) -> Vector2:
-	for y in range(5, World.H - 5):
-		for x in range(5, World.W - 5):
+## Centre of a patch of open ground (nothing that blocks bullets), (2r+1) tiles wide.
+func _open_spot(w: World, r := 3) -> Vector2:
+	for y in range(r + 2, World.H - r - 2):
+		for x in range(r + 2, World.W - r - 2):
 			var ok := true
-			for dy in range(-3, 4):
-				for dx in range(-3, 4):
+			for dy in range(-r, r + 1):
+				for dx in range(-r, r + 1):
 					if w.get_tile(Vector2i(x + dx, y + dy)) != World.GROUND:
 						ok = false
 						break
@@ -695,3 +808,85 @@ func _open_spot(w: World) -> Vector2:
 			if ok:
 				return w.center_of(Vector2i(x, y))
 	return w.center_of(w.spawn_cell)
+
+
+## Melee nerf, weapons wearing out and breaking, jams, repair kits, improvised armour.
+func _wear_and_repair_tests() -> void:
+	var p: Player = main.player
+	var inv := p.inv
+	print("Melee nerf")
+	check(int(Items.WEAPONS["knife"]["damage"]) == 22 and int(Items.WEAPONS["axe"]["damage"]) == 48 and int(Items.WEAPONS["fists"]["damage"]) == 14, "melee weapons deal 20% less")
+	print("Weapon wear / repair")
+	_clear_zombies()
+	inv.gear["melee"] = Items.make("knife")
+	p.switch_weapon("melee")
+	if inv.active != "melee":
+		p.switch_weapon("melee")
+	var z: Zombie = main.add_zombie(p.global_position + Vector2(20, 0))
+	z.set_physics_process(false)
+	z.health = 999.0
+	p.melee(Vector2.RIGHT)
+	check(float(inv.gear["melee"]["cond"]) < 100.0, "melee hits wear the weapon down (%.1f%%)" % float(inv.gear["melee"]["cond"]))
+	inv.gear["melee"]["cond"] = 0.5
+	p.melee(Vector2.RIGHT)
+	check(Items.is_ruined(inv.gear["melee"]) and p.weapon_id() == "fists", "a worn-out knife breaks -> fists")
+	p.holster()
+	p.switch_weapon("melee")
+	check(inv.active != "melee", "broken weapons can't be selected")
+	z.free()
+	var g := {"id": "pistol", "count": 1, "mag": 5, "cond": 10.0}
+	inv.gear["secondary"] = g
+	p.switch_weapon("secondary")
+	var jams := 0
+	for i in 80:
+		g["cond"] = 10.0
+		g["mag"] = 5
+		p.shoot()
+		if int(g["mag"]) == 5:
+			jams += 1
+	check(jams > 0 and jams < 40, "badly worn guns jam sometimes (%d / 80)" % jams)
+	g["cond"] = 100.0
+	p.shoot()
+	check(float(g["cond"]) < 100.0, "shooting wears the gun")
+	# Repairs
+	var hood := Items.make("hoodie")
+	hood["cond"] = 30.0
+	inv.gear["coat"] = hood
+	var acts: Array = p.actions_for(Inventory.gear_loc("coat"))
+	check(acts.any(func(a): return a[1] == "repair" and String(a[0]).contains("needs")), "repair needs a sewing kit")
+	check(not p.repair(Inventory.gear_loc("coat")), "can't repair without a kit")
+	inv.gear["hands"] = Items.make("sewing_kit")
+	acts = p.actions_for(Inventory.gear_loc("coat"))
+	check(acts.any(func(a): return a[0] == "Repair (sewing kit)"), "right-click: Repair (sewing kit)")
+	check(p.repair(Inventory.gear_loc("coat")) and absf(float(hood["cond"]) - 70.0) < 0.1 and int(inv.gear["hands"]["uses"]) == 4, "sewing kit: +40% condition, one use")
+	g["cond"] = 50.0
+	check(not p.repair(Inventory.gear_loc("secondary")), "a sewing kit can't fix guns")
+	inv.gear["hands"] = Items.make("toolbox")
+	inv.gear["hands"]["uses"] = 1
+	check(p.repair(Inventory.gear_loc("secondary")) and absf(float(g["cond"]) - 90.0) < 0.1, "toolbox repairs guns")
+	check(inv.gear["hands"] == null, "used-up toolbox is gone")
+	inv.gear["hands"] = Items.make("toolbox")
+	inv.gear["melee"]["cond"] = 0.0
+	check(not p.repair(Inventory.gear_loc("melee")), "ruined things are beyond repair")
+	check(Items.repair_kind("helmet") == "tool" and Items.repair_kind("jeans") == "sew" and Items.repair_kind("bat") == "tool", "helmets & weapons need a toolbox, clothes a sewing kit")
+	inv.gear["hands"] = Items.make("rags", 2)
+	p.quick_use(Inventory.gear_loc("hands"))
+	check(inv.gear["hands"] != null, "double-clicking materials never drops them")
+	inv.gear["hands"] = null
+	print("Improvised armour")
+	inv.gear["armour"] = null
+	inv.gear["back"] = Items.make("backpack_large")
+	inv.add("scrap_metal", 3)
+	inv.add("rope", 2)
+	var before := inv.armour_points()
+	check(p.craft("scrap_armour"), "craft improvised armour (3 scrap metal + 2 rope)")
+	check(inv.gear["armour"] != null and inv.gear["armour"]["id"] == "scrap_armour" and inv.armour_points() > before + 2.0, "improvised armour worn: +2.2 armour")
+	var found := {}
+	for i in 400:
+		for it in Loot.roll("crate") + Loot.roll("wardrobe") + Loot.roll("car"):
+			found[it["id"]] = true
+	check(found.has("toolbox") and found.has("sewing_kit") and found.has("scrap_metal"), "toolboxes, sewing kits and scrap metal can be found")
+	var used := Loot.roll("crate")
+	for i in 200:
+		used += Loot.roll("crate")
+	check(used.any(func(it): return it.has("cond") and float(it["cond"]) < 100.0), "found weapons / clothes are worn")

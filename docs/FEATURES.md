@@ -140,7 +140,28 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
   - Campfire = 3 sticks + 1 match
   - Shirts / flannels now tear into **rags** (3 / 4)
 - 💭 **Crafting ideas for later**: bow & arrows, splint (for broken legs), torch, barricade planks for doors &
-  windows, sewing kit / toolbox repairs, boiling dirty water, improvised armour from metal plates
+  windows, boiling dirty water, scrap helmet
+
+## Milestone 4 — Enemies, wear & repair
+- ✅ **Melee nerf**: all melee damage −20% (fists 14, knife 22, spear 27, bat 34, axe 48)
+- ✅ **Weapon wear**: weapons have condition. Melee weapons wear on every hit, guns on every shot.
+  Worn melee weapons hit up to 25% softer; guns below 50% can **jam**. At 0% a weapon is broken (fists)
+- ✅ Found clothes and weapons are used (35–100% condition)
+- ✅ **Repairs** (right-click → Repair): +40% condition per use, ruined things can't be fixed
+  - **Sewing kit** (5 uses): clothing, backpacks — wardrobes, boxes, desks
+  - **Toolbox** (5 uses): weapons, helmets, improvised armour — tool crates, cars, police lockers
+- ✅ **Improvised armour** (armour slot, 2.2 armour) = 3 scrap metal + 2 rope. Scrap metal: crates, cars, bins
+- ✅ **Zombie types**:
+  - Walker — the usual
+  - Runner — fast (faster than walking, slower than sprinting), weak; more at night
+  - Brute — big, slow, very tough
+  - Axe zombie — throws its axe from a distance, then walks over to pick it up (grab it first!)
+  - Armed zombie — dead soldier / cop that shoots until its magazine is empty, drops the gun; more in the city
+- ✅ **Bandits** (hostile survivors): groups of 1–3 in towns and along roads (up to 8 alive). They wear random
+  clothes, carry a gun and/or melee weapon, spare ammo and supplies. They attack you on sight, shoot zombies
+  that get close (zombies attack them too), keep their distance with guns, reload, run away and bandage up when
+  hurt, and drop **everything** they carry when killed. Gunfights are loud — zombies come running
+- ✅ Kills only count when you land the killing blow
 
 ## Planned
 - 📌 **Base building** (wooden & reinforced walls and gates are in the art pack)
@@ -153,7 +174,7 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 
 ## Milestone 3 — World & content
 - 💭 Hand-designed + generated towns, named locations, a world map
-- 💭 Zombie types: runner, tank, crawler
+- ✅ Zombie types: runner, brute, axe, armed (crawler still an idea)
 - 💭 Vehicles (car with fuel)
 - 💭 Weather (rain, fog)
 - 💭 Crafting & base building (barricades)

@@ -10,6 +10,8 @@ class_name Items
 ## warmth  how much the item warms you
 ## sleeves takes extra wear when you're attacked
 ## tear    rags you get from tearing it up
+## repair  "sew" (sewing kit) or "tool" (toolbox): what fixes it. Weapons always use a toolbox.
+## uses    repair kits: how many repairs are left in a fresh kit
 ## colors  random colour picked when the item spawns
 ## icon    "px:<name>" = drawn in code, "sheet:<tex>:<frames>:<frame>" = frame of a sprite sheet, else a texture
 
@@ -36,6 +38,11 @@ const DEFS := {
 	"rope": {"name": "Rope", "icon": "px:rope", "stack": 3, "kind": "material"},
 	"sack": {"name": "Sack", "icon": "px:sack", "stack": 3, "kind": "material"},
 	"map": {"name": "Road map", "icon": "px:map", "stack": 1, "kind": "material"},
+	"scrap_metal": {"name": "Scrap metal", "icon": "px:scrap_metal", "stack": 5, "kind": "material"},
+
+	# --- repair kits (each repair adds REPAIR_AMOUNT condition; ruined things can't be fixed)
+	"sewing_kit": {"name": "Sewing kit", "icon": "px:sewing_kit", "stack": 1, "kind": "tool", "uses": 5, "fixes": "sew"},
+	"toolbox": {"name": "Toolbox", "icon": "px:toolbox", "stack": 1, "kind": "tool", "uses": 5, "fixes": "tool"},
 
 	# --- ammo (each gun takes exactly one type)
 	"ammo_9mm": {"name": "9mm rounds", "icon": "icon_ammo_pistol", "stack": 30, "kind": "ammo"},
@@ -58,7 +65,7 @@ const DEFS := {
 		"colors": ["red", "blue", "black", "green", "yellow", "white", "grey"]},
 	"beanie": {"name": "Beanie", "icon": "px:beanie", "stack": 1, "kind": "clothing", "equip": "head", "cargo": 0, "big": true, "warmth": 10.0,
 		"colors": ["grey", "black", "red", "blue", "green", "orange", "purple"]},
-	"helmet": {"name": "Helmet", "icon": "px:helmet", "stack": 1, "kind": "clothing", "equip": "head", "cargo": 0, "big": true, "warmth": 3.0, "armour": 2.0,
+	"helmet": {"name": "Helmet", "icon": "px:helmet", "stack": 1, "kind": "clothing", "equip": "head", "cargo": 0, "big": true, "warmth": 3.0, "armour": 2.0, "repair": "tool",
 		"colors": ["olive", "black", "tan"]},
 	"tshirt": {"name": "T-shirt", "icon": "px:tshirt", "stack": 1, "kind": "clothing", "equip": "shirt", "cargo": 0, "big": true, "warmth": 3.0, "tear": 3,
 		"colors": ["white", "black", "grey", "red", "blue", "green", "yellow", "orange", "purple", "pink"]},
@@ -76,6 +83,7 @@ const DEFS := {
 		"colors": ["brown", "black", "darkbrown"]},
 	"vest": {"name": "Tactical vest", "icon": "px:vest", "stack": 1, "kind": "clothing", "equip": "armour", "cargo": 2, "big": true, "warmth": 4.0, "armour": 3.0,
 		"colors": ["olive", "black", "tan"]},
+	"scrap_armour": {"name": "Improvised armour", "icon": "px:scrap_armour", "stack": 1, "kind": "clothing", "equip": "armour", "cargo": 0, "big": true, "warmth": 2.0, "armour": 2.2, "repair": "tool"},
 	"backpack_small": {"name": "Small backpack", "icon": "px:backpack_small", "stack": 1, "kind": "clothing", "equip": "back", "cargo": 6, "big": true, "warmth": 2.0,
 		"colors": ["olive", "black", "blue", "red", "grey", "brown"]},
 	"sack_backpack": {"name": "Sack backpack", "icon": "px:sack_backpack", "stack": 1, "kind": "clothing", "equip": "back", "cargo": 4, "big": true, "warmth": 1.0},
@@ -95,25 +103,25 @@ const COLORS := {
 }
 
 const WEAPONS := {
-	"fists": {"name": "Fists", "melee": true, "damage": 18.0, "range": 34.0, "cooldown": 0.55, "noise": 90.0, "held": ""},
-	"knife": {"name": "Knife", "melee": true, "damage": 28.0, "range": 34.0, "cooldown": 0.38, "noise": 70.0, "held": "icon_knife"},
-	"bat": {"name": "Baseball bat", "melee": true, "damage": 42.0, "range": 48.0, "cooldown": 0.75, "noise": 140.0, "held": "item_bat"},
-	"spear": {"name": "Wooden spear", "melee": true, "damage": 34.0, "range": 60.0, "cooldown": 0.8, "noise": 100.0, "held": "px:spear"},
-	"axe": {"name": "Fire axe", "melee": true, "damage": 60.0, "range": 50.0, "cooldown": 1.0, "noise": 150.0, "held": "sheet:axe_sheet:9:0"},
+	"fists": {"name": "Fists", "melee": true, "damage": 14.0, "range": 34.0, "cooldown": 0.55, "noise": 90.0, "held": ""},
+	"knife": {"name": "Knife", "melee": true, "damage": 22.0, "range": 34.0, "cooldown": 0.38, "noise": 70.0, "wear": 0.8, "held": "icon_knife"},
+	"bat": {"name": "Baseball bat", "melee": true, "damage": 34.0, "range": 48.0, "cooldown": 0.75, "noise": 140.0, "wear": 0.6, "held": "item_bat"},
+	"spear": {"name": "Wooden spear", "melee": true, "damage": 27.0, "range": 60.0, "cooldown": 0.8, "noise": 100.0, "wear": 1.4, "held": "px:spear"},
+	"axe": {"name": "Fire axe", "melee": true, "damage": 48.0, "range": 50.0, "cooldown": 1.0, "noise": 150.0, "wear": 0.5, "held": "sheet:axe_sheet:9:0"},
 	"pistol": {"name": "Pistol", "melee": false, "damage": 45.0, "mag": 8, "ammo": "ammo_9mm",
-		"cooldown": 0.32, "reload": 1.4, "pellets": 1, "spread": 0.0, "range": 750.0, "noise": 750.0,
+		"cooldown": 0.32, "reload": 1.4, "pellets": 1, "spread": 0.0, "range": 750.0, "noise": 750.0, "wear": 0.25,
 		"aim_time": 0.7, "spread_max": 0.45, "spread_min": 0.03, "recoil": 0.14,
 		"held": "item_pistol", "bullet_ui": "ui_bullet_pistol"},
 	"shotgun": {"name": "Shotgun", "melee": false, "damage": 24.0, "mag": 5, "ammo": "ammo_12ga",
-		"cooldown": 0.8, "reload": 2.4, "pellets": 6, "spread": 0.16, "range": 380.0, "noise": 1000.0,
+		"cooldown": 0.8, "reload": 2.4, "pellets": 6, "spread": 0.16, "range": 380.0, "noise": 1000.0, "wear": 0.4,
 		"aim_time": 1.5, "spread_max": 0.6, "spread_min": 0.1, "recoil": 0.35,
 		"held": "item_shotgun", "bullet_ui": "ui_bullet_shotgun"},
 	"rifle": {"name": "Assault rifle", "melee": false, "damage": 32.0, "mag": 30, "ammo": "ammo_556",
-		"cooldown": 0.11, "reload": 2.2, "pellets": 1, "spread": 0.0, "range": 850.0, "noise": 950.0,
+		"cooldown": 0.11, "reload": 2.2, "pellets": 1, "spread": 0.0, "range": 850.0, "noise": 950.0, "wear": 0.08,
 		"aim_time": 1.1, "spread_max": 0.5, "spread_min": 0.04, "recoil": 0.06,
 		"held": "item_rifle", "bullet_ui": "ui_bullet_rifle"},
 	"hunting_rifle": {"name": "Hunting rifle", "melee": false, "damage": 120.0, "mag": 5, "ammo": "ammo_308",
-		"cooldown": 1.1, "reload": 2.6, "pellets": 1, "spread": 0.0, "range": 1200.0, "noise": 1100.0,
+		"cooldown": 1.1, "reload": 2.6, "pellets": 1, "spread": 0.0, "range": 1200.0, "noise": 1100.0, "wear": 0.3,
 		"aim_time": 2.2, "spread_max": 0.55, "spread_min": 0.008, "recoil": 0.45,
 		"held": "icon_hunting_rifle", "bullet_ui": "ui_bullet_rifle"},
 }
@@ -129,6 +137,25 @@ static func damage_text(id: String) -> String:
 	if pellets > 1:
 		return "%d - %d damage (1 - %d pellets)" % [dmg, dmg * pellets, pellets]
 	return "%d damage" % dmg
+
+
+const REPAIR_AMOUNT := 40.0
+
+
+## Which kit repairs it: "tool" (toolbox) for weapons and metal, "sew" (sewing kit) for other clothing, "" = can't.
+static func repair_kind(id: String) -> String:
+	if is_weapon(id):
+		return "tool"
+	if is_clothing(id):
+		return DEFS[id].get("repair", "sew")
+	return ""
+
+
+## Worn weapons hit a bit softer: 100% at full condition, 75% just before breaking.
+static func weapon_factor(it) -> float:
+	if it == null or not it.has("cond"):
+		return 1.0
+	return 0.75 + 0.25 * clampf(float(it["cond"]), 0.0, 100.0) / 100.0
 
 
 static func def(id: String) -> Dictionary:
@@ -229,6 +256,10 @@ static func make(id: String, count := 1) -> Dictionary:
 	var it := {"id": id, "count": count}
 	if WEAPONS.has(id) and not WEAPONS[id]["melee"]:
 		it["mag"] = randi_range(0, int(WEAPONS[id]["mag"]) / 2)
+	if is_weapon(id):
+		it["cond"] = 100.0
+	if DEFS[id].has("uses"):
+		it["uses"] = int(DEFS[id]["uses"])
 	if is_clothing(id):
 		it["cond"] = 100.0
 		var c := []
@@ -239,6 +270,15 @@ static func make(id: String, count := 1) -> Dictionary:
 		var cn: String = cols[randi() % cols.size()]
 		it["color_name"] = cn
 		it["color"] = COLORS[cn]
+	return it
+
+
+## Found items have been used: clothing and weapons 35-100% condition, repair kits partly used.
+static func used(it: Dictionary, lo := 35.0, hi := 100.0) -> Dictionary:
+	if it.has("cond"):
+		it["cond"] = float(roundi(randf_range(lo, hi)))
+	if it.has("uses"):
+		it["uses"] = randi_range(maxi(1, int(it["uses"]) - 3), int(it["uses"]))
 	return it
 
 
@@ -255,6 +295,6 @@ static func roll(table: Array, rolls: Vector2i, empty_chance := 0.15) -> Array:
 		for row in table:
 			r -= int(row[1])
 			if r < 0:
-				out.append(make(row[0], randi_range(row[2], row[3])))
+				out.append(used(make(row[0], randi_range(row[2], row[3]))))
 				break
 	return out

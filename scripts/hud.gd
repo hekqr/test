@@ -411,6 +411,8 @@ func _item_icon(item: Dictionary, cell: Rect2, _scale_px := 0.0, modulate := Col
 		_text(cell.end - Vector2(6, 6), str(item["count"]), 14, Color.WHITE, HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	elif item.has("mag"):
 		_text(cell.end - Vector2(6, 6), str(item["mag"]), 12, Color(1, 0.9, 0.6), HORIZONTAL_ALIGNMENT_RIGHT, 0)
+	elif item.has("uses"):
+		_text(cell.end - Vector2(6, 6), str(item["uses"]), 12, Color(0.7, 0.9, 1.0), HORIZONTAL_ALIGNMENT_RIGHT, 0)
 
 
 func _cell(r: Rect2, scale_px: float, chosen := false) -> void:
@@ -743,6 +745,13 @@ func _info(it: Dictionary) -> String:
 		parts.append("%d / %d loaded" % [it["mag"], Items.WEAPONS[id]["mag"]])
 	if Items.is_weapon(id):
 		parts.append(("melee, " if Items.WEAPONS[id]["melee"] else "") + Items.damage_text(id))
+		if it.has("cond"):
+			parts.append(_cond_text(it) + (" (broken)" if Items.is_ruined(it) else ""))
+	if it.has("uses"):
+		parts.append("%d uses left" % int(it["uses"]))
+		parts.append("repairs clothing" if d.get("fixes", "") == "sew" else "repairs weapons, helmets, metal armour")
+	if id == "scrap_metal":
+		parts.append("for improvised armour")
 	if Items.kind(id) == "ammo":
 		for w in Items.WEAPONS:
 			if Items.WEAPONS[w].get("ammo", "") == id:

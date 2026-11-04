@@ -7,6 +7,9 @@ const DAY_LENGTH := 480.0 # seconds for a full day/night cycle
 const AUTOSAVE_EVERY := 20.0
 const MAX_RABBITS := 22
 const MAX_DEER := 11
+const MAX_SURVIVORS := 8 # hostile bandits alive at once
+## Zombie mix: [type, weight]. Runners show up more at night, armed zombies more in the city.
+const ZOMBIE_MIX := [["walker", 62.0], ["runner", 12.0], ["brute", 10.0], ["axe", 7.0], ["armed", 9.0]]
 
 var world: World
 var player: Player
@@ -22,6 +25,8 @@ var world_seed := 0
 var _spawn_t := 0.0
 var _save_t := AUTOSAVE_EVERY
 var _animal_t := 0.0
+var _survivor_t := 0.0
+var survivors: Node2D
 ## Map exploration: 1 = you've seen this cell (W x H)
 var explored := PackedByteArray()
 var _reveal_t := 0.0
@@ -41,6 +46,7 @@ func _ready() -> void:
 	entities = Node2D.new()
 	entities.name = "Entities"
 	entities.y_sort_enabled = true
+	entities.add_to_group("entities")
 	add_child(entities)
 	world.generate(world_seed, entities)
 	explored.resize(World.W * World.H)
@@ -62,9 +68,17 @@ func _ready() -> void:
 	entities.add_child(player)
 	player.died.connect(_on_player_died)
 
+	survivors = Node2D.new()
+	survivors.name = "Survivors"
+	survivors.y_sort_enabled = true
+	entities.add_child(survivors)
+
 	if save.is_empty():
 		for i in MAX_ZOMBIES_DAY:
 			spawn_zombie(500.0)
+		while get_tree().get_nodes_in_group("survivors").size() < MAX_SURVIVORS - 2:
+			if spawn_survivor_group(900.0).is_empty():
+				break
 	else:
 		_apply_save(save)
 	for i in MAX_RABBITS:
@@ -158,8 +172,10 @@ func to_save() -> Dictionary:
 			loot.append((n as LootSpot).to_save())
 	var zs := []
 	for n in get_tree().get_nodes_in_group("zombies"):
-		var z := n as Zombie
-		zs.append({"pos": [z.position.x, z.position.y], "big": z.big, "health": z.health})
+		zs.append((n as Zombie).to_save())
+	var ss := []
+	for n in get_tree().get_nodes_in_group("survivors"):
+		ss.append((n as Survivor).to_save())
 	var p := player
 	return {
 		"seed": world_seed, "dead": p.dead, "day": day, "time_of_day": time_of_day,
@@ -169,7 +185,7 @@ func to_save() -> Dictionary:
 			"thirst": p.thirst, "bleeding": p.bleeding, "temp": p.body_temp, "poison": p.poison_t,
 			"inv": p.inv.to_save(),
 		},
-		"loot": loot, "zombies": zs,
+		"loot": loot, "zombies": zs, "survivors": ss,
 		"fires": get_tree().get_nodes_in_group("fires").map(func(f): return f.to_save()),
 		"explored": Marshalls.raw_to_base64(explored.compress(FileAccess.COMPRESSION_DEFLATE)),
 	}
@@ -202,8 +218,11 @@ func _apply_save(s: Dictionary) -> void:
 	for fd in s.get("fires", []):
 		add_fire(SaveGame.vec(fd["pos"]), fd["fuel"])
 	for zd in s["zombies"]:
-		var z := add_zombie(SaveGame.vec(zd["pos"]), zd["big"])
+		var z := add_zombie(SaveGame.vec(zd["pos"]), String(zd.get("type", "walker")), String(zd.get("gun", "")), int(zd.get("mag", 0)))
 		z.health = zd["health"]
+		z.has_axe = zd.get("has_axe", true)
+	for sd in s.get("survivors", []):
+		add_survivor(Survivor.from_save(sd))
 	player.say("Welcome back. Day %d." % day)
 
 
@@ -257,6 +276,12 @@ func _process(delta: float) -> void:
 		if n["deer"] < MAX_DEER:
 			spawn_animal("deer", 900.0)
 
+	_survivor_t -= delta
+	if _survivor_t <= 0.0:
+		_survivor_t = 45.0
+		if get_tree().get_nodes_in_group("survivors").size() < MAX_SURVIVORS:
+			spawn_survivor_group(1300.0)
+
 	_spawn_t -= delta
 	if _spawn_t <= 0.0:
 		_spawn_t = 3.0
@@ -299,19 +324,82 @@ func spawn_zombie(min_dist: float) -> Zombie:
 		var p := world.center_of(c)
 		if p.distance_to(player.position) < min_dist:
 			continue
-		return add_zombie(p, randf() < 0.12)
+		return add_zombie(p, pick_zombie_type(world.settlement_at(c)))
 	return null
 
 
-func add_zombie(p: Vector2, big := false) -> Zombie:
+func pick_zombie_type(town := -1) -> String:
+	var city: bool = town >= 0 and world.settlements[town]["type"] == "city"
+	var total := 0.0
+	var mix := []
+	for row in ZOMBIE_MIX:
+		var w: float = row[1]
+		if row[0] == "runner":
+			w *= 1.0 + Game.night
+		elif row[0] == "armed":
+			w *= 1.8 if city else (0.4 if town < 0 else 1.0)
+		mix.append([row[0], w])
+		total += w
+	var r := randf() * total
+	for row in mix:
+		r -= float(row[1])
+		if r <= 0.0:
+			return row[0]
+	return "walker"
+
+
+func add_zombie(p: Vector2, type := "walker", gun := "", mag := 0) -> Zombie:
 	var z := Zombie.new()
-	z.big = big
+	z.type = type
+	z.gun = gun
+	z.mag = mag
 	z.world = world
 	z.player = player
 	z.position = p
 	z.died.connect(_on_zombie_died)
 	zombies.add_child(z)
 	return z
+
+
+## Bandits travel in small groups (1-3) and camp in towns, villages or along the roads.
+func spawn_survivor_group(min_dist: float) -> Array:
+	var out := []
+	for attempt in 60:
+		var c: Vector2i
+		if randf() < 0.75 and not world.settlements.is_empty():
+			var st: Dictionary = world.settlements[randi() % world.settlements.size()]
+			var r: Rect2i = st["rect"]
+			c = Vector2i(randi_range(r.position.x, r.end.x - 1), randi_range(r.position.y, r.end.y - 1))
+		else:
+			c = Vector2i(randi_range(4, World.W - 5), randi_range(4, World.H - 5))
+			if world.get_tile(c) != World.ROAD:
+				continue
+		if not world.is_walkable(c) or world.building_at(world.center_of(c)) >= 0:
+			continue
+		var center := world.center_of(c)
+		if center.distance_to(player.position) < min_dist:
+			continue
+		var n := randi_range(1, 3)
+		for i in n:
+			var s := Survivor.new()
+			s.position = world.random_walkable_near(center, 2)
+			s.home = center
+			out.append(add_survivor(s))
+		return out
+	return out
+
+
+func add_survivor(s: Survivor) -> Survivor:
+	s.world = world
+	s.player = player
+	s.died.connect(_on_survivor_died)
+	survivors.add_child(s)
+	return s
+
+
+func _on_survivor_died(s: Survivor) -> void:
+	if s.last_hit_by == player:
+		kills += 1
 
 
 ## Animals live in the wilderness, away from roads and buildings.
@@ -365,10 +453,16 @@ func _on_noise(pos: Vector2, radius: float) -> void:
 		var z := n as Zombie
 		if z.position.distance_to(pos) <= radius:
 			z.hear(pos)
+	for n in get_tree().get_nodes_in_group("survivors"):
+		var s := n as Survivor
+		if s.position.distance_to(pos) <= radius * 0.8:
+			s.hear(pos)
 
 
-func _on_zombie_died(_z: Zombie) -> void:
-	kills += 1
+## Only your own kills count.
+func _on_zombie_died(z: Zombie) -> void:
+	if z.last_hit_by == player:
+		kills += 1
 
 
 func _on_player_died() -> void:

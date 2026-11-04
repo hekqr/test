@@ -5,6 +5,7 @@ const LAYER_WALL := 1
 const LAYER_PLAYER := 2
 const LAYER_ZOMBIE := 4
 const LAYER_ANIMAL := 8
+const LAYER_NPC := 16 # hostile survivors
 
 signal noise_made(pos: Vector2, radius: float)
 
@@ -123,6 +124,29 @@ func dir_name(v: Vector2) -> String:
 	if absf(v.x) >= absf(v.y) * 0.8:
 		return "side" if v.x >= 0.0 else "side-left"
 	return "down" if v.y >= 0.0 else "up"
+
+
+## The y-sorted node where things on the ground go (loot piles, thrown axes).
+func ground(from: Node) -> Node:
+	var e := from.get_tree().get_first_node_in_group("entities")
+	return e if e != null else from.get_parent()
+
+
+## Short blood spray where a bullet or blade hits (plays once, then removes itself).
+func hit_fx(parent: Node, pos: Vector2, dir: Vector2) -> void:
+	if parent == null:
+		return
+	var key := "hit_blood_%d" % randi_range(1, 2)
+	var sf := frames(key, {"hit": [key, 3, 16.0, false]})
+	var fx := AnimatedSprite2D.new()
+	fx.sprite_frames = sf
+	fx.scale = Vector2(2, 2)
+	fx.flip_h = dir.x < 0.0
+	fx.position = pos + Vector2(0, -10)
+	fx.z_index = 5
+	parent.add_child(fx)
+	fx.play("hit")
+	fx.animation_finished.connect(fx.queue_free)
 
 
 func make_sprite(name: String, scale_px := 2.0) -> Sprite2D:

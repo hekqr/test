@@ -245,6 +245,15 @@ func pickup(item: Dictionary) -> int:
 	return left
 
 
+## Where the first carried `id` is (storage or hands), or {} if you don't have one.
+func find(id: String) -> Dictionary:
+	for loc in _holders():
+		var s = get_at(loc)
+		if s != null and s["id"] == id:
+			return loc
+	return {}
+
+
 func count_of(id: String) -> int:
 	var n := 0
 	for loc in _holders():
