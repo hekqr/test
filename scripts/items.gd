@@ -39,6 +39,9 @@ const DEFS := {
 	"sack": {"name": "Sack", "icon": "px:sack", "stack": 3, "kind": "material"},
 	"map": {"name": "Road map", "icon": "px:map", "stack": 1, "kind": "material"},
 	"scrap_metal": {"name": "Scrap metal", "icon": "px:scrap_metal", "stack": 5, "kind": "material"},
+	"leather": {"name": "Leather", "icon": "px:leather", "stack": 5, "kind": "material"},
+	# Refillable: holds 4 bottles' worth (one drink each). Fill it at taps, lakes and rivers.
+	"gourd": {"name": "Water gourd", "icon": "px:gourd", "stack": 1, "kind": "tool", "capacity": 4, "thirst": 40.0},
 
 	# --- repair kits (each repair adds REPAIR_AMOUNT condition; ruined things can't be fixed)
 	"sewing_kit": {"name": "Sewing kit", "icon": "px:sewing_kit", "stack": 1, "kind": "tool", "uses": 5, "fixes": "sew"},
@@ -109,19 +112,19 @@ const WEAPONS := {
 	"spear": {"name": "Wooden spear", "melee": true, "damage": 27.0, "range": 60.0, "cooldown": 0.8, "noise": 100.0, "wear": 1.4, "held": "px:spear"},
 	"axe": {"name": "Fire axe", "melee": true, "damage": 48.0, "range": 50.0, "cooldown": 1.0, "noise": 150.0, "wear": 0.5, "held": "sheet:axe_sheet:9:0"},
 	"pistol": {"name": "Pistol", "melee": false, "damage": 45.0, "mag": 8, "ammo": "ammo_9mm",
-		"cooldown": 0.32, "reload": 1.4, "pellets": 1, "spread": 0.0, "range": 750.0, "noise": 750.0, "wear": 0.25,
+		"cooldown": 0.32, "reload": 1.4, "pellets": 1, "spread": 0.0, "range": 750.0, "noise": 380.0, "wear": 0.25,
 		"aim_time": 0.7, "spread_max": 0.45, "spread_min": 0.03, "recoil": 0.14,
 		"held": "item_pistol", "bullet_ui": "ui_bullet_pistol"},
 	"shotgun": {"name": "Shotgun", "melee": false, "damage": 24.0, "mag": 5, "ammo": "ammo_12ga",
-		"cooldown": 0.8, "reload": 2.4, "pellets": 6, "spread": 0.16, "range": 380.0, "noise": 1000.0, "wear": 0.4,
+		"cooldown": 0.8, "reload": 2.4, "pellets": 6, "spread": 0.16, "range": 380.0, "noise": 480.0, "wear": 0.4,
 		"aim_time": 1.5, "spread_max": 0.6, "spread_min": 0.1, "recoil": 0.35,
 		"held": "item_shotgun", "bullet_ui": "ui_bullet_shotgun"},
 	"rifle": {"name": "Assault rifle", "melee": false, "damage": 32.0, "mag": 30, "ammo": "ammo_556",
-		"cooldown": 0.11, "reload": 2.2, "pellets": 1, "spread": 0.0, "range": 850.0, "noise": 950.0, "wear": 0.08,
+		"cooldown": 0.11, "reload": 2.2, "pellets": 1, "spread": 0.0, "range": 850.0, "noise": 440.0, "wear": 0.08,
 		"aim_time": 1.1, "spread_max": 0.5, "spread_min": 0.04, "recoil": 0.06,
 		"held": "item_rifle", "bullet_ui": "ui_bullet_rifle"},
 	"hunting_rifle": {"name": "Hunting rifle", "melee": false, "damage": 120.0, "mag": 5, "ammo": "ammo_308",
-		"cooldown": 1.1, "reload": 2.6, "pellets": 1, "spread": 0.0, "range": 1200.0, "noise": 1100.0, "wear": 0.3,
+		"cooldown": 1.1, "reload": 2.6, "pellets": 1, "spread": 0.0, "range": 1200.0, "noise": 520.0, "wear": 0.3,
 		"aim_time": 2.2, "spread_max": 0.55, "spread_min": 0.008, "recoil": 0.45,
 		"held": "icon_hunting_rifle", "bullet_ui": "ui_bullet_rifle"},
 }
@@ -260,6 +263,8 @@ static func make(id: String, count := 1) -> Dictionary:
 		it["cond"] = 100.0
 	if DEFS[id].has("uses"):
 		it["uses"] = int(DEFS[id]["uses"])
+	if DEFS[id].has("capacity"):
+		it["water"] = 0
 	if is_clothing(id):
 		it["cond"] = 100.0
 		var c := []

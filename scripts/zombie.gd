@@ -4,13 +4,14 @@ extends CharacterBody2D
 ## paths around walls.
 ##
 ## Types
-##   walker  the usual shambler
-##   runner  fast and weak - you can only outrun it by sprinting
-##   brute   big, slow and very tough
+##   walker  the usual shambler (100 health)
+##   runner  fast, a bit weaker - you can only outrun it by sprinting (80)
+##   brute   big, a bit slower, hits 50% harder (300)
 ##   axe     throws its axe from a distance, then walks over and picks it up again
-##           (grab the axe first and it has to fight with its hands)
-##   armed   a dead soldier / cop that still fires its gun until the magazine is empty;
-##           drops the gun when killed
+##           (grab the axe first and it has to fight with its hands) (100)
+##   armed   a dead soldier / cop in a vest (armour) that still fires its gun until the magazine
+##           is empty; drops the gun when killed (100)
+## Every zombie's health, speed and damage vary by up to 10%.
 
 signal died(zombie: Zombie)
 
@@ -18,13 +19,15 @@ enum State { WANDER, INVESTIGATE, CHASE, FETCH }
 
 const RADIUS := 11.0
 const THINK_INTERVAL := 0.25
+## walk / chase = base speeds, dmg = damage per hit (min, max), armour = points (1 = 10% less damage)
 const TYPES := {
-	"walker": {"name": "Zombie", "health": 70.0, "walk": [28.0, 48.0], "chase": [100.0, 125.0], "dmg": [8.0, 14.0], "cd": 1.1, "reach": 8.0, "knock": 220.0},
-	"runner": {"name": "Runner", "health": 45.0, "walk": [40.0, 60.0], "chase": [150.0, 168.0], "dmg": [6.0, 10.0], "cd": 0.8, "reach": 8.0, "knock": 260.0},
-	"brute": {"name": "Brute", "health": 180.0, "walk": [22.0, 38.0], "chase": [78.0, 97.0], "dmg": [18.0, 26.0], "cd": 1.4, "reach": 12.0, "knock": 90.0},
-	"axe": {"name": "Axe zombie", "health": 110.0, "walk": [26.0, 42.0], "chase": [88.0, 104.0], "dmg": [16.0, 24.0], "cd": 1.3, "reach": 12.0, "knock": 150.0},
-	"armed": {"name": "Armed zombie", "health": 80.0, "walk": [26.0, 44.0], "chase": [84.0, 100.0], "dmg": [8.0, 14.0], "cd": 1.1, "reach": 8.0, "knock": 200.0},
+	"walker": {"name": "Zombie", "health": 100.0, "walk": 38.0, "chase": 112.0, "dmg": [8.0, 14.0], "cd": 1.1, "reach": 8.0, "knock": 220.0, "armour": 0.0},
+	"runner": {"name": "Runner", "health": 80.0, "walk": 50.0, "chase": 158.0, "dmg": [7.0, 12.0], "cd": 0.9, "reach": 8.0, "knock": 260.0, "armour": 0.0},
+	"brute": {"name": "Brute", "health": 300.0, "walk": 34.0, "chase": 100.0, "dmg": [12.0, 21.0], "cd": 1.4, "reach": 12.0, "knock": 90.0, "armour": 0.0},
+	"axe": {"name": "Axe zombie", "health": 100.0, "walk": 36.0, "chase": 100.0, "dmg": [16.0, 24.0], "cd": 1.3, "reach": 12.0, "knock": 150.0, "armour": 0.0},
+	"armed": {"name": "Armed zombie", "health": 100.0, "walk": 36.0, "chase": 96.0, "dmg": [8.0, 14.0], "cd": 1.1, "reach": 8.0, "knock": 200.0, "armour": 3.0},
 }
+const VARIANCE := 0.1 # each zombie's stats vary by up to 10%
 ## Armed zombies: [damage min, max, aim time, shots per burst, range]
 const ZOMBIE_GUNS := {
 	"pistol": [11.0, 16.0, 0.9, 1, 520.0],
@@ -56,6 +59,7 @@ var gun := ""
 var mag := 0
 
 var _t: Dictionary
+var _dmg_mult := 1.0
 var _path_i := 0
 var _think_t := randf() * THINK_INTERVAL
 var _repath_t := 0.0
@@ -90,15 +94,16 @@ func _ready() -> void:
 		type = "walker"
 	_t = TYPES[type]
 	collision_layer = Game.LAYER_ZOMBIE
-	collision_mask = Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_ZOMBIE | Game.LAYER_NPC
+	collision_mask = Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_ZOMBIE | Game.LAYER_NPC | Game.LAYER_WATER
 	var circle := CircleShape2D.new()
 	circle.radius = RADIUS + (3.0 if type == "brute" else 0.0)
 	var cs := CollisionShape2D.new()
 	cs.shape = circle
 	add_child(cs)
-	health = _t["health"]
-	walk_speed = randf_range(_t["walk"][0], _t["walk"][1])
-	chase_speed = randf_range(_t["chase"][0], _t["chase"][1])
+	health = float(_t["health"]) * _vary()
+	walk_speed = float(_t["walk"]) * _vary()
+	chase_speed = float(_t["chase"]) * _vary()
+	_dmg_mult = _vary()
 	_sprite = AnimatedSprite2D.new()
 	_sprite.sprite_frames = _make_frames()
 	_sprite.scale = Vector2(2, 2)
@@ -150,6 +155,10 @@ func _make_frames() -> SpriteFrames:
 				spec["death_" + d] = ["zaxe_death_" + d, 6, 10.0, false]
 				spec["na_death_" + d] = ["zaxe_na_death_" + d, 6, 10.0, false]
 	return Game.frames(key, spec)
+
+
+func _vary() -> float:
+	return randf_range(1.0 - VARIANCE, 1.0 + VARIANCE)
 
 
 ## Animation name for this zombie (axe zombies without their axe use the "na_" set).
@@ -346,7 +355,7 @@ func _try_attack() -> void:
 		_attack_cd = _t["cd"]
 		_attack_anim_t = 0.35 if type != "axe" else 0.5
 		facing = (foe.global_position - global_position).normalized()
-		var dmg := randf_range(_t["dmg"][0], _t["dmg"][1])
+		var dmg := randf_range(_t["dmg"][0], _t["dmg"][1]) * _dmg_mult
 		if unarmed:
 			dmg *= 0.55
 		hit(foe, dmg, facing, self)
@@ -360,6 +369,8 @@ static func hit(who: Node2D, amount: float, dir: Vector2, from: Node2D) -> void:
 		(who as Survivor).take_damage(amount, dir, from)
 	elif who is Zombie:
 		(who as Zombie).take_damage(amount, dir, from)
+	elif who is Animal:
+		(who as Animal).take_damage(amount, dir, from)
 
 
 # ---------------------------------------------------------------- axe zombie
@@ -455,7 +466,7 @@ func _fire(g: Array) -> void:
 			hit(col as Node2D, randf_range(g[0], g[1]), dir, self)
 	_shots = [end]
 	_shot_t = 0.07
-	Game.make_noise(global_position, 700.0)
+	Game.make_noise(global_position, 350.0)
 
 
 func _draw() -> void:
@@ -471,7 +482,7 @@ func _draw() -> void:
 func take_damage(amount: float, dir: Vector2, from: Node2D = null) -> void:
 	if dead:
 		return
-	health -= amount
+	health -= amount * (1.0 - float(_t["armour"]) * 0.1)
 	_flash_t = 0.12
 	_knock = dir * float(_t["knock"])
 	last_hit_by = from if from != null else player
@@ -518,6 +529,8 @@ func _drop_loot() -> void:
 		items.append(g)
 		if randf() < 0.4:
 			items.append(Items.make(Items.WEAPONS[gun]["ammo"], randi_range(2, 6)))
+		if randf() < 0.3:
+			items.append(Items.used(Items.make("vest"), 10.0, 45.0))
 	elif type == "axe" and has_axe and randf() < 0.5:
 		items.append(Items.used(Items.make("axe"), 20.0, 60.0))
 	if items.is_empty():

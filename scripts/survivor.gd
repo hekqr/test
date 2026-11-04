@@ -68,7 +68,7 @@ var _held: Sprite2D
 func _ready() -> void:
 	add_to_group("survivors")
 	collision_layer = Game.LAYER_NPC
-	collision_mask = Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_ZOMBIE | Game.LAYER_NPC
+	collision_mask = Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_ZOMBIE | Game.LAYER_NPC | Game.LAYER_WATER
 	var circle := CircleShape2D.new()
 	circle.radius = RADIUS
 	var cs := CollisionShape2D.new()
@@ -244,6 +244,8 @@ func _foe_ok() -> bool:
 		return not (foe as Player).dead
 	if foe is Zombie:
 		return not (foe as Zombie).dead
+	if foe is Animal:
+		return not (foe as Animal).dead
 	return false
 
 
@@ -265,8 +267,8 @@ func _think() -> void:
 		if d < sight and world.has_los(global_position + HAND, player.global_position + Vector2(0, -8)):
 			best = player
 			best_d = d
-	for n in get_tree().get_nodes_in_group("zombies"):
-		var z := n as Zombie
+	for n in get_tree().get_nodes_in_group("zombies") + get_tree().get_nodes_in_group("wolves"):
+		var z := n as Node2D
 		var d := global_position.distance_to(z.global_position)
 		if d < ZOMBIE_ALERT and d < best_d and world.has_los(global_position + HAND, z.global_position + Vector2(0, -8)):
 			best = z
@@ -363,7 +365,7 @@ func _fight_move() -> Vector2:
 	if w["melee"]:
 		return to.normalized() if d > float(w["range"]) * 0.7 + RADIUS else Vector2.ZERO
 	var hi := clampf(float(w["range"]) * 0.35, 150.0, 400.0)
-	if foe is Zombie:
+	if foe is Zombie or foe is Animal:
 		hi = minf(hi, 200.0)
 	var lo := hi * 0.5
 	if reloading or d < lo:
@@ -427,10 +429,8 @@ func _shoot(w: Dictionary, g: Dictionary) -> void:
 			end = hit["position"]
 			var col: Object = hit["collider"]
 			var dmg := float(w["damage"]) * GUN_DAMAGE
-			if col is Player or col is Survivor or col is Zombie:
+			if col is Player or col is Survivor or col is Zombie or col is Animal:
 				Zombie.hit(col as Node2D, dmg, dir, self)
-			elif col is Animal:
-				(col as Animal).take_damage(dmg, dir)
 		_shots.append(end)
 	_shot_t = 0.07
 	spread = minf(spread + float(w["recoil"]) * SPREAD_MULT, float(w["spread_max"]) * SPREAD_MULT + 0.2)

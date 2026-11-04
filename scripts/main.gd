@@ -7,6 +7,7 @@ const DAY_LENGTH := 480.0 # seconds for a full day/night cycle
 const AUTOSAVE_EVERY := 20.0
 const MAX_RABBITS := 22
 const MAX_DEER := 11
+const MAX_WOLVES := 9 # in packs of 2-3
 const MAX_SURVIVORS := 8 # hostile bandits alive at once
 ## Zombie mix: [type, weight]. Runners show up more at night, armed zombies more in the city.
 const ZOMBIE_MIX := [["walker", 62.0], ["runner", 12.0], ["brute", 10.0], ["axe", 7.0], ["armed", 9.0]]
@@ -56,6 +57,16 @@ func _ready() -> void:
 	else:
 		for d in save["loot"]:
 			entities.add_child(LootSpot.from_save(d))
+	# Bathroom taps: about half still have a little water in the pipes
+	var tap_water: Array = save.get("taps", [])
+	for i in world.taps.size():
+		var t := WaterSource.new()
+		t.position = world.taps[i]
+		if tap_water.size() == world.taps.size():
+			t.water = int(tap_water[i])
+		else:
+			t.water = randi_range(1, 6) if randf() < 0.45 else 0
+		entities.add_child(t)
 
 	zombies = Node2D.new()
 	zombies.name = "Zombies"
@@ -85,6 +96,9 @@ func _ready() -> void:
 		spawn_animal("rabbit", 400.0)
 	for i in MAX_DEER:
 		spawn_animal("deer", 400.0)
+	while get_tree().get_nodes_in_group("wolves").size() < MAX_WOLVES - 2:
+		if spawn_wolf_pack(900.0).is_empty():
+			break
 
 	night_tint = CanvasModulate.new()
 	add_child(night_tint)
@@ -186,6 +200,7 @@ func to_save() -> Dictionary:
 			"inv": p.inv.to_save(),
 		},
 		"loot": loot, "zombies": zs, "survivors": ss,
+		"taps": get_tree().get_nodes_in_group("taps").map(func(t): return t.water),
 		"fires": get_tree().get_nodes_in_group("fires").map(func(f): return f.to_save()),
 		"explored": Marshalls.raw_to_base64(explored.compress(FileAccess.COMPRESSION_DEFLATE)),
 	}
@@ -268,13 +283,15 @@ func _process(delta: float) -> void:
 	_animal_t -= delta
 	if _animal_t <= 0.0:
 		_animal_t = 15.0
-		var n := {"rabbit": 0, "deer": 0}
+		var n := {"rabbit": 0, "deer": 0, "wolf": 0}
 		for a in get_tree().get_nodes_in_group("animals"):
 			n[a.species] += 1
 		if n["rabbit"] < MAX_RABBITS:
 			spawn_animal("rabbit", 900.0)
 		if n["deer"] < MAX_DEER:
 			spawn_animal("deer", 900.0)
+		if n["wolf"] < MAX_WOLVES - 1:
+			spawn_wolf_pack(1100.0)
 
 	_survivor_t -= delta
 	if _survivor_t <= 0.0:
@@ -415,6 +432,20 @@ func spawn_animal(species: String, min_dist: float) -> Animal:
 	return null
 
 
+## Wolves roam the wilderness in packs of 2-3.
+func spawn_wolf_pack(min_dist: float) -> Array:
+	var out := []
+	var leader := spawn_animal("wolf", min_dist)
+	if leader == null:
+		return out
+	out.append(leader)
+	for i in randi_range(1, 2):
+		out.append(add_animal("wolf", world.random_walkable_near(leader.position, 2)))
+	for w in out:
+		(w as Animal).home = leader.position
+	return out
+
+
 func add_animal(species: String, p: Vector2) -> Animal:
 	var a := Animal.new()
 	a.species = species
@@ -433,6 +464,8 @@ func _on_animal_died(a: Animal) -> void:
 	c.animal = a.species
 	c.flip = randf() < 0.5
 	c.contents = [Items.make("meat", Animal.SPECIES[a.species]["meat"])]
+	if int(Animal.SPECIES[a.species]["leather"]) > 0:
+		c.contents.append(Items.make("leather", Animal.SPECIES[a.species]["leather"]))
 	c.position = a.global_position
 	entities.call_deferred("add_child", c)
 

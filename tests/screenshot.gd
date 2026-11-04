@@ -97,9 +97,26 @@ func _process(_delta: float) -> void:
 		_shot("enemies")
 		for e in _enemies:
 			e.queue_free()
+		# A river / lake bank with a wolf pack
+		_enemies = []
+		var bank := Vector2i(-1, -1)
+		for y in range(8, World.H - 8):
+			for x in range(8, World.W - 8):
+				var c := Vector2i(x, y)
+				if bank.x < 0 and w.get_tile(c) == World.WATER and w.get_tile(c + Vector2i(0, 2)) == World.GROUND and w.get_tile(c + Vector2i(-3, 0)) == World.WATER:
+					bank = c + Vector2i(0, 2)
+		p.global_position = w.center_of(bank)
+		for i in 3:
+			var wolf: Animal = main.add_animal("wolf", p.global_position + Vector2(140 + i * 40, 60 + (i % 2) * 30))
+			wolf.set_physics_process(false)
+			_enemies.append(wolf)
+	if frame == 62:
+		_shot("water")
+		for e in _enemies:
+			e.queue_free()
 		var b2: Rect2i = w.buildings[0]
 		p.global_position = w.center_of(Vector2i(b2.end.x + 1, b2.position.y + b2.size.y / 2))
-	if frame == 60:
+	if frame == 80:
 		_shot("outside")
 		var l: LootSpot = null
 		for n in get_tree().get_nodes_in_group("loot"):
@@ -116,6 +133,7 @@ func _process(_delta: float) -> void:
 		p.inv.add("rags", 5)
 		p.inv.add("sack")
 		p.inv.add("sticks", 4)
+		p.inv.add("leather", 2)
 		main.hud.left_tab = "craft"
 		await get_tree().process_frame
 		await get_tree().process_frame

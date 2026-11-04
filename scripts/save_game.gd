@@ -51,6 +51,8 @@ static func fix_item(it) -> Variant:
 		d["mag"] = int(d["mag"])
 	if d.has("uses"):
 		d["uses"] = int(d["uses"])
+	if d.has("water"):
+		d["water"] = int(d["water"])
 	if d.has("cargo"):
 		var c := []
 		for x in d["cargo"]:

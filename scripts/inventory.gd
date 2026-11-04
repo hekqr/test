@@ -245,6 +245,16 @@ func pickup(item: Dictionary) -> int:
 	return left
 
 
+## Every carried stack of `id` (storage and hands).
+func all_of(id: String) -> Array:
+	var out := []
+	for loc in _holders():
+		var s = get_at(loc)
+		if s != null and s["id"] == id:
+			out.append(s)
+	return out
+
+
 ## Where the first carried `id` is (storage or hands), or {} if you don't have one.
 func find(id: String) -> Dictionary:
 	for loc in _holders():

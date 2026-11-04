@@ -114,15 +114,13 @@ func take_all_rect() -> Rect2:
 
 
 func _has_action(p: Player) -> bool:
-	return p.nearest_loot != null or p.nearest_fire != null
+	return p.interact_choice() != ""
 
 
 func _action_label(p: Player) -> String:
 	if p.cook_t > 0.0:
 		return "Cooking... %ds" % int(ceil(p.cook_t))
-	var fire_d := p.global_position.distance_to(p.nearest_fire.global_position) if p.nearest_fire else INF
-	var loot_d := p.global_position.distance_to(p.nearest_loot.global_position) if p.nearest_loot else INF
-	return p.nearest_fire.label(p) if fire_d <= loot_d else p.nearest_loot.label()
+	return p.action_label()
 
 
 func action_rect() -> Rect2:
@@ -181,6 +179,8 @@ func _refresh_map() -> void:
 						c = Color("a8784e") if w.floor_kind[y * World.W + x] != 0 else Color("7a6a58")
 					World.WALL, World.WINDOW:
 						c = Color("5a3a28")
+					World.WATER:
+						c = Color("6f94b0")
 				if c == paper and (x * 7 + y * 13) % 11 == 0:
 					c = paper.darkened(0.04)
 				img.set_pixel(x, y, c)
@@ -411,6 +411,8 @@ func _item_icon(item: Dictionary, cell: Rect2, _scale_px := 0.0, modulate := Col
 		_text(cell.end - Vector2(6, 6), str(item["count"]), 14, Color.WHITE, HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	elif item.has("mag"):
 		_text(cell.end - Vector2(6, 6), str(item["mag"]), 12, Color(1, 0.9, 0.6), HORIZONTAL_ALIGNMENT_RIGHT, 0)
+	elif item.has("water"):
+		_text(cell.end - Vector2(6, 6), "%d/%d" % [item["water"], Items.def(item["id"])["capacity"]], 12, Color(0.6, 0.85, 1.0), HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	elif item.has("uses"):
 		_text(cell.end - Vector2(6, 6), str(item["uses"]), 12, Color(0.7, 0.9, 1.0), HORIZONTAL_ALIGNMENT_RIGHT, 0)
 
@@ -752,6 +754,10 @@ func _info(it: Dictionary) -> String:
 		parts.append("repairs clothing" if d.get("fixes", "") == "sew" else "repairs weapons, helmets, metal armour")
 	if id == "scrap_metal":
 		parts.append("for improvised armour")
+	if id == "leather":
+		parts.append("2 = sack, 1 = water gourd")
+	if it.has("water"):
+		parts.append("water %d / %d - refill at taps, lakes and rivers" % [it["water"], d["capacity"]])
 	if Items.kind(id) == "ammo":
 		for w in Items.WEAPONS:
 			if Items.WEAPONS[w].get("ammo", "") == id:

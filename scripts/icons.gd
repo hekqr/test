@@ -8,7 +8,7 @@ const OUTLINE := Color("1a1016")
 
 const NAMES := ["tshirt", "flannel", "hoodie", "jacket", "jeans", "cargo_pants", "boots", "vest",
 	"helmet", "cap", "beanie", "backpack_small", "backpack_large", "soda", "meat", "cooked_meat", "matches", "water",
-	"rags", "rope", "sack", "sack_backpack", "spear", "map", "sewing_kit", "toolbox", "scrap_metal", "scrap_armour"]
+	"rags", "rope", "sack", "sack_backpack", "spear", "map", "sewing_kit", "toolbox", "scrap_metal", "scrap_armour", "leather", "gourd"]
 
 ## Default colours for items without a random colour.
 const DEFAULT := {
@@ -17,6 +17,7 @@ const DEFAULT := {
 	"beanie": "3a4a5a", "backpack_small": "5a6a3a", "backpack_large": "6a4a30", "soda": "a83838",
 	"meat": "a83a3a", "cooked_meat": "7a4a2a", "matches": "a83838", "water": "7ab8e0",
 	"rags": "b8ae98", "rope": "a08458", "sack": "a08a60", "sack_backpack": "8a7450", "spear": "7a5a38", "map": "d8ccaa",
+	"leather": "a0703e", "gourd": "7a5030",
 	"sewing_kit": "5a7aa8", "toolbox": "b83a3a", "scrap_metal": "8a8e94", "scrap_armour": "767a80",
 }
 
@@ -313,6 +314,28 @@ static func _draw_item(img: Image, name: String, c: Color, silhouette: bool) -> 
 			for r in [Vector2(9, 13), Vector2(13, 17), Vector2(19, 13), Vector2(23, 17), Vector2(10, 24), Vector2(22, 24)]:
 				_px(img, int(r.x), int(r.y), Color("2e2a30"))
 			_rect(img, 20, 21, 3, 2, Color("9a5a32"))
+		"leather":
+			# A stretched hide
+			_poly(img, [Vector2(6, 4), Vector2(11, 7), Vector2(16, 5), Vector2(21, 7), Vector2(26, 4), Vector2(28, 10), Vector2(25, 16),
+				Vector2(28, 22), Vector2(25, 28), Vector2(20, 25), Vector2(16, 28), Vector2(12, 25), Vector2(7, 28), Vector2(4, 22), Vector2(7, 16), Vector2(4, 10)], c)
+			if silhouette:
+				return
+			_poly(img, [Vector2(10, 10), Vector2(16, 9), Vector2(22, 10), Vector2(22, 22), Vector2(16, 24), Vector2(10, 22)], l)
+			for y in [11, 15, 19]:
+				_px(img, 9, y, d)
+				_px(img, 23, y, d)
+		"gourd":
+			# Leather water flask with a cork and a strap
+			_ring(img, Vector2(16, 13), 11.0, 1.4, Color("4a3828"))
+			_circle(img, Vector2(16, 19), 10.0, c)
+			_rect(img, 13, 5, 6, 6, c)
+			_rect(img, 13, 2, 6, 4, Color("c8a070"))
+			if silhouette:
+				return
+			_ring(img, Vector2(16, 19), 7.5, 1.0, l)
+			for a in [0.0, 0.8, 1.6, 2.4, 3.2, 4.0, 4.8, 5.6]:
+				_px(img, int(16 + cos(a) * 7.5), int(19 + sin(a) * 7.5), dd)
+			_line(img, Vector2i(13, 10), Vector2i(18, 10), dd)
 		# --- symbols only
 		"hand":
 			_rect(img, 10, 13, 13, 14, c)

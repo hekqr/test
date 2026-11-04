@@ -7,6 +7,8 @@ const RECIPES := [
 	{"id": "sack_backpack", "name": "Sack backpack", "makes": "sack_backpack", "count": 1, "needs": {"sack": 1, "rope": 1}, "tools": []},
 	{"id": "spear", "name": "Wooden spear", "makes": "spear", "count": 1, "needs": {"sticks": 3, "rope": 1}, "tools": ["knife", "axe"]},
 	{"id": "campfire", "name": "Campfire", "makes": "", "count": 0, "needs": {"sticks": 3, "matches": 1}, "tools": []},
+	{"id": "leather_sack", "name": "Sack (leather)", "makes": "sack", "count": 1, "needs": {"leather": 2}, "tools": []},
+	{"id": "gourd", "name": "Water gourd", "makes": "gourd", "count": 1, "needs": {"leather": 1}, "tools": []},
 	{"id": "scrap_armour", "name": "Improvised armour", "makes": "scrap_armour", "count": 1, "needs": {"scrap_metal": 3, "rope": 2}, "tools": []},
 ]
 

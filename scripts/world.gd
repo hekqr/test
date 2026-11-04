@@ -2,10 +2,10 @@ class_name World
 extends Node2D
 ## The map: named settlements (a city, towns, villages) with their own street layouts, connected by
 ## highways; hand-made buildings (see buildings.gd) facing the streets; street props and lootable cars;
-## forests, nature and animals in the wilderness between them.
+## forests, lakes, a river, nature and animals in the wilderness between them.
 ## Also provides pathfinding and line of sight.
 
-enum { GROUND, WALL, TREE, FLOOR, ROAD, WINDOW, FURN }
+enum { GROUND, WALL, TREE, FLOOR, ROAD, WINDOW, FURN, WATER }
 enum { F_NONE, F_WOOD, F_TILE, F_CONCRETE }
 
 const W := 200
@@ -40,6 +40,7 @@ var building_style: Array[String] = [] # wall colour: dark / beige / gray / whit
 var building_id := PackedInt32Array() # per cell: building index, or -1
 var facades: Array[Sprite2D] = [] # front wall of each building (3/4 view), fades with the roof
 var _face_windows: Array = [] # [{cell, tex}] windows on interior wall faces
+var taps: Array[Vector2] = [] # bathroom taps (at house baths) - some still have water
 
 const TOWN_NAMES := ["Ashford", "Millbrook", "Pine Hollow", "Greywater", "Stonebridge", "Redfield", "Elm Crossing",
 	"Harrow", "Oakvale", "Cold Spring", "Linton", "Marsh End", "Westbury", "Fairhill", "Dunmore", "Northfield",
@@ -119,6 +120,7 @@ func generate(seed_value: int, entities: Node2D) -> void:
 	_make_roads()
 	_make_buildings()
 	_make_street()
+	_make_water()
 	_make_trees()
 	_make_nature()
 	_make_border()
@@ -351,6 +353,8 @@ func _place_building(r: Rect2i, kind: String, plan: Array, town := -1) -> void:
 							"empty_chance": PRE_LOOTED.get(kind, 0.4)})
 					elif Buildings.FURNITURE_CHARS.has(ch):
 						furniture.append({"cell": c, "name": Buildings.FURNITURE_CHARS[ch]})
+						if ch == "A" and kind.begins_with("house"):
+							taps.append(center_of(c) + Vector2(-8, -6))
 	buildings.append(r)
 	building_types.append(kind)
 	building_town.append(town)
@@ -605,6 +609,90 @@ func _make_nature() -> void:
 				stick_spots.append(c)
 
 
+# ---------------------------------------------------------------- water
+
+## Lakes out in the wilderness and (usually) a river across the map. Roads cross the river on bridges.
+func _make_water() -> void:
+	var noise := FastNoiseLite.new()
+	noise.seed = rng.randi()
+	noise.frequency = 0.12
+	if rng.randf() < 0.85:
+		# Try a few river courses and keep the one that stays clear of towns and buildings.
+		var best: Array = []
+		var best_bad := 1 << 30
+		for attempt in 14:
+			var cells := _river_cells(noise)
+			var bad := 0
+			for c in cells:
+				if get_tile(c) == ROAD:
+					bad += 1
+				elif not _water_ok(c, 4):
+					bad += 3
+			if bad < best_bad:
+				best_bad = bad
+				best = cells
+		for c in best:
+			if _water_ok(c, 1):
+				set_tile(c, WATER)
+	var lakes := rng.randi_range(3, 5)
+	for attempt in 300:
+		if lakes <= 0:
+			break
+		var c := Vector2i(rng.randi_range(12, W - 13), rng.randi_range(12, H - 13))
+		if not _water_ok(c, 8) or _near_type(c, ROAD, 6):
+			continue
+		var rx := rng.randf_range(3.5, 7.5)
+		var ry := rng.randf_range(3.0, 6.0)
+		for dy in range(-8, 9):
+			for dx in range(-9, 10):
+				var n := c + Vector2i(dx, dy)
+				var v := pow(dx / rx, 2.0) + pow(dy / ry, 2.0) + noise.get_noise_2d(n.x * 2.0, n.y * 2.0) * 0.5
+				if v < 1.0 and _water_ok(n, 2) and not _near_type(n, ROAD, 2):
+					set_tile(n, WATER)
+		lakes -= 1
+
+
+## A meandering river from one edge of the map to the other, 2-3 tiles wide.
+func _river_cells(noise: FastNoiseLite) -> Array:
+	var vertical := rng.randf() < 0.5
+	var across := W if vertical else H
+	var along := H if vertical else W
+	var pos := rng.randf_range(30.0, across - 30.0)
+	var drift := 0.0
+	var cells := []
+	for t in range(1, along - 1):
+		drift = clampf(drift + rng.randf_range(-0.3, 0.3), -0.9, 0.9)
+		pos = clampf(pos + drift, 6.0, across - 8.0)
+		var width := 2 + (1 if noise.get_noise_1d(t * 1.5) > 0.1 else 0)
+		for k in width:
+			cells.append(Vector2i(int(pos) + k, t) if vertical else Vector2i(t, int(pos) + k))
+	return cells
+
+
+## Open ground away from towns (by `margin` tiles) and buildings.
+func _water_ok(c: Vector2i, margin: int) -> bool:
+	if c.x < 2 or c.y < 2 or c.x >= W - 2 or c.y >= H - 2 or get_tile(c) != GROUND:
+		return false
+	for st in settlements:
+		if (st["rect"] as Rect2i).grow(margin).has_point(c):
+			return false
+	return not (_near_type(c, WALL, 2) or _near_type(c, WINDOW, 2) or _near_type(c, FLOOR, 2) or _near_type(c, FURN, 1))
+
+
+## True when a position is close enough to a lake or river to drink / fill a gourd.
+func water_near(p: Vector2, reach := 26.0) -> bool:
+	var c := cell_of(p)
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			var n := c + Vector2i(dx, dy)
+			if get_tile(n) == WATER:
+				var r := Rect2(Vector2(n * T), Vector2(T, T))
+				var q := Vector2(clampf(p.x, r.position.x, r.end.x), clampf(p.y, r.position.y, r.end.y))
+				if q.distance_to(p) <= reach:
+					return true
+	return false
+
+
 func _make_border() -> void:
 	for i in W:
 		set_tile(Vector2i(i, 0), WALL)
@@ -661,6 +749,26 @@ func _build_collision() -> void:
 		cs.shape = rs
 		cs.position = r.get_center()
 		walls.add_child(cs)
+	# Water blocks walking, not bullets or sight (its own layer).
+	var water := StaticBody2D.new()
+	water.collision_layer = Game.LAYER_WATER
+	water.collision_mask = 0
+	add_child(water)
+	for y in H:
+		var x := 0
+		while x < W:
+			if tiles[y * W + x] != WATER:
+				x += 1
+				continue
+			var start := x
+			while x < W and tiles[y * W + x] == WATER:
+				x += 1
+			var rs := RectangleShape2D.new()
+			rs.size = Vector2((x - start) * T, T)
+			var cs := CollisionShape2D.new()
+			cs.shape = rs
+			cs.position = Vector2(start * T + (x - start) * T * 0.5, y * T + T * 0.5)
+			water.add_child(cs)
 	var trees := StaticBody2D.new()
 	trees.collision_layer = Game.LAYER_WALL
 	trees.collision_mask = 0
@@ -705,6 +813,19 @@ func _build_tilemaps() -> void:
 	ground.scale = Vector2(2, 2)
 	ground.z_index = -10
 	add_child(ground)
+	var water_id := ts.add_source(_atlas(_make_water_tiles(), [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)]))
+	var water := TileMapLayer.new()
+	water.tile_set = ts
+	water.scale = Vector2(2, 2)
+	water.z_index = -10
+	var wmat := ShaderMaterial.new()
+	wmat.shader = load("res://shaders/water.gdshader")
+	water.material = wmat
+	add_child(water)
+	var banks := WaterBanks.new()
+	banks.world = self
+	banks.z_index = -10
+	add_child(banks)
 	var walls := TileMapLayer.new()
 	walls.tile_set = ts
 	walls.scale = Vector2(2, 2)
@@ -716,6 +837,8 @@ func _build_tilemaps() -> void:
 			var c := Vector2i(x, y)
 			var t := tiles[y * W + x]
 			var fk := floor_kind[y * W + x]
+			if t == WATER:
+				water.set_cell(c, water_id, Vector2i(rng.randi() % 4, 0))
 			if t == ROAD:
 				ground.set_cell(c, road_id, _road_tile(c))
 			elif fk == F_TILE:
@@ -839,6 +962,24 @@ func _make_asphalt() -> Texture2D:
 		img.set_pixel(2 * 16 + i, 8, paint)
 		img.set_pixel(3 * 16 + 7, i, paint)
 		img.set_pixel(3 * 16 + 8, i, paint)
+	return ImageTexture.create_from_image(img)
+
+
+## Deep water with ripples (4 variants).
+func _make_water_tiles() -> Texture2D:
+	var img := Image.create_empty(64, 16, false, Image.FORMAT_RGBA8)
+	var base := Color("2e4f73")
+	for t in 4:
+		for y in 16:
+			for x in 16:
+				img.set_pixel(t * 16 + x, y, base.lightened(rng.randf_range(-0.03, 0.03)))
+		for k in 3:
+			var rx := rng.randi_range(0, 11)
+			var ry := rng.randi_range(1, 14)
+			for i in rng.randi_range(2, 4):
+				img.set_pixel(t * 16 + rx + i, ry, Color("5a86ad"))
+			if rng.randf() < 0.5:
+				img.set_pixel(t * 16 + rx + 1, ry - 1, Color("8ab4d4"))
 	return ImageTexture.create_from_image(img)
 
 

@@ -12,8 +12,13 @@ func _ready() -> void:
 	print("generated in %d ms, %d buildings, %d settlements, %d containers, %d segments" % [Time.get_ticks_msec() - t0, w.buildings.size(), w.settlements.size(), w.containers.size(), w.segments.size()])
 	for st in w.settlements:
 		print("  ", st["type"], " ", st["name"], " ", st["rect"])
+	var water := 0
+	for t in w.tiles:
+		if t == World.WATER:
+			water += 1
+	print("  water tiles: %d, taps: %d" % [water, w.taps.size()])
 	var img := Image.create_empty(World.W, World.H, false, Image.FORMAT_RGB8)
-	var cols := {World.GROUND: Color("5a6a3a"), World.TREE: Color("2e4024"), World.ROAD: Color("8a8478"), World.FLOOR: Color("b08860"), World.WALL: Color("3a2420"), World.WINDOW: Color("7fa8c4"), World.FURN: Color("6a5040")}
+	var cols := {World.GROUND: Color("5a6a3a"), World.TREE: Color("2e4024"), World.ROAD: Color("8a8478"), World.FLOOR: Color("b08860"), World.WALL: Color("3a2420"), World.WINDOW: Color("7fa8c4"), World.FURN: Color("6a5040"), World.WATER: Color("3a6a9a")}
 	for y in World.H:
 		for x in World.W:
 			img.set_pixel(x, y, cols[w.get_tile(Vector2i(x, y))])

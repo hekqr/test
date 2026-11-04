@@ -6,6 +6,7 @@ const LAYER_PLAYER := 2
 const LAYER_ZOMBIE := 4
 const LAYER_ANIMAL := 8
 const LAYER_NPC := 16 # hostile survivors
+const LAYER_WATER := 32 # lakes & rivers: block walking, not bullets or sight
 
 signal noise_made(pos: Vector2, radius: float)
 
@@ -431,6 +432,37 @@ const _DEER_2 := [
 	".oo..........oo...",
 ]
 
+const _WOLF_1 := [
+	"..............o.o....",
+	".............oaoao...",
+	".............oaaaaoo.",
+	"oo..........oaaeaaaao",
+	"oco.......ooaaaaaaoo.",
+	".oco.oooooccaaaaao...",
+	"..ocoaacccccaaaao....",
+	"...oaaaaaaaaaaaao....",
+	"...oaaaaaaaaaaao.....",
+	"....obbbbbbbbbbo.....",
+	"....oaoo....oaao.....",
+	"....oao.....oao......",
+	"....oo......oo.......",
+]
+const _WOLF_2 := [
+	"..............o.o....",
+	".............oaoao...",
+	".............oaaaaoo.",
+	"oo..........oaaeaaaao",
+	"oco.......ooaaaaaaoo.",
+	".oco.oooooccaaaaao...",
+	"..ocoaacccccaaaao....",
+	"...oaaaaaaaaaaaao....",
+	"...oaaaaaaaaaaao.....",
+	"....obbbbbbbbbbo.....",
+	"...oaoao....oaoao....",
+	"..oao.oao..oao.oao...",
+	"..oo...oo..oo...oo...",
+]
+
 const ICONS := {
 	"matches": [_MATCHES, {"a": "a83838", "b": "e8e0c8", "w": "c84a2a"}, false, "a83838"],
 	"cooked_meat": [_MEAT, {"a": "7a4a2a", "b": "a06a3a", "c": "c8a070", "w": "e8e0d0"}, false, "7a4a2a"],
@@ -438,6 +470,8 @@ const ICONS := {
 	"rabbit_2": [_RABBIT_2, {"a": "9a8a7a", "b": "e8e4dc", "e": "1a1016"}, false, "9a8a7a"],
 	"deer_1": [_DEER_1, {"a": "8a6040", "b": "e8e0d0", "c": "b08a60", "e": "1a1016"}, false, "8a6040"],
 	"deer_2": [_DEER_2, {"a": "8a6040", "b": "e8e0d0", "c": "b08a60", "e": "1a1016"}, false, "8a6040"],
+	"wolf_1": [_WOLF_1, {"a": "6e6a72", "b": "b8b4b0", "c": "4a4650", "e": "e8c040"}, false, "6e6a72"],
+	"wolf_2": [_WOLF_2, {"a": "6e6a72", "b": "b8b4b0", "c": "4a4650", "e": "e8c040"}, false, "6e6a72"],
 	"tshirt": [_SHIRT, {"a": "base", "b": "dark"}, false, "6b7a4a"],
 	"flannel": [_SHIRT, {"a": "base", "b": "dark", "c": "darker"}, true, "8c3b3b"],
 	"hoodie": [_COAT, {"a": "base", "b": "light", "d": "dark"}, false, "5a5f6e"],

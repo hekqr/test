@@ -31,6 +31,8 @@ var aim := Vector2.RIGHT # mouse aim (guns)
 var facing := Vector2.RIGHT # where the body looks (aim, or the melee target)
 var nearest_loot: LootSpot = null
 var nearest_fire: Campfire = null
+var nearest_tap: WaterSource = null
+var near_lake := false # standing at a lake / river bank
 var cook_t := 0.0 # cooking in progress (seconds left)
 var message := ""
 var message_t := 0.0
@@ -63,7 +65,7 @@ var _melee_dir := Vector2.RIGHT
 func _ready() -> void:
 	add_to_group("player")
 	collision_layer = Game.LAYER_PLAYER
-	collision_mask = Game.LAYER_WALL | Game.LAYER_ZOMBIE | Game.LAYER_NPC
+	collision_mask = Game.LAYER_WALL | Game.LAYER_ZOMBIE | Game.LAYER_NPC | Game.LAYER_WATER
 	var circle := CircleShape2D.new()
 	circle.radius = RADIUS
 	var cs := CollisionShape2D.new()
@@ -182,6 +184,8 @@ func actions_for(loc: Dictionary) -> Array:
 	var id: String = it["id"]
 	var out := []
 	var d := Items.def(id)
+	if it.has("water") and loc["t"] != "near":
+		out.append(["Drink (%d/%d)" % [it["water"], d["capacity"]], "drink_gourd"])
 	if Items.is_usable(id):
 		var verb := "Use"
 		if Items.kind(id) == "consumable":
@@ -238,6 +242,8 @@ func do_action(loc: Dictionary, action: String) -> void:
 			tear(loc)
 		"repair":
 			repair(loc)
+		"drink_gourd":
+			drink_gourd(loc)
 		"fire":
 			build_fire()
 		"take":
@@ -258,6 +264,57 @@ func quick_use(loc: Dictionary) -> void:
 	var acts := actions_for(loc)
 	if not acts.is_empty() and acts[0][1] != "drop":
 		do_action(loc, acts[0][1])
+
+
+## One drink from a water gourd (it stays, empty, when it runs out).
+func drink_gourd(loc: Dictionary) -> bool:
+	var it = inv.get_at(loc)
+	if it == null or int(it.get("water", 0)) <= 0:
+		say("The gourd is empty - fill it at a tap, lake or river")
+		return false
+	if thirst > 97.0:
+		say("Not thirsty")
+		return false
+	thirst = minf(thirst + float(Items.def(it["id"])["thirst"]), 100.0)
+	it["water"] = int(it["water"]) - 1
+	inv.changed.emit()
+	say("Drank from the gourd (%d/%d left)" % [it["water"], Items.def(it["id"])["capacity"]])
+	return true
+
+
+## At a tap or a lake / river: drink your fill, then fill every gourd you carry.
+## Taps only have a little water left; lakes and rivers never run dry.
+func use_water(tap: WaterSource = null) -> void:
+	var units: int = 1000 if tap == null else tap.water
+	if units <= 0:
+		say("The tap is dry")
+		return
+	var drank := 0
+	while thirst < 90.0 and units > 0:
+		thirst = minf(thirst + 40.0, 100.0)
+		units -= 1
+		drank += 1
+	var filled := 0
+	var gourds := inv.all_of("gourd")
+	for g in gourds:
+		var cap := int(Items.def("gourd")["capacity"])
+		while int(g["water"]) < cap and units > 0:
+			g["water"] = int(g["water"]) + 1
+			units -= 1
+			filled += 1
+	if tap:
+		tap.water = units
+		tap.queue_redraw()
+	inv.changed.emit()
+	var parts := PackedStringArray()
+	if drank > 0:
+		parts.append("You drink your fill" if thirst >= 90.0 else "You drink the last of the water")
+	if filled > 0:
+		parts.append("filled your gourd%s (+%d)" % ["s" if gourds.size() > 1 else "", filled])
+	if parts.is_empty():
+		say("Not thirsty" + (" - and your gourds are full" if not gourds.is_empty() else ""))
+	else:
+		say(", ".join(parts))
 
 
 ## Sewing kit (clothing) or toolbox (weapons, helmets, metal armour): +40% condition per use.
@@ -529,15 +586,50 @@ func _unhandled_input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 
-## E / action button: whatever is closest — a fire, a carcass, a container or an item on the ground.
+## What E would do right now: "fire", "loot", "water" or "" (closest wins).
+func interact_choice() -> String:
+	var best := ""
+	var best_d := INF
+	if nearest_fire:
+		best_d = global_position.distance_to(nearest_fire.global_position)
+		best = "fire"
+	if nearest_loot and global_position.distance_to(nearest_loot.global_position) < best_d:
+		best_d = global_position.distance_to(nearest_loot.global_position)
+		best = "loot"
+	var water_d := INF
+	if nearest_tap:
+		water_d = global_position.distance_to(nearest_tap.global_position)
+	elif near_lake:
+		water_d = 30.0
+	if water_d < best_d:
+		best = "water"
+	return best
+
+
+func action_label() -> String:
+	match interact_choice():
+		"fire":
+			return nearest_fire.label(self)
+		"loot":
+			return nearest_loot.label()
+		"water":
+			if nearest_tap:
+				return nearest_tap.label()
+			return "Drink / fill gourd" if not inv.all_of("gourd").is_empty() else "Drink"
+	return ""
+
+
+## E / action button: whatever is closest — a fire, water, a carcass, a container or an item on the ground.
 func interact() -> void:
-	var fire_d := global_position.distance_to(nearest_fire.global_position) if nearest_fire else INF
-	var loot_d := global_position.distance_to(nearest_loot.global_position) if nearest_loot else INF
-	if nearest_fire and fire_d <= loot_d:
-		use_fire(nearest_fire)
-		return
-	if nearest_loot == null:
-		return
+	match interact_choice():
+		"fire":
+			use_fire(nearest_fire)
+			return
+		"water":
+			use_water(nearest_tap)
+			return
+		"":
+			return
 	if nearest_loot.kind == "carcass":
 		if not has_blade():
 			say("You need a knife or an axe to skin it")
@@ -665,7 +757,7 @@ func melee(dir: Vector2) -> void:
 		var a := n as Animal
 		var d := a.global_position - global_position
 		if d.length() <= reach + 16.0 and absf(dir.angle_to(d)) < deg_to_rad(65.0):
-			a.take_damage(dmg, d.normalized())
+			a.take_damage(dmg, d.normalized(), self)
 			hits += 1
 	if hits > 0:
 		_wear_weapon(float(w.get("wear", 0.0)))
@@ -682,8 +774,11 @@ func _update_aim(delta: float) -> void:
 	var reach: float = w["range"] * 0.85
 	var best: Node2D = null
 	var best_d := reach
-	for groups in [["zombies", "survivors"], ["animals"]]:
-		for n in get_tree().get_nodes_in_group(groups[0]) + (get_tree().get_nodes_in_group(groups[1]) if groups.size() > 1 else []):
+	for groups in [["zombies", "survivors", "wolves"], ["animals"]]:
+		var nodes: Array = []
+		for g in groups:
+			nodes.append_array(get_tree().get_nodes_in_group(g))
+		for n in nodes:
 			var t := n as Node2D
 			var d := t.global_position.distance_to(global_position)
 			# Keep the current target unless something is clearly closer (no flickering).
@@ -693,7 +788,7 @@ func _update_aim(delta: float) -> void:
 				best_d = d
 				best = t
 		if best != null:
-			break # zombies / bandits first; animals only when no one is around
+			break # zombies / bandits / wolves first; other animals only when nothing else is around
 	if best != aim_target:
 		aim_spread = maxf(aim_spread, lerpf(w["spread_min"], w["spread_max"], 0.6))
 		aim_target = best
@@ -755,7 +850,7 @@ func shoot() -> void:
 			if col is Zombie or col is Survivor:
 				Zombie.hit(col as Node2D, w["damage"], dir, self)
 			elif col is Animal:
-				(col as Animal).take_damage(w["damage"], dir)
+				(col as Animal).take_damage(w["damage"], dir, self)
 		_shots.append(end)
 	_shot_t = 0.07
 	aim_spread = minf(aim_spread + float(w["recoil"]), float(w["spread_max"]) + 0.2)
@@ -795,7 +890,15 @@ func quick_eat() -> void:
 
 
 func quick_drink() -> void:
-	for id in ["water", "soda", "soup"]:
+	if inv.count_of("water") > 0:
+		use_item("water")
+		return
+	for loc in [Inventory.gear_loc("hands")] + inv.storage_cells():
+		var it = inv.get_at(loc)
+		if it != null and int(it.get("water", 0)) > 0:
+			drink_gourd(loc)
+			return
+	for id in ["soda", "soup"]:
 		if inv.count_of(id) > 0:
 			use_item(id)
 			return
@@ -913,6 +1016,15 @@ func _find_loot() -> void:
 			best = d / l.reach
 			nearest_loot = l
 	inv.near = nearest_loot if nearest_loot == null or nearest_loot.kind != "carcass" else null
+	nearest_tap = null
+	var best_t := 46.0
+	for n in get_tree().get_nodes_in_group("taps"):
+		var t := n as WaterSource
+		var d := t.global_position.distance_to(global_position)
+		if d < best_t:
+			best_t = d
+			nearest_tap = t
+	near_lake = world != null and world.water_near(global_position)
 	nearest_fire = null
 	var best_f := 56.0
 	for n in get_tree().get_nodes_in_group("fires"):

@@ -8,6 +8,7 @@ var z_test: Zombie
 var hp_before := 0.0
 var pos_before := Vector2.ZERO
 var loot: LootSpot
+var wolf: Animal
 
 
 func check(cond: bool, what: String) -> void:
@@ -64,6 +65,14 @@ func _physics_process(_delta: float) -> void:
 			var nature := w.props.filter(func(pr): return String(pr["tex"]).begins_with("nat_")).size()
 			check(lights >= 10 and nature >= 50, "street lights (%d) and wilderness nature (%d)" % [lights, nature])
 			check(w.wild_spots.size() >= 3, "rare wilderness finds (%d)" % w.wild_spots.size())
+			var water_n := 0
+			for t in w.tiles:
+				if t == World.WATER:
+					water_n += 1
+			check(water_n > 150, "lakes / river generated (%d water tiles)" % water_n)
+			check(w.taps.size() >= 5 and get_tree().get_nodes_in_group("taps").size() == w.taps.size(), "bathroom taps in houses (%d)" % w.taps.size())
+			var packs := get_tree().get_nodes_in_group("wolves")
+			check(packs.size() >= 4 and packs.all(func(a): return a.global_position.distance_to(p.global_position) > 700.0), "wolf packs roam the wild, away from you (%d)" % packs.size())
 			var win := 0
 			for t in w.tiles:
 				if t == World.WINDOW:
@@ -617,7 +626,22 @@ func _physics_process(_delta: float) -> void:
 				hp[t] = z.health
 				if t == "runner":
 					check(z.chase_speed > Player.WALK_SPEED and z.chase_speed < Player.SPRINT_SPEED, "runners are faster than walking, slower than sprinting")
-			check(hp["runner"] < hp["walker"] and hp["walker"] < hp["axe"] and hp["axe"] < hp["brute"], "zombie types have different health")
+			var in_range := func(v: float, base: float): return v >= base * 0.9 - 0.01 and v <= base * 1.1 + 0.01
+			check(in_range.call(hp["walker"], 100.0) and in_range.call(hp["runner"], 80.0) and in_range.call(hp["brute"], 300.0) and in_range.call(hp["axe"], 100.0) and in_range.call(hp["armed"], 100.0),
+				"zombie health: walker 100, runner 80, brute 300, axe 100, armed 100 (+-10%%) (%s)" % str(hp))
+			var wt: Dictionary = Zombie.TYPES["walker"]
+			check(float(Zombie.TYPES["brute"]["dmg"][0]) == float(wt["dmg"][0]) * 1.5 and float(Zombie.TYPES["brute"]["dmg"][1]) == float(wt["dmg"][1]) * 1.5 and float(Zombie.TYPES["brute"]["chase"]) < float(wt["chase"]), "brutes hit 50% harder and are a bit slower")
+			check(float(Zombie.TYPES["runner"]["dmg"][1]) < float(wt["dmg"][1]), "runners hit a bit softer")
+			var hps := {}
+			for i in 12:
+				var zz: Zombie = main.add_zombie(p2.global_position + Vector2(0, 900), "walker")
+				hps[snappedf(zz.health, 0.1)] = true
+			check(hps.size() > 6, "every zombie's stats vary a little")
+			var za: Zombie = main.add_zombie(p2.global_position + Vector2(0, 900), "armed")
+			var before_a := za.health
+			za.take_damage(10.0, Vector2.RIGHT, p2)
+			check(absf(before_a - za.health - 7.0) < 0.01, "armed zombies wear armour (10 damage -> 7)")
+			check(int(Items.WEAPONS["pistol"]["noise"]) <= 400 and int(Items.WEAPONS["hunting_rifle"]["noise"]) <= 550, "gunshots carry about half as far")
 			var seen := {}
 			for i in 3000:
 				seen[main.pick_zombie_type(0)] = true
@@ -698,6 +722,36 @@ func _physics_process(_delta: float) -> void:
 			check(zb.foe == b2 and zb.state == Zombie.State.CHASE, "zombies go after bandits")
 			check(b2.foe == zb and b2.state == Survivor.State.FIGHT, "bandits fight zombies")
 		744:
+			_clear_zombies()
+			for b in get_tree().get_nodes_in_group("survivors"):
+				b.free()
+			for a in get_tree().get_nodes_in_group("animals"):
+				a.free()
+			main._animal_t = 9999.0
+			print("Wolves")
+			var p2: Player = main.player
+			p2.global_position = _open_spot(main.world, 5)
+			p2.health = 100.0
+			p2.holster()
+			p2.inv.gear["primary"] = {"id": "rifle", "count": 1, "mag": 0, "cond": 100.0}
+			p2.switch_weapon("primary") # a gun: no automatic melee, so the wolf gets to bite
+			wolf = main.add_animal("wolf", p2.global_position + Vector2(90, 0))
+			hp_before = p2.health
+		900:
+			var p2: Player = main.player
+			check(wolf.prey == p2, "wolf hunts you on sight")
+			check(p2.health < hp_before, "wolf bites (hp %.0f -> %.0f)" % [hp_before, p2.health])
+			wolf.take_damage(999.0, Vector2.RIGHT, p2)
+		902:
+			var p2: Player = main.player
+			var carcass: LootSpot = null
+			for n in get_tree().get_nodes_in_group("loot"):
+				if n.kind == "carcass" and n.animal == "wolf":
+					carcass = n
+			check(carcass != null and carcass.contents.any(func(it): return it["id"] == "meat" and int(it["count"]) == 2) and carcass.contents.any(func(it): return it["id"] == "leather"),
+				"dead wolf: 2 meat + 1 leather")
+			check(int(Animal.SPECIES["deer"]["leather"]) >= 1, "deer give leather too")
+			_water_tests()
 			if failures.is_empty():
 				print("SMOKE TEST PASSED")
 				get_tree().quit(0)
@@ -793,8 +847,17 @@ func _settle_time(id: String) -> float:
 	return float(w["aim_time"])
 
 
-## Centre of a patch of open ground (nothing that blocks bullets), (2r+1) tiles wide.
+## Centre of a patch of open ground (nothing that blocks bullets), (2r+1) tiles wide
+## (or the biggest smaller patch there is).
 func _open_spot(w: World, r := 3) -> Vector2:
+	for rr in range(r, 2, -1):
+		var c := _open_spot_r(w, rr)
+		if c != Vector2.INF:
+			return c
+	return w.center_of(w.spawn_cell)
+
+
+func _open_spot_r(w: World, r: int) -> Vector2:
 	for y in range(r + 2, World.H - r - 2):
 		for x in range(r + 2, World.W - r - 2):
 			var ok := true
@@ -807,7 +870,7 @@ func _open_spot(w: World, r := 3) -> Vector2:
 					break
 			if ok:
 				return w.center_of(Vector2i(x, y))
-	return w.center_of(w.spawn_cell)
+	return Vector2.INF
 
 
 ## Melee nerf, weapons wearing out and breaking, jams, repair kits, improvised armour.
@@ -890,3 +953,62 @@ func _wear_and_repair_tests() -> void:
 	for i in 200:
 		used += Loot.roll("crate")
 	check(used.any(func(it): return it.has("cond") and float(it["cond"]) < 100.0), "found weapons / clothes are worn")
+
+
+## Leather crafting, water gourd, lakes / rivers and taps.
+func _water_tests() -> void:
+	var p: Player = main.player
+	var w: World = main.world
+	var inv := p.inv
+	print("Leather / gourd")
+	inv.gear["hands"] = null
+	inv.gear["back"] = Items.make("backpack_large")
+	inv.add("leather", 3)
+	var sacks := inv.count_of("sack")
+	check(p.craft("leather_sack") and inv.count_of("sack") == sacks + 1, "2 leather -> sack")
+	check(p.craft("gourd") and inv.count_of("gourd") == 1 and inv.count_of("leather") == 0, "1 leather -> water gourd")
+	var g: Dictionary = inv.all_of("gourd")[0]
+	check(int(g["water"]) == 0, "a new gourd is empty")
+	print("Water")
+	# Stand on a river / lake bank
+	var bank := Vector2i(-1, -1)
+	for y in range(2, World.H - 2):
+		for x in range(2, World.W - 2):
+			var c := Vector2i(x, y)
+			if w.get_tile(c) == World.WATER and w.is_walkable(c + Vector2i(0, 1)) and bank.x < 0:
+				bank = c + Vector2i(0, 1)
+	check(bank.x >= 0, "found a lake / river bank")
+	var wc := bank - Vector2i(0, 1)
+	check(not w.is_walkable(wc) and w.astar.is_point_solid(wc), "you can't walk on water")
+	check(not w.blocks_sight(wc), "you can see (and shoot) across water")
+	p.global_position = w.center_of(bank)
+	p._find_loot()
+	check(p.near_lake, "standing at the water's edge")
+	check(p.interact_choice() == "water" and p.action_label() == "Drink / fill gourd", "E: Drink / fill gourd")
+	p.thirst = 30.0
+	p.interact()
+	check(p.thirst >= 90.0 and int(g["water"]) == 4, "drink your fill and fill the gourd (4/4)")
+	p.thirst = 40.0
+	var loc := {}
+	for l in [Inventory.gear_loc("hands")] + inv.storage_cells():
+		if inv.get_at(l) != null and inv.get_at(l)["id"] == "gourd":
+			loc = l
+	check(p.actions_for(loc).any(func(a): return a[1] == "drink_gourd"), "right-click gourd: Drink")
+	check(p.drink_gourd(loc) and int(g["water"]) == 3 and absf(p.thirst - 80.0) < 0.01, "a gourd drink = a bottle of water (+40)")
+	p.thirst = 40.0
+	inv.remove("water", 99)
+	p.quick_drink()
+	check(int(g["water"]) == 2, "G drinks from the gourd when you have no bottles")
+	var tap := WaterSource.new()
+	tap.water = 2
+	tap.position = p.global_position + Vector2(20, 0)
+	main.entities.add_child(tap)
+	p.thirst = 0.0
+	p.use_water(tap)
+	check(tap.water == 0 and absf(p.thirst - 80.0) < 0.01, "taps only hold a little water")
+	p.use_water(tap)
+	check(p.message.contains("dry"), "a dry tap gives nothing")
+	main.save_game()
+	var d := SaveGame.read()
+	check(d.has("taps") and d["taps"].size() == get_tree().get_nodes_in_group("taps").size(), "tap water saved")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(Game.save_path))
