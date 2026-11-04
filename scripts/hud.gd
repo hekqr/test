@@ -43,7 +43,9 @@ var inventory_open := false
 var _font: Font
 var _mouse := Vector2.ZERO
 var _btn_down := false
-var _drag := {} # location being dragged
+var _drag := {} # location pressed on (becomes a drag once the mouse moves)
+var _press_pos := Vector2.ZERO
+const DRAG_START := 6.0 # pixels the mouse must move before a press turns into a drag
 var _menu := {} # right-click menu: {"loc", "pos", "items": [[label, action], ...]}
 var _near_scroll := 0
 var left_tab := "near" # "near" or "craft"
@@ -230,7 +232,14 @@ func _input(event: InputEvent) -> void:
 		_near_scroll = clampi(_near_scroll + (1 if mb.button_index == MOUSE_BUTTON_WHEEL_DOWN else -1), 0, maxi(n - near_visible_rows(), 0))
 		get_viewport().set_input_as_handled()
 		return
-	# Right-click menu open: a left click picks an option (or closes the menu).
+	# Double-click an item: its main action (equip / wear / use / take) - also while its menu is open.
+	if mb.button_index == MOUSE_BUTTON_LEFT and mb.pressed and mb.double_click and not loc.is_empty() and inv.get_at(loc) != null:
+		_menu = {}
+		_drag = {}
+		p.double_click(loc)
+		get_viewport().set_input_as_handled()
+		return
+	# Item menu open: a left click picks an option (or closes the menu).
 	if not _menu.is_empty() and mb.pressed:
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			var i := _menu_index(mb.position)
@@ -256,27 +265,32 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if mb.button_index == MOUSE_BUTTON_LEFT:
-		if mb.pressed and mb.double_click and not loc.is_empty():
-			# Double-click: wear / equip / use / take
-			_drag = {}
-			p.double_click(loc)
-		elif mb.pressed:
+		if mb.pressed:
 			if inv.near and not inv.near.contents.is_empty() and take_all_rect().has_point(mb.position):
 				p.say(inv.near.search(p))
 			elif not loc.is_empty() and inv.get_at(loc) != null:
 				_drag = loc
+				_press_pos = mb.position
 		elif not _drag.is_empty():
-			_drop_drag(p, mb.position, loc)
+			if mb.position.distance_to(_press_pos) > DRAG_START:
+				_drop_drag(p, mb.position, loc)
+			else:
+				open_menu(p, _drag, mb.position) # a click: show what you can do with it
 			_drag = {}
 	elif mb.button_index == MOUSE_BUTTON_RIGHT and mb.pressed and not loc.is_empty():
-		var acts := p.actions_for(loc)
-		if not acts.is_empty():
-			_menu = {"loc": loc, "pos": mb.position, "items": acts}
+		open_menu(p, loc, mb.position)
 	get_viewport().set_input_as_handled()
 
 
 const MENU_W := 190.0
 const MENU_ROW := 26.0
+
+
+## The item's action menu (Eat / Drink / Use / Wear / Repair / Drop ...), if there's anything to do with it.
+func open_menu(p: Player, loc: Dictionary, at: Vector2) -> void:
+	var acts := p.actions_for(loc)
+	if not acts.is_empty():
+		_menu = {"loc": loc, "pos": at + Vector2(8, 8), "items": acts}
 
 
 func _menu_rect() -> Rect2:
@@ -364,13 +378,19 @@ func _unhandled_input(event: InputEvent) -> void:
 
 # ---------------------------------------------------------------- drawing helpers
 
-func _text(pos: Vector2, s: String, size_px := 16, col := Color.WHITE, align := HORIZONTAL_ALIGNMENT_LEFT, width := -1.0) -> void:
+func _text(pos: Vector2, s: String, size_px := 16, col := Color.WHITE, align := HORIZONTAL_ALIGNMENT_LEFT, width := -1.0, shadow := true) -> void:
 	if align == HORIZONTAL_ALIGNMENT_RIGHT and width <= 0.0:
 		pos.x -= _font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size_px).x
 		align = HORIZONTAL_ALIGNMENT_LEFT
 		width = -1.0
-	draw_string(_font, pos + Vector2(2, 2), s, align, width, size_px, Color(0.08, 0.04, 0.07, 0.85))
+	if shadow:
+		draw_string(_font, pos + Vector2(2, 2), s, align, width, size_px, Color(0.08, 0.04, 0.07, 0.85))
 	draw_string(_font, pos, s, align, width, size_px, col)
+
+
+## True once a pressed item has been moved far enough to count as dragging.
+func _dragging() -> bool:
+	return not _drag.is_empty() and _mouse.distance_to(_press_pos) > DRAG_START
 
 
 func _tex(t: Texture2D, pos: Vector2, scale_px: float, modulate := Color.WHITE) -> void:
@@ -427,9 +447,9 @@ func _cell_item(inv: Inventory, loc: Dictionary, r: Rect2, chosen := false, scal
 	var it = inv.get_at(loc)
 	if it == null:
 		return
-	if r.has_point(_mouse) and _drag.is_empty():
+	if r.has_point(_mouse) and not _dragging():
 		draw_rect(r.grow(-8), Color(1, 1, 1, 0.08))
-	if not _drag.is_empty() and _drag == loc:
+	if _dragging() and _drag == loc:
 		return
 	_item_icon(it, r, 0.0, Color(0.55, 0.45, 0.45) if Items.is_ruined(it) else Color.WHITE)
 
@@ -487,7 +507,7 @@ func _draw() -> void:
 		_text(Vector2(bx + 176, by + 26), "not healing", 11, C_DIM)
 	if p.bleeding:
 		_tex(Game.tex("blood_2"), Vector2(bx + 176, by + 4), 3.0)
-		_text(Vector2(bx + 210, by + 26), "Bleeding [H]", 15, Color(1, 0.4, 0.4))
+		_text(Vector2(bx + 210, by + 26), "Bleeding", 15, Color(1, 0.4, 0.4))
 	if p.poison_t > 0.0:
 		_text(Vector2(bx + 186, by + 70), "Sick (%ds)" % int(ceil(p.poison_t)), 15, Color(0.7, 0.9, 0.4))
 
@@ -544,16 +564,19 @@ func _draw() -> void:
 		var pressed := _btn_down and ar.has_point(_mouse)
 		_tex(Game.tex("ui_button_pressed" if pressed else "ui_button"), ar.position + Vector2(0, 6 if pressed else 0), UI_SCALE)
 		var label := _action_label(p)
-		_text(Vector2(ar.position.x, ar.position.y + (44 if pressed else 38)), label, 16, C_EDGE, HORIZONTAL_ALIGNMENT_CENTER, ar.size.x)
+		# The button art has a dark shadow strip at the bottom: centre the text on the light face above it.
+		var face_mid := ar.position.y + (6.0 if pressed else 0.0) + 8.5 * UI_SCALE
+		var baseline := face_mid + (_font.get_ascent(16) - _font.get_descent(16)) / 2.0
+		_text(Vector2(ar.position.x, roundf(baseline)), label, 16, C_EDGE, HORIZONTAL_ALIGNMENT_CENTER, ar.size.x, false)
 		_text(Vector2(ar.end.x + 8, ar.position.y + 38), "[E]", 14, C_DIM)
 
 	# Help
 	if show_help and not inventory_open:
 		var lines := [
 			"WASD move   Shift sprint   Melee is automatic   Guns aim for you - stand still, then click",
-			"E / button: search, pick up, skin, cook   R reload   X lower weapon   C campfire",
-			"1 / 2 / 3 or wheel: main / secondary / melee   Tab inventory",
-			"F eat   G drink   H bandage / first aid   Esc pause   F1 hide help",
+			"E / button: search, pick up, skin, cook, drink   R reload   X lower weapon   C campfire",
+			"1 / 2 / 3 or wheel: main / secondary / melee   K crafting   M map",
+			"Tab inventory: click an item to eat, drink, bandage, wear...   Esc pause   F1 hide help",
 		]
 		draw_rect(Rect2(14, 14, 660, 104), Color(0.08, 0.04, 0.07, 0.6))
 		for i in lines.size():
@@ -643,9 +666,9 @@ func _draw_nearby(p: Player, inv: Inventory) -> void:
 		var it: Dictionary = near_items[i]
 		var row := near_row(r)
 		var loc := Inventory.near_loc(i)
-		var dragging: bool = not _drag.is_empty() and _drag == loc
+		var dragging: bool = _dragging() and _drag == loc
 		draw_rect(row, C_EDGE)
-		draw_rect(row.grow(-2), C_LIGHT if (row.has_point(_mouse) and _drag.is_empty()) else C_CARD)
+		draw_rect(row.grow(-2), C_LIGHT if (row.has_point(_mouse) and not _dragging()) else C_CARD)
 		if dragging:
 			continue
 		_fit_icon(Items.item_icon(it), Rect2(row.position + Vector2(4, 1), Vector2(40, 40)), Color(0.6, 0.5, 0.5) if Items.is_ruined(it) else Color.WHITE, 0.9)
@@ -673,9 +696,9 @@ func _draw_gear(p: Player, inv: Inventory, vs: Vector2) -> void:
 		_cell(sr, SLOT_SCALE, inv.active == s)
 		if g == null:
 			_fit_icon(Game.slot_symbol(s), sr, Color.WHITE, 0.75)
-		elif not (not _drag.is_empty() and _drag == Inventory.gear_loc(s)):
+		elif not (_dragging() and _drag == Inventory.gear_loc(s)):
 			_item_icon(g, sr, 0.0, Color(0.55, 0.45, 0.45) if Items.is_ruined(g) else Color.WHITE)
-			if sr.has_point(_mouse) and _drag.is_empty():
+			if sr.has_point(_mouse) and not _dragging():
 				draw_rect(sr.grow(-8), Color(1, 1, 1, 0.08))
 		if g != null and g.has("cond") and not s in Inventory.STORAGE:
 			_text(Vector2(sr.position.x, sr.end.y + 13), _cond_text(g), 11, _cond_color(g), HORIZONTAL_ALIGNMENT_CENTER, sr.size.x)
@@ -701,7 +724,7 @@ func _draw_gear(p: Player, inv: Inventory, vs: Vector2) -> void:
 	_text(Vector2(stx, sty + 22), "Warmth +%d   -   %s" % [int(round(inv.warmth())), p.temp_status()], 14, C_DIM)
 	_text(Vector2(stx, sty + 44), "%d free storage slots" % inv.free_slots(), 14, C_DIM)
 
-	_text(Vector2(0, vs.y - 30), "Drag to move   -   Double-click: equip / wear / use   -   Right-click for more   -   Drag outside to drop   -   Tab to close", 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+	_text(Vector2(0, vs.y - 30), "Click an item: what you can do with it   -   Double-click: equip / wear / use   -   Drag to move, outside to drop   -   Tab to close", 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 
 	# Right-click menu
 	if not _menu.is_empty():
@@ -717,7 +740,7 @@ func _draw_gear(p: Player, inv: Inventory, vs: Vector2) -> void:
 		return
 
 	# Tooltip / dragged item
-	if _drag.is_empty():
+	if not _dragging():
 		var hover := loc_at(_mouse)
 		var tip_item = inv.get_at(hover) if not hover.is_empty() and hover["t"] != "near" else null
 		if tip_item != null:

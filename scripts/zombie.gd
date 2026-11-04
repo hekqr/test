@@ -5,7 +5,7 @@ extends CharacterBody2D
 ##
 ## Types
 ##   walker  the usual shambler (100 health)
-##   runner  fast, a bit weaker - you can only outrun it by sprinting (80)
+##   runner  very fast (about as fast as you sprint), a bit weaker (80)
 ##   brute   big, a bit slower, hits 50% harder (300)
 ##   axe     throws its axe from a distance, then walks over and picks it up again
 ##           (grab the axe first and it has to fight with its hands) (100)
@@ -22,7 +22,7 @@ const THINK_INTERVAL := 0.25
 ## walk / chase = base speeds, dmg = damage per hit (min, max), armour = points (1 = 10% less damage)
 const TYPES := {
 	"walker": {"name": "Zombie", "health": 100.0, "walk": 38.0, "chase": 112.0, "dmg": [8.0, 14.0], "cd": 1.1, "reach": 8.0, "knock": 220.0, "armour": 0.0},
-	"runner": {"name": "Runner", "health": 80.0, "walk": 50.0, "chase": 158.0, "dmg": [7.0, 12.0], "cd": 0.9, "reach": 8.0, "knock": 260.0, "armour": 0.0},
+	"runner": {"name": "Runner", "health": 80.0, "walk": 50.0, "chase": 190.0, "dmg": [7.0, 12.0], "cd": 0.9, "reach": 8.0, "knock": 260.0, "armour": 0.0},
 	"brute": {"name": "Brute", "health": 300.0, "walk": 34.0, "chase": 100.0, "dmg": [12.0, 21.0], "cd": 1.4, "reach": 12.0, "knock": 90.0, "armour": 0.0},
 	"axe": {"name": "Axe zombie", "health": 100.0, "walk": 36.0, "chase": 100.0, "dmg": [16.0, 24.0], "cd": 1.3, "reach": 12.0, "knock": 150.0, "armour": 0.0},
 	"armed": {"name": "Armed zombie", "health": 100.0, "walk": 36.0, "chase": 96.0, "dmg": [8.0, 14.0], "cd": 1.1, "reach": 8.0, "knock": 200.0, "armour": 3.0},

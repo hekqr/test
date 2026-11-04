@@ -50,9 +50,6 @@ func _ready() -> void:
 			wb.button_index = pair[1]
 			InputMap.action_add_event(pair[0], wb)
 	_key("inventory", [KEY_TAB, KEY_I], false)
-	_key("eat", [KEY_F], false)
-	_key("drink", [KEY_G], false)
-	_key("bandage", [KEY_H], false)
 	_key("help", [KEY_F1])
 	_key("pause", [KEY_ESCAPE])
 	_key("fullscreen", [KEY_F11])

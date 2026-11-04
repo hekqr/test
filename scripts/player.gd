@@ -53,6 +53,8 @@ var aim_target: Node2D = null
 const WALK_SPREAD := 0.22 # extra cone while walking
 const SPRINT_SPREAD := 0.5 # extra cone while sprinting
 var _shot_t := 0.0
+var _hunger_msg_t := 0.0
+var _thirst_msg_t := 0.0
 var _hurt_t := 0.0
 var _noise_t := 0.0
 var _sprite: AnimatedSprite2D
@@ -496,10 +498,27 @@ func _needs(delta: float) -> void:
 		dmg += 1.5
 	if body_temp < TEMP_FREEZING:
 		dmg += 0.5
+	_need_messages(delta)
 	if dmg > 0.0:
 		take_damage(dmg * delta, false)
 	elif can_heal():
 		health = minf(health + 0.4 * delta, 100.0)
+
+
+## "I'm hungry" / "I'm thirsty" when they drop below 25% (repeats every minute while it stays low).
+func _need_messages(delta: float) -> void:
+	_hunger_msg_t -= delta
+	_thirst_msg_t -= delta
+	if hunger >= 25.0:
+		_hunger_msg_t = 0.0
+	elif _hunger_msg_t <= 0.0:
+		_hunger_msg_t = 60.0
+		say("I'm starving!" if hunger <= 0.0 else "I'm hungry")
+	if thirst >= 25.0:
+		_thirst_msg_t = 0.0
+	elif _thirst_msg_t <= 0.0:
+		_thirst_msg_t = 60.0
+		say("I'm dehydrated!" if thirst <= 0.0 else "I'm thirsty")
 
 
 func indoors() -> bool:
@@ -554,14 +573,8 @@ func _actions() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if dead or get_tree().paused or not event.is_pressed() or event.is_echo():
 		return
-	# These also work with the inventory open.
-	if event.is_action_pressed("eat"):
-		quick_eat()
-	elif event.is_action_pressed("drink"):
-		quick_drink()
-	elif event.is_action_pressed("bandage"):
-		quick_heal()
-	elif event.is_action_pressed("weapon_primary"):
+	# These also work with the inventory open. (Eating, drinking and bandaging are done from the inventory.)
+	if event.is_action_pressed("weapon_primary"):
 		switch_weapon("primary")
 	elif event.is_action_pressed("weapon_secondary"):
 		switch_weapon("secondary")
@@ -880,40 +893,6 @@ func use_item(item: String) -> void:
 		inv.remove(item, 1)
 
 
-## F / G / H quick keys: pick the best item you carry for the job.
-func quick_eat() -> void:
-	for id in ["food", "soup", "chips_salted", "chips_cheese", "meat"]:
-		if inv.count_of(id) > 0:
-			use_item(id)
-			return
-	say("Nothing to eat")
-
-
-func quick_drink() -> void:
-	if inv.count_of("water") > 0:
-		use_item("water")
-		return
-	for loc in [Inventory.gear_loc("hands")] + inv.storage_cells():
-		var it = inv.get_at(loc)
-		if it != null and int(it.get("water", 0)) > 0:
-			drink_gourd(loc)
-			return
-	for id in ["soda", "soup"]:
-		if inv.count_of(id) > 0:
-			use_item(id)
-			return
-	say("Nothing to drink")
-
-
-func quick_heal() -> void:
-	var order := ["bandage", "firstaid"] if bleeding and poison_t <= 0.0 else ["firstaid", "bandage"]
-	for id in order:
-		if inv.count_of(id) > 0:
-			use_item(id)
-			return
-	say("No bandages or first aid kits")
-
-
 ## Applies a consumable / medical item. Returns false if it wasn't needed.
 func _apply_consumable(item: String) -> bool:
 	var d := Items.def(item)
@@ -991,7 +970,7 @@ func take_damage(amount: float, can_bleed := true) -> void:
 		var covered := inv.gear["coat"] != null or inv.gear["armour"] != null
 		if not bleeding and randf() < (0.18 if covered else 0.3):
 			bleeding = true
-			say("You are bleeding! Press H to bandage")
+			say("I'm bleeding!")
 	if health <= 0.0:
 		health = 0.0
 		dead = true

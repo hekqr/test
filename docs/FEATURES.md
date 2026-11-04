@@ -167,9 +167,9 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ **Quieter guns**: gunshots carry about half as far as before (pistol 380 px, shotgun 480, rifle 440,
   hunting rifle 520, armed zombies 350)
 - ✅ **Zombie stats** (each zombie varies ±10% in health, speed and damage):
-  walker 100 hp · runner 80 hp, hits a bit softer · brute 300 hp, a bit slower, hits 50% harder ·
+  walker 100 hp · runner 80 hp, runs 190 (about your sprint speed), hits a bit softer · brute 300 hp, a bit slower, hits 50% harder ·
   axe zombie 100 hp · armed zombie 100 hp + vest (armour 3 = 30% less damage, sometimes drops it)
-- ✅ **Wolves** (40 hp, faster than runners, bite 9–16): packs of 2–3 roam the wilderness. They hunt you (and bandits) on sight — further at
+- ✅ **Wolves** (40 hp, run 210 — faster than runners and than you, bite 9–16): packs of 2–3 roam the wilderness. They hunt you (and bandits) on sight — further at
   night — bite and back off, call the pack when one is hurt, and run when badly wounded.
   Bandits shoot them. Skin a dead wolf for **2 meat + 1 leather** (deer now give 1 leather too)
 - ✅ **Leather crafting**: 2 leather = sack, 1 leather = **water gourd**
@@ -179,6 +179,13 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
   bridges. Water blocks walking but not bullets or sight. Shown on the map. E at the bank: drink your fill
   and fill your gourds
 - ✅ **Bathroom taps** in houses: about half still have a little water left (1–6 drinks), saved per tap
+
+## Milestone 6 — Inventory-first actions
+- ✅ Eating, drinking and bandaging are done from the inventory: **click an item** to see what you can do
+  with it (double-click = its main action, drag = move). The F / G / H hotkeys are gone
+- ✅ Your survivor speaks up: "I'm hungry" / "I'm thirsty" below 25% (every minute, "I'm starving!" /
+  "I'm dehydrated!" at 0), "I'm bleeding!"
+- ✅ Action button text centred on the button face, no text shadow
 
 ## Planned
 - 📌 **Base building** (wooden & reinforced walls and gates are in the art pack)

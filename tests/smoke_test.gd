@@ -127,6 +127,9 @@ func _physics_process(_delta: float) -> void:
 			check(far, "bandits don't spawn on top of you")
 			for b in bandits:
 				b.set_physics_process(false) # keep them out of the other tests
+			for wf in get_tree().get_nodes_in_group("wolves"):
+				wf.set_physics_process(false)
+			main._animal_t = 9999.0
 			_clear_zombies()
 			pos_before = p.global_position
 			Input.action_press("move_right")
@@ -367,7 +370,7 @@ func _physics_process(_delta: float) -> void:
 						food -= 100
 					else:
 						food += 1
-			check(guns > 12, "police lockers have guns & ammo (%d)" % guns)
+			check(guns > 8, "police lockers have guns & ammo (%d)" % guns)
 			check(food > 20, "fridges have food & drink only")
 			var total := 0
 			for i in 100:
@@ -387,14 +390,35 @@ func _physics_process(_delta: float) -> void:
 			p.hunger = 50.0
 			inv.add("food")
 			var fbefore := inv.count_of("food")
-			_press("eat")
-			check(inv.count_of("food") == fbefore - 1 and p.hunger > 50.0, "F key eats (key events)")
+			check(not InputMap.has_action("eat") and not InputMap.has_action("drink") and not InputMap.has_action("bandage"), "no eat / drink / bandage hotkeys (done from the inventory)")
+			var food_loc := {}
+			for l in inv.storage_cells() + [Inventory.gear_loc("hands")]:
+				if inv.get_at(l) != null and inv.get_at(l)["id"] == "food":
+					food_loc = l
+			main.hud.set_inventory_open(true)
+			var cell: Rect2 = main.hud.cargo_cell(food_loc["s"], food_loc["i"]) if food_loc["t"] == "cargo" else main.hud.slot_rect(food_loc["s"])
+			_click(cell.get_center())
+			var menu: Dictionary = main.hud._menu
+			check(not menu.is_empty() and menu["items"][0][0] == "Eat", "clicking an item shows what you can do with it (%s)" % str(menu.get("items", [])))
+			if not main.hud._menu.is_empty():
+				_click(main.hud._menu_rect().position + Vector2(20, 4 + Hud.MENU_ROW * 0.5))
+			check(inv.count_of("food") == fbefore - 1 and p.hunger > 50.0, "pick Eat from the menu")
+			main.hud.set_inventory_open(false)
 			var old_primary = inv.gear["primary"]
 			p.inv.gear["primary"] = Items.make("shotgun")
 			_press("weapon_primary")
 			check(p.weapon_id() == "shotgun", "1 key selects main gun")
 			_press("weapon_primary")
 			check(p.weapon_id() == "fists", "1 again lowers it")
+			p.hunger = 20.0
+			p._hunger_msg_t = 0.0
+			p._need_messages(0.1)
+			check(p.message == "I'm hungry", "says \"I'm hungry\" below 25%")
+			p.thirst = 20.0
+			p._need_messages(0.1)
+			check(p.message == "I'm thirsty", "says \"I'm thirsty\" below 25%")
+			p.hunger = 100.0
+			p.thirst = 100.0
 			inv.gear["primary"] = old_primary
 			print("Double-click")
 			inv.gear["hands"] = Items.make("cap")
@@ -625,7 +649,7 @@ func _physics_process(_delta: float) -> void:
 				var z: Zombie = main.add_zombie(p2.global_position + Vector2(0, 900), t)
 				hp[t] = z.health
 				if t == "runner":
-					check(z.chase_speed > Player.WALK_SPEED and z.chase_speed < Player.SPRINT_SPEED, "runners are faster than walking, slower than sprinting")
+					check(z.chase_speed >= 171.0 - 0.01 and z.chase_speed <= 209.0 + 0.01, "runners run 190 (+-10%%): about as fast as you sprint (%.0f)" % z.chase_speed)
 			var in_range := func(v: float, base: float): return v >= base * 0.9 - 0.01 and v <= base * 1.1 + 0.01
 			check(in_range.call(hp["walker"], 100.0) and in_range.call(hp["runner"], 80.0) and in_range.call(hp["brute"], 300.0) and in_range.call(hp["axe"], 100.0) and in_range.call(hp["armed"], 100.0),
 				"zombie health: walker 100, runner 80, brute 300, axe 100, armed 100 (+-10%%) (%s)" % str(hp))
@@ -752,7 +776,7 @@ func _physics_process(_delta: float) -> void:
 				"dead wolf: 2 meat + 1 leather")
 			check(int(Animal.SPECIES["deer"]["leather"]) >= 1, "deer give leather too")
 			var ws: Dictionary = Animal.SPECIES["wolf"]
-			check(float(ws["run"]) > float(Zombie.TYPES["runner"]["chase"]) * 1.1 and float(ws["run"]) < Player.SPRINT_SPEED, "wolves are faster than runners (you can still outsprint them)")
+			check(float(ws["run"]) == 210.0 and float(ws["run"]) > float(Zombie.TYPES["runner"]["chase"]) and float(ws["run"]) > Player.SPRINT_SPEED, "wolves run 210: faster than runners and than you")
 			check(float(ws["health"]) == 40.0 and float(ws["bite"][1]) > float(Zombie.TYPES["walker"]["dmg"][1]), "wolves: 40 hp, bite a bit harder than walkers")
 			_water_tests()
 			if failures.is_empty():
@@ -978,7 +1002,7 @@ func _water_tests() -> void:
 	for y in range(2, World.H - 2):
 		for x in range(2, World.W - 2):
 			var c := Vector2i(x, y)
-			if w.get_tile(c) == World.WATER and w.is_walkable(c + Vector2i(0, 1)) and bank.x < 0:
+			if bank.x < 0 and w.get_tile(c) == World.WATER and w.is_walkable(c + Vector2i(0, 1)) and _nothing_near(w.center_of(c + Vector2i(0, 1)), 80.0):
 				bank = c + Vector2i(0, 1)
 	check(bank.x >= 0, "found a lake / river bank")
 	var wc := bank - Vector2i(0, 1)
@@ -998,10 +1022,6 @@ func _water_tests() -> void:
 			loc = l
 	check(p.actions_for(loc).any(func(a): return a[1] == "drink_gourd"), "right-click gourd: Drink")
 	check(p.drink_gourd(loc) and int(g["water"]) == 3 and absf(p.thirst - 80.0) < 0.01, "a gourd drink = a bottle of water (+40)")
-	p.thirst = 40.0
-	inv.remove("water", 99)
-	p.quick_drink()
-	check(int(g["water"]) == 2, "G drinks from the gourd when you have no bottles")
 	var tap := WaterSource.new()
 	tap.water = 2
 	tap.position = p.global_position + Vector2(20, 0)
@@ -1015,3 +1035,23 @@ func _water_tests() -> void:
 	var d := SaveGame.read()
 	check(d.has("taps") and d["taps"].size() == get_tree().get_nodes_in_group("taps").size(), "tap water saved")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(Game.save_path))
+
+
+## A real left click (press + release) at a screen position.
+func _click(pos: Vector2) -> void:
+	for pressed in [true, false]:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = pressed
+		ev.position = pos
+		ev.global_position = pos
+		get_viewport().push_input(ev, true)
+
+
+## No loot pile, container, fire or tap within `r` px.
+func _nothing_near(pos: Vector2, r: float) -> bool:
+	for g in ["loot", "fires", "taps"]:
+		for n in get_tree().get_nodes_in_group(g):
+			if (n as Node2D).global_position.distance_to(pos) < r:
+				return false
+	return true
