@@ -18,3 +18,9 @@ Top-down 2D zombie survival game for Windows. Godot 4.7.2, GDScript. The user do
 - After adding a new `class_name` script: `godot --headless --path . --import`
 - Windows build: `godot --headless --path . --export-release "Windows Desktop" build/windows/Project0.exe`, zip to `build/Project0-windows.zip` and send it to the user.
 - Bump `SaveGame.VERSION` when the save format changes.
+
+## Design decisions (from the user)
+- Base walls/gates are unbreakable: the base is a fully safe, sustainable place. No raids on bases.
+- No food spoilage mechanic (for now).
+- Later (when asked): renewable supplies (rain collector, snares, fish trap) and utility (workbench, stove/fireplace, shelves/weapon rack).
+- Rejected: fortifying/boarding up existing houses.
