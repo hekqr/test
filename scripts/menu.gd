@@ -115,7 +115,7 @@ func _draw() -> void:
 			i += 1
 	draw_rect(Rect2(Vector2.ZERO, vs), Color(0.04, 0.02, 0.06, 0.45))
 
-	_text(Vector2(0, vs.y * 0.24), "ASHFALL", 84, C_TEXT, vs.x)
+	_text(Vector2(0, vs.y * 0.24), "PROJECT 0", 84, C_TEXT, vs.x)
 	_text(Vector2(0, vs.y * 0.24 + 40), "survive the outbreak", 20, C_DIM, vs.x)
 
 	for b in _buttons():

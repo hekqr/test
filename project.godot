@@ -3,7 +3,7 @@ config_version=5
 
 [application]
 
-config/name="Ashfall"
+config/name="Project 0"
 config/description="Top-down 2D zombie survival."
 run/main_scene="res://scenes/menu.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")

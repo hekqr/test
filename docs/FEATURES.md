@@ -1,4 +1,4 @@
-# Ashfall — Feature Plan
+# Project 0 — Feature Plan
 
 Working title. Top-down 2D zombie survival for PC (Windows first), built in Godot 4.
 

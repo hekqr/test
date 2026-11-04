@@ -1,14 +1,14 @@
-# Ashfall
+# Project 0
 
 Top-down 2D zombie survival game for PC, made with [Godot 4.7](https://godotengine.org).
 
 - Feature plan: [docs/FEATURES.md](docs/FEATURES.md)
 
 ## Play
-Download `Ashfall.exe` (Windows) and double-click it. No install needed.
+Download `Project0.exe` (Windows) and double-click it. No install needed.
 
 The game saves automatically (every 20 s, when you quit, and when you die) to
-`%APPDATA%\Godot\app_userdata\Ashfall\save.json`. A dead survivor's save is kept but can't be continued.
+`%APPDATA%\Godot\app_userdata\Project 0\save.json`. A dead survivor's save is kept but can't be continued.
 
 ## Controls
 | Key | Action |
@@ -48,4 +48,4 @@ commercial permission for the Zombie Apocalypse Tileset, or replace those assets
 ## Development
 - Open the folder in Godot 4.7 to edit.
 - Smoke test: `godot --headless --path . res://tests/smoke_test.tscn`
-- Windows build: `godot --headless --path . --export-release "Windows Desktop" build/windows/Ashfall.exe`
+- Windows build: `godot --headless --path . --export-release "Windows Desktop" build/windows/Project0.exe`
