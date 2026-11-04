@@ -1329,7 +1329,7 @@ func _base_tests() -> void:
 					mags_ok = false
 	check(mags_ok, "ammo always comes in whole magazines (at least one)")
 	check(big_ok, "big ammo finds are split into proper stacks")
-	check(["ammo_9mm", "ammo_12ga", "ammo_556", "ammo_308"].all(func(id): return Items.max_stack(id) == 30), "every kind of ammo stacks to 30")
+	check(["ammo_9mm", "ammo_12ga", "ammo_308"].all(func(id): return Items.max_stack(id) == 30) and Items.max_stack("ammo_556") == 100, "ammo stacks to 30 (assault rifle 5.56: 100)")
 	print("Weather")
 	p.global_position = _open_spot(w, 3)
 	main._set_weather("clear", 100.0)

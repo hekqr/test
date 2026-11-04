@@ -275,7 +275,7 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
   crops grow 1.5× faster
 - ✅ **Military camps** (one per region): fenced, a road gate, tents, barracks and an armoury full of military
   crates (guns, 2–4 magazines of ammo, vests, helmets, food, water, medicine). Guarded by a few armed zombies only
-- ✅ **Ammo comes in whole magazines** (at least one): 9mm 8, 12ga 5, 5.56 30, .308 5 per magazine; every kind of ammo stacks to 30
+- ✅ **Ammo comes in whole magazines** (at least one): 9mm 8, 12ga 5, 5.56 30, .308 5 per magazine; ammo stacks to 30 (5.56 for the assault rifle: 100)
 - ✅ Unsearched containers have a white outline (like items on the ground); items on the ground lie straight
 - ✅ Benches, bins and hydrants are never placed right in front of a door
 
