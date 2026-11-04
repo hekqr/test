@@ -7,7 +7,7 @@ class_name Buildings
 ##   w  wood floor        t  tile floor        c  concrete floor
 ##   Containers you can search:
 ##     F fridge   R wardrobe   M medicine cabinet   U trash can
-##     S shop shelf   P pharmacy shelf   V vending machine   L police locker   C tool crate
+##     S shop shelf   P pharmacy shelf   V vending machine   L police locker   C tool crate   Y military crate
 ##   Furniture (blocks walking, can't be searched):
 ##     B bed (head)   b bed (foot)   T table   Z sofa   O toilet   A bath (with a tap)   K kitchen counter   E desk
 ## Most village buildings are tiny one-room huts; houses have a bedroom or two, a bathroom and a living room.
@@ -41,6 +41,30 @@ const TEMPLATES := {
 		"#cccc#",
 		"#Eccc#",
 		"###D##",
+	]},
+	# --- military camp
+	"mil_tent": {"weight": 0, "rows": [
+		"#######",
+		"#BYcYB#",
+		"#bcccb#",
+		"#ccccc#",
+		"###D###",
+	]},
+	"mil_barracks": {"weight": 0, "rows": [
+		"##W####W##",
+		"#BcBcBcBY#",
+		"#bcbcbcbc#",
+		"#ccccccccW",
+		"#YccccccY#",
+		"####DD####",
+	]},
+	"mil_armory": {"weight": 0, "rows": [
+		"########",
+		"#YcYcYc#",
+		"#cccccc#",
+		"#YcYcYc#",
+		"#cccccc#",
+		"###DD###",
 	]},
 	# --- houses
 	"house_small": {"weight": 40, "rows": [
@@ -103,7 +127,7 @@ const TEMPLATES := {
 ## Container furniture -> loot table key (see Loot.CONTAINERS)
 const CONTAINER_CHARS := {
 	"F": "fridge", "R": "wardrobe", "M": "medicine", "U": "trash",
-	"S": "shelf", "P": "pharmacy", "V": "vending", "L": "locker", "C": "crate",
+	"S": "shelf", "P": "pharmacy", "V": "vending", "L": "locker", "C": "crate", "Y": "military",
 }
 ## Furniture you can't search -> drawn sprite
 const FURNITURE_CHARS := {"B": "bed_head", "b": "bed_foot", "T": "table", "Z": "sofa", "O": "toilet", "A": "bath",
@@ -112,7 +136,7 @@ const FURNITURE_CHARS := {"B": "bed_head", "b": "bed_foot", "T": "table", "Z": "
 const FLOOR_OF := {
 	"w": 1, "D": 1, "R": 1, "E": 1, "B": 1, "b": 1, "T": 1, "Z": 1,
 	"t": 2, "F": 2, "K": 2, "M": 2, "S": 2, "P": 2, "V": 2, "U": 2, "O": 2, "A": 2,
-	"c": 3, "L": 3, "C": 3,
+	"c": 3, "L": 3, "C": 3, "Y": 3,
 }
 
 

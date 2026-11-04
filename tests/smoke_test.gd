@@ -12,6 +12,7 @@ var wolf: Animal
 var home_name := ""
 var marker_pos := Vector2.ZERO
 var east_road_y := 0
+var wall_cell := Vector2i(-1, -1)
 
 
 func check(cond: bool, what: String) -> void:
@@ -79,7 +80,7 @@ func _physics_process(_delta: float) -> void:
 			var by_type := {}
 			for i in w.settlements.size():
 				var t: String = w.settlements[i]["type"]
-				var lim: Array = {"hamlet": [2, 7], "village": [5, 12], "town": [8, 13], "city": [12, 16]}[t]
+				var lim: Array = {"hamlet": [2, 7], "village": [5, 12], "town": [8, 13], "city": [12, 16], "military": [3, 4]}[t]
 				if per.get(i, 0) < int(lim[0]) or per.get(i, 0) > int(lim[1]):
 					sizes_ok = false
 				by_type[t] = by_type.get(t, 0) + 1
@@ -177,7 +178,7 @@ func _physics_process(_delta: float) -> void:
 			check(names.size() == w.settlements.size(), "every settlement has its own name")
 			var unreachable := 0
 			for st in w.settlements:
-				if w.find_path(w.center_of(w.spawn_cell), w.center_of(st["center"])).size() < 2:
+				if st["center"] != w.spawn_cell and w.find_path(w.center_of(w.spawn_cell), w.center_of(st["center"])).size() < 2:
 					unreachable += 1
 			check(unreachable == 0, "every settlement reachable from the start (roads connect them)")
 			var in_towns := 0
@@ -735,7 +736,7 @@ func _physics_process(_delta: float) -> void:
 			check(dropped, "dropped backpack (with its slots) saved on the ground")
 			var zn := get_tree().get_nodes_in_group("zombies").size()
 			var zs: int = saved_alive["zombies"].size()
-			check(zn >= zs and zn <= zs + 2, "zombies restored (%d saved, %d now)" % [zs, zn])
+			check(zn >= zs and zn <= zs + 2 + main.CAMP_GUARDS, "zombies restored (%d saved, %d now)" % [zs, zn])
 			var typed: bool = saved_alive["zombies"].all(func(zd): return Zombie.TYPES.has(String(zd.get("type", ""))))
 			check(typed, "zombie types saved")
 			var sn := get_tree().get_nodes_in_group("survivors").size()
@@ -890,6 +891,7 @@ func _physics_process(_delta: float) -> void:
 			check(float(ws["run"]) == 126.0 and float(ws["run"]) > float(Zombie.TYPES["runner"]["chase"]) and float(ws["run"]) > Player.SPRINT_SPEED, "wolves run 126: faster than runners and than you")
 			check(float(ws["health"]) == 40.0 and float(ws["bite"][1]) > float(Zombie.TYPES["walker"]["dmg"][1]), "wolves: 40 hp, bite a bit harder than walkers")
 			_water_tests()
+			_base_tests()
 			print("Regions")
 			main.hud.set_map_open(false)
 			var pr: Player = main.player
@@ -921,6 +923,7 @@ func _physics_process(_delta: float) -> void:
 				if n.is_bag and n.position.distance_to(marker_pos) < 2.0 and n.contents.any(func(it): return it["id"] == "map"):
 					found = true
 			check(found, "what you left in a region is still there when you come back")
+			check(main.structure_at(wall_cell) != null and main.world.get_tile(wall_cell) == World.BUILT, "your walls are still standing when you come back")
 			check(main.player.global_position.x > (World.W - 5) * World.T, "you come back in at the east edge")
 			main.save_game()
 			var d := SaveGame.read()
@@ -1255,3 +1258,251 @@ func _door_tests(w: World) -> void:
 	door._t = 0.0
 	door._physics_process(0.016)
 	check(not door.open, "it closes once the doorway is clear")
+
+
+## Keys, outlines, ammo in magazines, weather, fishing, base building, sleeping, crops, military camps.
+func _base_tests() -> void:
+	var p: Player = main.player
+	var w: World = main.world
+	var inv := p.inv
+	p.cancel_busy()
+	print("Keys / looks / ammo")
+	var keys := func(action: String) -> Array:
+		return InputMap.action_get_events(action).map(func(e): return e.keycode)
+	check(KEY_E in keys.call("inventory") and KEY_Q in keys.call("interact"), "E = inventory, Q = action")
+	main.hud.set_inventory_open(false)
+	_press("inventory")
+	var opened: bool = main.hud.inventory_open
+	_press("inventory")
+	check(opened and not main.hud.inventory_open, "E opens the inventory and E closes it again")
+	main.hud.set_inventory_open(true)
+	_press("interact")
+	check(not main.hud.inventory_open, "Q closes the inventory (after opening a chest)")
+	var cont: LootSpot = null
+	for n in get_tree().get_nodes_in_group("loot"):
+		if not n.is_bag and n.kind != "carcass" and n.kind != "chest" and not n.opened:
+			cont = n
+			break
+	check(cont != null and cont._outline != null and cont._outline.visible, "unsearched containers have a white outline")
+	var pile := get_tree().get_nodes_in_group("loot").filter(func(l): return l.is_bag)
+	check(pile.is_empty() or pile[0]._sprite.rotation == 0.0, "items on the ground lie straight")
+	var mags_ok := true
+	var big_ok := true
+	for i in 200:
+		for table in ["locker", "military", "car", "crate", "wild"]:
+			var total := {}
+			for it in Loot.roll(table):
+				if Items.kind(it["id"]) == "ammo":
+					total[it["id"]] = total.get(it["id"], 0) + int(it["count"])
+					if int(it["count"]) > Items.max_stack(it["id"]):
+						big_ok = false
+			for id in total:
+				if total[id] < Items.mag_size(id) or total[id] % Items.mag_size(id) != 0:
+					mags_ok = false
+	check(mags_ok, "ammo always comes in whole magazines (at least one)")
+	check(big_ok, "big ammo finds are split into proper stacks")
+	print("Weather")
+	p.global_position = _open_spot(w, 3)
+	main._set_weather("clear", 100.0)
+	var t_clear := p.target_temp()
+	main._set_weather("rain", 100.0)
+	check(Game.weather == "rain" and main.weather_fx.kind == "rain", "it can rain")
+	check(p.target_temp() < t_clear, "rain makes it colder")
+	main._set_weather("snow", 100.0)
+	check(p.target_temp() < t_clear - 8.0, "snow makes it colder still")
+	main._set_weather("clear", 100.0)
+	print("Fishing")
+	var bank := Vector2i(-1, -1)
+	for y in range(2, World.H - 2):
+		for x in range(2, World.W - 2):
+			if bank.x < 0 and w.get_tile(Vector2i(x, y)) == World.WATER and w.is_walkable(Vector2i(x, y + 1)) and _nothing_near(w.center_of(Vector2i(x, y + 1)), 60.0):
+				bank = Vector2i(x, y + 1)
+	p.global_position = w.center_of(bank)
+	p._find_loot()
+	inv.gear["hands"] = null
+	p.cancel_busy()
+	p.go_fishing()
+	check(p.busy_t <= 0.0 and p.message.contains("fishing rod"), "fishing needs a rod")
+	inv.gear["hands"] = Items.make("fishing_rod")
+	p.go_fishing()
+	check(p.busy_total >= 3.0 and p.busy_total <= 10.0, "a bite takes 3-10 seconds (%.1f)" % p.busy_total)
+	var caught := 0
+	for i in 40:
+		p.finish_busy()
+		if p.message == "Caught a fish!":
+			caught += 1
+		p.go_fishing()
+	p.cancel_busy()
+	check(caught >= 10 and caught < 40, "sometimes the fish is hooked, sometimes it gets away (%d / 40)" % caught)
+	main._set_weather("rain", 100.0)
+	var tmax := 0.0
+	for i in 20:
+		p.go_fishing()
+		tmax = maxf(tmax, p.busy_total)
+		p.cancel_busy()
+	check(tmax <= 6.01, "fish bite faster in the rain (max %.1f s)" % tmax)
+	main._set_weather("clear", 100.0)
+	check(float(Items.def("cooked_fish")["hunger"]) >= 50.0, "a cooked fish is a proper meal (+%d)" % int(Items.def("cooked_fish")["hunger"]))
+	print("Base building")
+	for b in get_tree().get_nodes_in_group("survivors"):
+		b.free()
+	_clear_zombies()
+	p.global_position = _open_spot(w, 5)
+	inv.gear["back"] = Items.make("backpack_large")
+	inv.add("planks", 10)
+	inv.add("planks", 10)
+	inv.add("nails", 30)
+	inv.add("rope", 2)
+	inv.add("rags", 4)
+	for k in ["kit_wall", "kit_gate", "kit_chest", "kit_bed", "kit_garden"]:
+		check(p.craft(k) and inv.count_of(k) == 1, "craft " + Items.name_of(k).to_lower())
+	p.facing = Vector2.RIGHT
+	p.start_placing("kit_wall")
+	wall_cell = p.build_cell()
+	check(p.placing == "kit_wall" and p.build_problem(wall_cell) == "", "building mode: a spot in front of you")
+	p.place_kit()
+	p.finish_busy()
+	check(main.structure_at(wall_cell) != null and w.get_tile(wall_cell) == World.BUILT, "wooden wall built")
+	check(w.astar.is_point_solid(wall_cell) and w.astar_z.is_point_solid(wall_cell) and w.blocks_sight(wall_cell), "walls block people, zombies and sight")
+	check(p.build_problem(wall_cell) != "", "can't build on top of a wall")
+	p.start_placing("kit_gate")
+	var gate_cell := _face_free(p, [Vector2.DOWN, Vector2.UP, Vector2.LEFT])
+	p.place_kit()
+	p.finish_busy()
+	check(w.is_door(gate_cell) and main.structure_at(gate_cell).door != null, "gate built (a door zombies can't open)")
+	p.start_placing("kit_chest")
+	var chest_cell := _face_free(p, [Vector2.LEFT, Vector2.UP, Vector2.DOWN])
+	p.place_kit()
+	p.finish_busy()
+	var chest_st: Structure = main.structure_at(chest_cell)
+	check(chest_st != null and chest_st.chest != null, "chest built")
+	p._find_loot()
+	check(p.nearest_loot == chest_st.chest and p.interact_choice() == "loot", "Q opens the chest")
+	p.interact()
+	p._find_loot()
+	check(inv.near == chest_st.chest, "the chest shows in the nearby list")
+	inv.add("matches", 3)
+	var mloc := inv.find("matches")
+	inv.move(mloc, Inventory.near_loc(0))
+	check(chest_st.chest.contents.any(func(it): return it["id"] == "matches"), "store things in your chest")
+	main.hud.set_inventory_open(false)
+	Game.open_inventory = false
+	p.start_placing("kit_bed")
+	var bed_cell := _face_free(p, [Vector2.UP, Vector2.DOWN, Vector2.LEFT])
+	p.place_kit()
+	p.finish_busy()
+	check(main.structure_at(bed_cell) != null and main.in_base(p.global_position), "bed built - this is your base now")
+	var spawned_in := false
+	for i in 20:
+		var z: Zombie = main.spawn_zombie(0.0, main.BASE_RADIUS * 0.9)
+		if z != null:
+			spawned_in = true
+	check(not spawned_in, "zombies don't spawn at your base")
+	_clear_zombies()
+	main._crop_t = 0.0
+	main._process(0.016)
+	check(p.in_base, "you're at your base")
+	var base_pos := p.global_position
+	p.global_position = _open_spot_r(w, 6) if _open_spot_r(w, 6) != Vector2.INF else _open_spot(w, 4)
+	p.in_base = true
+	var zd := lerpf(380.0, 220.0, Game.night) * 0.75
+	var zz: Zombie = main.add_zombie(p.global_position + Vector2(zd, 0))
+	zz.set_physics_process(false)
+	zz._think()
+	var sees_in_base := zz.foe == p
+	p.in_base = false
+	zz.foe = null
+	zz._think()
+	check(not sees_in_base and zz.foe == p, "zombies see you from half as far at your base")
+	zz.free()
+	p.global_position = base_pos
+	p.in_base = true
+	print("Sleeping")
+	main.time_of_day = 22.0 / 24.0
+	var d0: int = main.day
+	p.hunger = 100.0
+	p.thirst = 100.0
+	main.sleep()
+	check(absf(main.time_of_day * 24.0 - 7.0) < 0.05 and main.day == d0 + 1, "sleep through the night until 07:00 (%s)" % main.clock_text())
+	check(p.hunger < 100.0 and p.thirst < 100.0, "you wake up hungrier and thirstier")
+	var zz2: Zombie = main.add_zombie(p.global_position + Vector2(200, 0))
+	main.time_of_day = 22.0 / 24.0
+	main.sleep()
+	check(main.time_of_day * 24.0 > 21.0, "can't sleep with zombies around")
+	zz2.free()
+	print("Crops")
+	p.global_position = _open_spot(w, 3) + Vector2(0, 32 * 2)
+	for b2 in get_tree().get_nodes_in_group("structures"):
+		if b2.global_position.distance_to(p.global_position) < 120.0 and b2.kind != "bed":
+			p.global_position += Vector2(0, 160)
+	p.start_placing("kit_garden")
+	var g_cell := _face_free(p, [Vector2.RIGHT, Vector2.LEFT, Vector2.DOWN, Vector2.UP])
+	p.place_kit()
+	p.finish_busy()
+	var garden: Structure = main.structure_at(g_cell)
+	check(garden != null and garden.kind == "garden", "garden bed built")
+	inv.add("tomato_seeds", 2)
+	p._find_loot()
+	check(p.interact_choice() == "build" and p.action_label() == "Plant tomatoes", "Q at the garden bed: Plant tomatoes")
+	p.interact()
+	p.finish_busy()
+	check(garden.crop == "tomato" and inv.count_of("tomato_seeds") == 1, "tomatoes planted (uses a seed)")
+	main.world_days += 1.0
+	garden.grow(main.world_days, false)
+	check(not garden.ripe() and absf(garden.growth - 1.0 / 1.5) < 0.01, "tomatoes take 1.5 days (%.0f%% after 1 day)" % (garden.growth * 100.0))
+	main.world_days += 0.5
+	garden.grow(main.world_days, false)
+	check(garden.ripe(), "ripe after 1.5 days")
+	p._find_loot()
+	p.interact()
+	p.finish_busy()
+	check(_pile_count("tomato") >= 3 and _pile_count("tomato_seeds") >= 2, "harvest: 3 tomatoes + 2 seeds on the ground")
+	garden.plant("potato", main.world_days)
+	main.world_days += 1.0
+	garden.grow(main.world_days, true)
+	check(absf(garden.growth - 0.5) < 0.01, "rain makes crops grow 1.5x faster (potato: 1 rainy day = 50%)")
+	var tom: Dictionary = Structure.CROPS["tomato"]
+	var pot: Dictionary = Structure.CROPS["potato"]
+	var tom_day := 3.0 * float(Items.def("tomato")["hunger"]) / float(tom["days"])
+	var pot_day := 5.0 * float(Items.def("potato")["hunger"]) / float(pot["days"])
+	check(float(pot["days"]) == 3.0 and float(tom["days"]) == 1.5 and pot_day > tom_day and float(Items.def("potato")["hunger"]) > float(Items.def("tomato")["hunger"]),
+		"potatoes: slower, more per batch, more food per day (%.0f vs %.0f hunger / day)" % [pot_day, tom_day])
+	print("Dismantling / saving")
+	p.global_position = w.center_of(gate_cell) + Vector2(0, 40)
+	p._find_loot()
+	var data: Dictionary = main.to_save()
+	check(data["structures"].size() == 5 and data["structures"].any(func(d): return d["kind"] == "chest" and d["contents"].size() > 0), "your base is saved (with the chest's contents)")
+	print("Military camps")
+	var camp := -1
+	for i in w.settlements.size():
+		if w.settlements[i]["type"] == "military":
+			camp = i
+	check(camp >= 0, "a military camp in the region (%s)" % (w.settlements[camp]["name"] if camp >= 0 else "-"))
+	if camp >= 0:
+		var r: Rect2i = (w.settlements[camp]["rect"] as Rect2i).grow(1)
+		var fence := 0
+		for x in range(r.position.x, r.end.x):
+			if w.get_tile(Vector2i(x, r.position.y)) == World.WALL:
+				fence += 1
+		check(fence > r.size.x / 2, "the camp is fenced in")
+		var crates := w.containers.filter(func(c): return c["kind"] == "military").size()
+		check(crates >= 8, "military crates (%d)" % crates)
+		check(main.pick_zombie_type(camp) == "armed", "only armed zombies in the camp")
+		var guns := 0
+		var supplies := 0
+		for i in 100:
+			for it in Loot.roll("military"):
+				if Items.is_weapon(it["id"]) or Items.kind(it["id"]) == "ammo":
+					guns += 1
+				elif Items.kind(it["id"]) in ["consumable", "medical"]:
+					supplies += 1
+		check(guns > 60 and supplies > 40, "military crates: lots of guns, ammo and supplies (%d / %d)" % [guns, supplies])
+
+
+## Turns the player towards the first direction where the kit can be built; returns that cell.
+func _face_free(p: Player, dirs: Array) -> Vector2i:
+	for d in dirs:
+		p.facing = d
+		if p.build_problem(p.build_cell()) == "":
+			return p.build_cell()
+	return p.build_cell()

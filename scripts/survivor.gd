@@ -114,7 +114,7 @@ func _roll_gear() -> void:
 		var w: Dictionary = Items.WEAPONS[id]
 		g["mag"] = randi_range(int(w["mag"]) / 2, int(w["mag"]))
 		gear[Items.equip_of(id)] = g
-		_add_ammo(String(w["ammo"]), randi_range(int(w["mag"]) / 2, int(w["mag"]) * 2))
+		_add_ammo(String(w["ammo"]), int(w["mag"]) * randi_range(1, 2)) # 1-2 spare magazines
 	if not has_gun or randf() < 0.4:
 		var m: String = ["knife", "knife", "bat", "axe", "spear"].pick_random()
 		gear["melee"] = Items.used(Items.make(m), 30.0, 90.0)

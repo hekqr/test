@@ -36,7 +36,16 @@ var _survivor_t := 0.0
 var _despawn_t := 0.0
 var _glint_t := 0.0
 var _save_task := -1
+## Weather: "clear", "rain" or "snow", changing every few in-game hours.
+var weather := "clear"
+var _weather_t := 160.0 # seconds until it changes
+var weather_fx: WeatherFX
+## Days that have passed in the world (crops grow by this; sleeping moves it on).
+var world_days := 0.0
 var survivors: Node2D
+## Your base: things you built. Near a bed (BASE_RADIUS) zombies don't spawn and see you worse.
+const BASE_RADIUS := 12.0 * 32.0
+var _crop_t := 0.0
 ## Map exploration: 1 = you've seen this cell (W x H)
 var explored := PackedByteArray()
 var explored_coarse := PackedByteArray() # the same at 1/4 size (for the map's fog)
@@ -45,6 +54,7 @@ const REVEAL_RADIUS := 15
 
 
 func _ready() -> void:
+	add_to_group("main")
 	randomize()
 	get_tree().set_auto_accept_quit(false)
 	Game.noise_made.connect(_on_noise)
@@ -74,6 +84,7 @@ func region_seed() -> int:
 func _setup(save: Dictionary) -> void:
 	Game.ui_open = false
 	Game.click_used = false
+	_set_weather("clear", 6.0 * DAY_LENGTH / 24.0)
 	world_seed = int(save["seed"]) if not save.is_empty() else randi()
 	var rr: Array = save.get("region", [0, 0])
 	region = Vector2i(int(rr[0]), int(rr[1]))
@@ -159,6 +170,9 @@ func _setup(save: Dictionary) -> void:
 	var grade_layer := CanvasLayer.new()
 	grade_layer.layer = 1
 	add_child(grade_layer)
+	weather_fx = WeatherFX.new()
+	weather_fx.kind = weather
+	grade_layer.add_child(weather_fx)
 	var grade := ColorRect.new()
 	grade.set_anchors_preset(Control.PRESET_FULL_RECT)
 	grade.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -179,6 +193,109 @@ func _setup(save: Dictionary) -> void:
 	hud.prepare_map() # build the paper map now, not when it's first opened
 	if save.is_empty():
 		save_game() # a new survivor replaces the old save straight away
+
+
+func add_structure(kind: String, cell: Vector2i) -> Structure:
+	var st := Structure.new()
+	st.world = world
+	st.kind = kind
+	st.cell = cell
+	if kind == "garden":
+		st.last_day = world_days
+	entities.add_child(st)
+	return st
+
+
+func structure_at(cell: Vector2i) -> Structure:
+	for n in get_tree().get_nodes_in_group("structures"):
+		if (n as Structure).cell == cell:
+			return n
+	return null
+
+
+## A few armed zombies guard each military camp: when you come near (but before you can see in) the
+## camp gets up to CAMP_GUARDS of them.
+const CAMP_GUARDS := 3
+var _guard_t := 0.0
+
+
+func _camp_garrison() -> void:
+	_guard_t -= 1.0
+	if _guard_t > 0.0:
+		return
+	_guard_t = 5.0
+	var pp := player.global_position
+	for i in world.settlements.size():
+		var st: Dictionary = world.settlements[i]
+		if st["type"] != "military":
+			continue
+		var d := world.center_of(st["center"]).distance_to(pp)
+		if d < 1000.0 or d > 2800.0:
+			continue
+		var r: Rect2i = st["rect"]
+		var have := 0
+		for n in get_tree().get_nodes_in_group("zombies"):
+			if r.has_point(world.cell_of((n as Zombie).global_position)):
+				have += 1
+		for k in CAMP_GUARDS - have:
+			for attempt in 30:
+				var c := Vector2i(randi_range(r.position.x, r.end.x - 1), randi_range(r.position.y, r.end.y - 1))
+				if world.is_walkable(c) and not world.is_door(c) and world.building_at(world.center_of(c)) < 0:
+					add_zombie(world.center_of(c), "armed")
+					break
+
+
+## Near one of your beds.
+func in_base(pos: Vector2) -> bool:
+	for n in get_tree().get_nodes_in_group("structures"):
+		var st := n as Structure
+		if st.kind == "bed" and st.global_position.distance_to(pos) < BASE_RADIUS:
+			return true
+	return false
+
+
+## Sleep in your bed: through the night until 07:00 (or 4 hours in the daytime). You get hungrier and
+## thirstier as the hours pass, heal if you're fed and warm, and crops grow meanwhile.
+func sleep() -> void:
+	for n in get_tree().get_nodes_in_group("zombies"):
+		var z := n as Zombie
+		if z.state == Zombie.State.CHASE or z.global_position.distance_to(player.global_position) < 500.0:
+			player.say("You can't sleep with zombies around")
+			return
+	for n in get_tree().get_nodes_in_group("survivors"):
+		if (n as Survivor).state == Survivor.State.FIGHT:
+			player.say("You can't sleep now")
+			return
+	var hour := time_of_day * 24.0
+	var hours := 4.0
+	if hour >= 18.0:
+		hours = 24.0 - hour + 7.0
+	elif hour < 7.0:
+		hours = 7.0 - hour
+	var secs := hours / 24.0 * DAY_LENGTH # the same real time that would have passed
+	var healed := player.can_heal()
+	player.hunger = maxf(player.hunger - secs * 100.0 / 900.0, 0.0)
+	player.thirst = maxf(player.thirst - secs * 100.0 / 600.0, 0.0)
+	if healed:
+		player.health = minf(player.health + 0.4 * secs, 100.0)
+	var t0 := time_of_day
+	var t1 := t0 + hours / 24.0
+	for k in [0.25, 1.25]: # a new day starts at 06:00
+		if t0 < k and t1 >= k:
+			day += 1
+	time_of_day = fmod(t1, 1.0)
+	world_days += hours / 24.0
+	for f in get_tree().get_nodes_in_group("fires"):
+		f.fuel = maxf(f.fuel - secs, 0.0)
+	_weather_t -= secs
+	if _weather_t <= 0.0:
+		_change_weather()
+	for n in get_tree().get_nodes_in_group("structures"):
+		if (n as Structure).kind == "garden":
+			(n as Structure).grow(world_days, false)
+	player.body_temp = player.target_temp()
+	player.say("You slept until %s" % clock_text())
+	save_game()
 
 
 ## Puts you just inside the edge of the region you arrived at (`side`), across from where you left.
@@ -208,7 +325,7 @@ func travel(dir: Vector2i) -> void:
 		return
 	_travelling = true
 	var data: Dictionary = to_save().duplicate(true)
-	regions_state[_rkey(region)] = {"loot": data["loot"], "taps": data["taps"], "fires": data["fires"],
+	regions_state[_rkey(region)] = {"loot": data["loot"], "taps": data["taps"], "fires": data["fires"], "structures": data["structures"],
 		"explored": Marshalls.raw_to_base64(explored.compress(FileAccess.COMPRESSION_DEFLATE))}
 	var nr := region + dir
 	var nk := _rkey(nr)
@@ -221,6 +338,7 @@ func travel(dir: Vector2i) -> void:
 		data["loot"] = st["loot"]
 		data["taps"] = st["taps"]
 		data["fires"] = st["fires"]
+		data["structures"] = st.get("structures", [])
 		data["explored"] = st["explored"]
 		regions_state.erase(nk)
 		data.erase("fresh_region")
@@ -228,6 +346,7 @@ func travel(dir: Vector2i) -> void:
 		data["loot"] = []
 		data["taps"] = []
 		data["fires"] = []
+		data["structures"] = []
 		data["fresh_region"] = true
 	data["region"] = [nr.x, nr.y]
 	data["regions"] = regions_state.duplicate(true)
@@ -308,7 +427,7 @@ func to_save() -> Dictionary:
 	# Containers you haven't opened aren't saved (they're filled again when the game loads) - keeps saves small.
 	for n in get_tree().get_nodes_in_group("loot"):
 		var l := n as LootSpot
-		if not l.is_queued_for_deletion() and (l.is_bag or l.opened or l.kind == "carcass"):
+		if not l.is_queued_for_deletion() and l.kind != "chest" and (l.is_bag or l.opened or l.kind == "carcass"):
 			loot.append(l.to_save())
 	var zs := []
 	for n in get_tree().get_nodes_in_group("zombies"):
@@ -319,6 +438,7 @@ func to_save() -> Dictionary:
 	var p := player
 	return {
 		"seed": world_seed, "dead": p.dead, "day": day, "time_of_day": time_of_day,
+		"weather": weather, "weather_t": _weather_t, "world_days": world_days,
 		"region": [region.x, region.y], "regions": regions_state,
 		"survived": survived, "kills": kills,
 		"player": {
@@ -327,6 +447,7 @@ func to_save() -> Dictionary:
 			"inv": p.inv.to_save(),
 		},
 		"loot": loot, "zombies": zs, "survivors": ss,
+		"structures": get_tree().get_nodes_in_group("structures").map(func(st): return st.to_save()),
 		"taps": get_tree().get_nodes_in_group("taps").map(func(t): return t.water),
 		"fires": get_tree().get_nodes_in_group("fires").map(func(f): return f.to_save()),
 		"explored_raw": explored, # compressed when written (see SaveGame.write)
@@ -351,6 +472,8 @@ func save_game(background := false) -> void:
 func _apply_save(s: Dictionary) -> void:
 	day = int(s["day"])
 	time_of_day = s["time_of_day"]
+	world_days = float(s.get("world_days", 0.0))
+	_set_weather(String(s.get("weather", "clear")), float(s.get("weather_t", 160.0)))
 	survived = s["survived"]
 	kills = int(s["kills"])
 	var ps: Dictionary = s["player"]
@@ -379,6 +502,8 @@ func _apply_save(s: Dictionary) -> void:
 		z.has_axe = zd.get("has_axe", true)
 	for sd in s.get("survivors", []):
 		add_survivor(Survivor.from_save(sd))
+	for sd in s.get("structures", []):
+		entities.add_child(Structure.from_save(sd, world))
 	player.say("Welcome back. Day %d." % day)
 
 
@@ -419,7 +544,16 @@ func _process(delta: float) -> void:
 		day += 1
 	var light := daylight()
 	Game.night = 1.0 - light
-	night_tint.color = Color(0.30, 0.36, 0.66).lerp(Color.WHITE, light)
+	var tint := Color(0.30, 0.36, 0.66).lerp(Color.WHITE, light)
+	if weather == "rain":
+		tint = tint.darkened(0.18).lerp(Color(0.7, 0.75, 0.82), 0.12)
+	elif weather == "snow":
+		tint = tint.lerp(Color(0.86, 0.9, 1.0), 0.25).darkened(0.05)
+	night_tint.color = tint
+	world_days += delta / DAY_LENGTH
+	_weather_t -= delta
+	if _weather_t <= 0.0:
+		_change_weather()
 	player.set_night(1.0 - light)
 
 	_reveal_t -= delta
@@ -437,16 +571,18 @@ func _process(delta: float) -> void:
 	var cam_zoom: float = player.camera.zoom.x if player.camera else 1.5
 	world.update_stream(player.global_position, get_viewport().get_visible_rect().size / (2.0 * cam_zoom))
 
-	# Unsearched containers near you glint now and then
-	_glint_t -= delta
-	if _glint_t <= 0.0:
-		_glint_t = 0.15
-		for n in get_tree().get_nodes_in_group("loot"):
-			var l := n as LootSpot
-			if not l.opened and not l.is_bag and l.position.distance_squared_to(player.position) < 1400.0 * 1400.0:
-				l.queue_redraw()
-
 	# Creatures far away from you are removed (new ones spawn around you)
+	# Crops grow; are you at your base?
+	_crop_t -= delta
+	if _crop_t <= 0.0:
+		_crop_t = 1.0
+		for n in get_tree().get_nodes_in_group("structures"):
+			var st := n as Structure
+			if st.kind == "garden":
+				st.grow(world_days, weather == "rain")
+		player.in_base = in_base(player.global_position)
+		_camp_garrison()
+
 	_despawn_t -= delta
 	if _despawn_t <= 0.0:
 		_despawn_t = 3.0
@@ -479,6 +615,24 @@ func _process(delta: float) -> void:
 			spawn_zombie(SPAWN_MIN)
 
 
+## Clear spells last 4-10 in-game hours, rain / snow 2-5 (1 hour = DAY_LENGTH / 24 s).
+func _change_weather() -> void:
+	var hour := DAY_LENGTH / 24.0
+	if weather == "clear":
+		_set_weather("snow" if randf() < 0.3 else "rain", randf_range(2.0, 5.0) * hour)
+	else:
+		_set_weather("clear", randf_range(4.0, 10.0) * hour)
+	player.say({"rain": "It starts to rain", "snow": "It starts to snow", "clear": "The sky clears up"}[weather])
+
+
+func _set_weather(w: String, secs: float) -> void:
+	weather = w
+	Game.weather = w
+	_weather_t = secs
+	if weather_fx:
+		weather_fx.kind = w
+
+
 func daylight() -> float:
 	var sun := -cos(time_of_day * TAU) # -1 at midnight, 1 at noon
 	return clampf((sun + 0.35) / 0.7, 0.0, 1.0)
@@ -493,7 +647,7 @@ func clock_text() -> String:
 ## settlements more likely) or anywhere in the ring. Vector2.INF if nothing was found.
 func _ring_point(min_d: float, max_d: float, town_chance: float, ok: Callable) -> Vector2:
 	var pp := player.global_position
-	var weights := {"city": 5.0, "town": 3.0, "village": 1.8, "hamlet": 1.0}
+	var weights := {"city": 5.0, "town": 3.0, "village": 1.8, "hamlet": 1.0, "military": 0.3}
 	var near := []
 	var total := 0.0
 	for i in world.settlements.size():
@@ -527,7 +681,7 @@ func _ring_point(min_d: float, max_d: float, town_chance: float, ok: Callable) -
 
 ## Zombies gather where people used to live: mostly in settlements (more in the bigger ones), some in the wild.
 func spawn_zombie(min_dist: float, max_dist := SPAWN_MAX) -> Zombie:
-	var p := _ring_point(min_dist, max_dist, 0.8, func(c: Vector2i): return world.is_walkable(c) and not world.is_door(c))
+	var p := _ring_point(min_dist, max_dist, 0.8, func(c: Vector2i): return world.is_walkable(c) and not world.is_door(c) and not in_base(world.center_of(c)))
 	if p == Vector2.INF:
 		return null
 	return add_zombie(p, pick_zombie_type(world.settlement_at(world.cell_of(p))))
@@ -555,6 +709,8 @@ func _despawn_far() -> void:
 
 
 func pick_zombie_type(town := -1) -> String:
+	if town >= 0 and world.settlements[town]["type"] == "military":
+		return "armed" # military camps: only armed zombies (and not many)
 	var city: bool = town >= 0 and world.settlements[town]["type"] == "city"
 	var total := 0.0
 	var mix := []

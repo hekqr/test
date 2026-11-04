@@ -268,7 +268,8 @@ func _think() -> void:
 	var best_d := sight
 	if player != null and not player.dead:
 		var d := global_position.distance_to(player.global_position)
-		if d < best_d and world.has_los(global_position, player.global_position):
+		# At your base (near your bed) they spot you only from half as far
+		if d < best_d * (0.5 if player.in_base else 1.0) and world.has_los(global_position, player.global_position):
 			best = player
 			best_d = d
 	for n in get_tree().get_nodes_in_group("survivors"):
@@ -342,10 +343,13 @@ func _set_path(to: Vector2) -> void:
 					var p := world.center_of(n)
 					if p.distance_to(global_position) < best.distance_to(global_position):
 						best = p
-		if best != Vector2.INF:
-			# Wait outside the door; once it's open and they can see you, they come straight in (chasing
-			# by sight needs no path search).
-			to = best
+		if best == Vector2.INF:
+			path = PackedVector2Array() # no way to the door: don't search the whole map for one
+			_path_i = 0
+			return
+		# Wait outside the door; once it's open and they can see you, they come straight in (chasing
+		# by sight needs no path search).
+		to = best
 	path = world.find_path(global_position, to, true)
 	_path_i = 0
 
@@ -563,7 +567,7 @@ func _drop_loot() -> void:
 		g["mag"] = clampi(mag, 0, int(Items.WEAPONS[gun]["mag"]))
 		items.append(g)
 		if randf() < 0.4:
-			items.append(Items.make(Items.WEAPONS[gun]["ammo"], randi_range(2, 6)))
+			items.append(Items.make(Items.WEAPONS[gun]["ammo"], Items.mag_size(Items.WEAPONS[gun]["ammo"]))) # a spare magazine
 		if randf() < 0.3:
 			items.append(Items.used(Items.make("vest"), 10.0, 45.0))
 	elif type == "axe" and has_axe and randf() < 0.5:

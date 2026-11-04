@@ -17,7 +17,9 @@ The game saves automatically (every 20 s, when you quit, and when you die) to
 | Shift | Sprint (louder — attracts zombies) |
 | Space | Shoot — guns aim at the nearest enemy by themselves (stand still to steady the aim); melee attacks automatically |
 | T | Switch between auto aim (Space, no mouse needed) and mouse aim (aim with the mouse, click to shoot) |
-| E (or the on-screen button) | Search (1 s — what you find drops on the floor) / pick up / skin / cook / drink & fill gourd at water or taps |
+| Q (or the on-screen button) | Search (1 s — what you find drops on the floor) / pick up / skin / cook / drink & fill gourd / open chest / sleep / plant / harvest / chop wood (with an axe) |
+| F | Fish (at a lake or river, with a fishing rod) |
+| B | Build: place a building kit in front of you (Q to place, B for the next kit, X to stop) |
 | C | Build campfire (3 sticks + 1 match) |
 | K | Crafting |
 | M | Map (scroll to zoom, drag to move) |
@@ -25,8 +27,8 @@ The game saves automatically (every 20 s, when you quit, and when you die) to
 | 1 / 2 / 3 | Primary / secondary / melee weapon |
 | Mouse wheel | Zoom in / out |
 | X | Lower weapon (fists) |
-| Tab or I | Inventory: click an item to see what you can do with it (Eat, Drink, Use, Wear, Repair, Tear into rags, Drop...), double-click for its main action, drag to move, drag outside to drop |
-| Esc | Pause (Q = save & quit to menu) |
+| E (or Tab / I) | Inventory (E again closes it): click an item to see what you can do with it (Eat, Drink, Use, Wear, Repair, Tear into rags, Drop...), double-click for its main action, drag to move, drag outside to drop |
+| Esc | Pause (Backspace = save & quit to menu) |
 | F11 | Fullscreen |
 | F1 | Toggle help |
 

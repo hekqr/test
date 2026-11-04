@@ -25,6 +25,10 @@ func _ready() -> void:
 		for x in World.W:
 			img.set_pixel(x, y, cols[w.get_tile(Vector2i(x, y))])
 	img.set_pixel(w.spawn_cell.x, w.spawn_cell.y, Color.RED)
+	for i in w.settlements.size():
+		var st: Dictionary = w.settlements[i]
+		if st["center"] != w.spawn_cell and w.find_path(w.center_of(w.spawn_cell), w.center_of(st["center"])).size() < 2:
+			print("  UNREACHABLE: %s %s center %s tile %d" % [st["type"], st["name"], st["center"], w.get_tile(st["center"])])
 	img.resize(World.W * 4, World.H * 4, Image.INTERPOLATE_NEAREST)
 	img.save_png(args[0])
 	get_tree().quit()

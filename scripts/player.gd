@@ -32,6 +32,11 @@ var facing := Vector2.RIGHT # where the body looks (aim, or the melee target)
 var nearest_loot: LootSpot = null
 var nearest_fire: Campfire = null
 var nearest_tap: WaterSource = null
+var nearest_structure: Structure = null # something you built, in reach
+var near_tree := Vector2i(-1, -1) # a tree you could chop (with an axe)
+var in_base := false # near one of your beds (set by main.gd)
+## Building: the kit being placed ("" = not building). The spot is the tile in front of you.
+var placing := ""
 var near_lake := false # standing at a lake / river bank
 var cook_t := 0.0 # cooking in progress (seconds left)
 var message := ""
@@ -70,6 +75,15 @@ const T_CRAFT := 2.0
 const T_REPAIR := 3.0
 const T_TEAR := 2.0
 const T_FIRE := 2.0
+const T_BUILD := 2.0
+const T_PLANT := 2.0
+const T_HARVEST := 2.0
+const T_DISMANTLE := 3.0
+const T_CHOP := 4.0
+## Fishing: a bite takes 3-10 s (faster in the rain), then the fish is hooked or gets away.
+const FISH_TIME := Vector2(3.0, 10.0)
+const FISH_HOOK := 0.55
+const FISH_HOOK_RAIN := 0.7
 var _thirst_msg_t := 0.0
 var _hurt_t := 0.0
 var _noise_t := 0.0
@@ -226,6 +240,8 @@ func actions_for(loc: Dictionary) -> Array:
 		if c > 0.0 and c < 100.0:
 			var kit := "sewing_kit" if fix == "sew" else "toolbox"
 			out.append(["Repair (%s)" % Items.name_of(kit).to_lower() if inv.count_of(kit) > 0 else "Repair - needs a " + Items.name_of(kit).to_lower(), "repair"])
+	if d.has("builds") and loc["t"] != "near":
+		out.append(["Build", "build"])
 	if d.has("tear"):
 		out.append(["Tear into rags", "tear"])
 	if id == "sticks" or id == "matches":
@@ -278,6 +294,12 @@ func do_action(loc: Dictionary, action: String) -> void:
 						drink_gourd(loc))
 		"fire":
 			build_fire_timed()
+		"build":
+			start_placing(id)
+			Game.ui_open = false
+			var hud := get_tree().get_first_node_in_group("hud")
+			if hud:
+				hud.set_inventory_open(false)
 		"take":
 			var left := inv.pickup(it)
 			var taken: Dictionary = inv.take(loc)
@@ -594,7 +616,11 @@ func _move(delta: float) -> void:
 func _needs(delta: float) -> void:
 	hunger = maxf(hunger - delta * 100.0 / 900.0, 0.0) # full -> empty in 15 min
 	thirst = maxf(thirst - delta * 100.0 / 600.0, 0.0) # full -> empty in 10 min
-	body_temp = move_toward(body_temp, target_temp(), TEMP_RATE * delta)
+	var tt := target_temp()
+	var rate := TEMP_RATE
+	if tt > body_temp and Game.weather != "clear" and not indoors():
+		rate *= 0.5 # wet / snowed on: you warm up slower
+	body_temp = move_toward(body_temp, tt, rate * delta)
 	if poison_t > 0.0:
 		poison_t -= delta
 		thirst = maxf(thirst - delta * 100.0 / 600.0, 0.0) # sick: thirst drains twice as fast
@@ -639,6 +665,8 @@ func indoors() -> bool:
 ## Temperature the body is heading towards.
 func target_temp() -> float:
 	var air := lerpf(TEMP_DAY, TEMP_NIGHT, Game.night)
+	if not indoors():
+		air -= {"rain": 6.0, "snow": 12.0}.get(Game.weather, 0.0)
 	if indoors():
 		air += TEMP_INDOORS
 	var fire := 0.0
@@ -706,14 +734,27 @@ func _unhandled_input(event: InputEvent) -> void:
 		switch_weapon("melee")
 	elif event.is_action_pressed("reload"):
 		start_reload()
+	elif event.is_action_pressed("holster") and placing != "":
+		stop_placing()
+	elif event.is_action_pressed("holster") and busy_t > 0.0:
+		cancel_busy()
 	elif event.is_action_pressed("holster") and inv.active != "":
 		holster()
 	elif Game.ui_open:
 		return
+	elif event.is_action_pressed("interact") and placing != "":
+		place_kit()
+	elif event.is_action_pressed("build"):
+		if placing == "":
+			start_placing()
+		else:
+			next_kit()
 	elif event.is_action_pressed("interact"):
 		interact()
 	elif event.is_action_pressed("build_fire"):
 		build_fire_timed()
+	elif event.is_action_pressed("fish"):
+		go_fishing()
 	else:
 		return
 	get_viewport().set_input_as_handled()
@@ -729,6 +770,9 @@ func interact_choice() -> String:
 	if nearest_loot and global_position.distance_to(nearest_loot.global_position) < best_d:
 		best_d = global_position.distance_to(nearest_loot.global_position)
 		best = "loot"
+	if nearest_structure and global_position.distance_to(nearest_structure.global_position) < best_d:
+		best_d = global_position.distance_to(nearest_structure.global_position)
+		best = "build"
 	var water_d := INF
 	if nearest_tap:
 		water_d = global_position.distance_to(nearest_tap.global_position)
@@ -736,7 +780,14 @@ func interact_choice() -> String:
 		water_d = 30.0
 	if water_d < best_d:
 		best = "water"
+		best_d = water_d
+	if best == "" and near_tree.x >= 0 and has_axe():
+		best = "tree"
 	return best
+
+
+func has_axe() -> bool:
+	return inv.count_of("axe") > 0 or (inv.gear["melee"] != null and inv.gear["melee"]["id"] == "axe" and not Items.is_ruined(inv.gear["melee"]))
 
 
 func action_label() -> String:
@@ -749,6 +800,33 @@ func action_label() -> String:
 			if nearest_tap:
 				return nearest_tap.label()
 			return "Drink / fill gourd" if not inv.all_of("gourd").is_empty() else "Drink"
+		"build":
+			return _structure_label(nearest_structure)
+		"tree":
+			return "Chop wood"
+	return ""
+
+
+func _structure_label(st: Structure) -> String:
+	match st.kind:
+		"bed":
+			return "Sleep"
+		"garden":
+			if st.crop == "":
+				var seed := _seed_to_plant()
+				return "Plant " + Structure.CROPS[seed]["name"].to_lower() if seed != "" else "Garden bed (no seeds)"
+			if st.ripe():
+				return "Harvest " + Structure.CROPS[st.crop]["name"].to_lower()
+			return "%s %d%%" % [Structure.CROPS[st.crop]["name"], int(st.growth * 100.0)]
+	return "Dismantle " + st.title().to_lower()
+
+
+## What you'd plant: tomato seeds first, else a potato.
+func _seed_to_plant() -> String:
+	if inv.count_of("tomato_seeds") > 0:
+		return "tomato"
+	if inv.count_of("potato") > 0:
+		return "potato"
 	return ""
 
 
@@ -765,9 +843,23 @@ func interact() -> void:
 			else:
 				start_busy("Drinking..", T_DRINK, func(): use_water(tap))
 			return
+		"build":
+			_use_structure(nearest_structure)
+			return
+		"tree":
+			start_busy("Chopping..", T_CHOP, func():
+				var left := inv.pickup(Items.make("planks", 2))
+				if left > 0:
+					drop_item(Items.make("planks", left))
+				say("Chopped 2 planks"))
+			return
 		"":
 			return
 	var spot := nearest_loot
+	if spot.kind == "chest":
+		spot.opened = true
+		Game.open_inventory = true # your chest's contents show in the nearby list
+		return
 	if spot.kind == "carcass":
 		if not has_blade():
 			say("You need a knife or an axe to skin it")
@@ -790,6 +882,149 @@ func has_blade() -> bool:
 		return true
 	var m = inv.gear["melee"]
 	return m != null and m["id"] in ["knife", "axe"]
+
+
+func has_rod() -> bool:
+	return inv.count_of("fishing_rod") > 0
+
+
+## F at a lake or river with a fishing rod: wait for a bite (3-10 s, faster in the rain), then it's
+## either hooked (a raw fish lands at your feet) or gets away.
+func go_fishing() -> void:
+	if not near_lake:
+		say("Stand at the edge of a lake or river to fish")
+		return
+	if not has_rod():
+		say("You need a fishing rod (craft one: 2 sticks + rope)")
+		return
+	var rain := Game.weather == "rain"
+	var t := randf_range(FISH_TIME.x, FISH_TIME.y) * (0.6 if rain else 1.0)
+	start_busy("Fishing..", t, func():
+		if randf() < (FISH_HOOK_RAIN if rain else FISH_HOOK):
+			drop_item(Items.make("fish"))
+			say("Caught a fish!")
+		else:
+			say(["Nothing bit", "It got away"].pick_random()))
+
+
+## Q at something you built: sleep, plant, harvest, or take it apart.
+func _use_structure(st: Structure) -> void:
+	var main := get_tree().get_first_node_in_group("main")
+	match st.kind:
+		"bed":
+			if main:
+				main.sleep()
+		"garden":
+			if st.crop == "":
+				var seed := _seed_to_plant()
+				if seed == "":
+					say("You need tomato seeds or a potato to plant")
+					return
+				start_busy("Planting..", T_PLANT, func():
+					if st.crop == "" and inv.remove(Structure.CROPS[seed]["seed"], 1) == 1:
+						st.plant(seed, main.world_days if main else 0.0)
+						say("Planted %s - ready in %.1f days" % [Structure.CROPS[seed]["name"].to_lower(), Structure.CROPS[seed]["days"]]))
+			elif st.ripe():
+				start_busy("Harvesting..", T_HARVEST, func():
+					if st.ripe():
+						var items := st.harvest()
+						for it in items:
+							drop_item(it)
+						say("Harvested: " + ", ".join(items.map(func(it): return "%s x%d" % [Items.name_of(it["id"]).to_lower(), it["count"]]))))
+			else:
+				say("Still growing (%d%%)" % int(st.growth * 100.0))
+		_:
+			start_busy("Dismantling..", T_DISMANTLE, func():
+				if is_instance_valid(st):
+					var refund: Dictionary = Structure.KINDS[st.kind]["refund"]
+					if st.chest:
+						for it in st.chest.contents:
+							drop_item(it)
+					st.remove()
+					for id in refund:
+						drop_item(Items.make(id, int(refund[id])))
+					say("Took it apart"))
+
+
+# ---------------------------------------------------------------- building
+
+## Start placing a kit (item menu -> Build, or B for the first kit you carry).
+func start_placing(kit := "") -> void:
+	if kit == "":
+		for k in ["kit_wall", "kit_gate", "kit_chest", "kit_bed", "kit_garden"]:
+			if inv.count_of(k) > 0:
+				kit = k
+				break
+	if kit == "" or inv.count_of(kit) <= 0:
+		say("No building kits - craft them (K)")
+		return
+	placing = kit
+	say("Building: %s - Q to place, B for the next kit, X to stop" % Items.name_of(kit).to_lower())
+
+
+## The next kit you carry (B while building).
+func next_kit() -> void:
+	var kits := ["kit_wall", "kit_gate", "kit_chest", "kit_bed", "kit_garden"]
+	var i := kits.find(placing)
+	for k in range(1, kits.size() + 1):
+		var cand: String = kits[(i + k) % kits.size()]
+		if inv.count_of(cand) > 0:
+			placing = cand
+			say("Building: " + Items.name_of(cand).to_lower())
+			return
+
+
+func stop_placing() -> void:
+	if placing != "":
+		placing = ""
+		say("Stopped building")
+
+
+## The tile in front of you (the way you face, snapped to up / down / left / right).
+func build_cell() -> Vector2i:
+	var f := facing
+	var d := Vector2(signf(f.x), 0) if absf(f.x) >= absf(f.y) else Vector2(0, signf(f.y))
+	return world.cell_of(global_position + d * 34.0 + Vector2(0, -4))
+
+
+## "" if you can build there, otherwise why not.
+func build_problem(cell: Vector2i) -> String:
+	if cell.x < 2 or cell.y < 2 or cell.x > World.W - 3 or cell.y > World.H - 3:
+		return "Too close to the edge"
+	if not world.is_walkable(cell) or world.is_door(cell):
+		return "Not there"
+	var main := get_tree().get_first_node_in_group("main")
+	if main and main.structure_at(cell) != null:
+		return "Something's already there"
+	var rect := Rect2(Vector2(cell * World.T), Vector2(World.T, World.T)).grow(4)
+	for g in ["player", "zombies", "survivors", "animals", "loot"]:
+		for n in get_tree().get_nodes_in_group(g):
+			if rect.has_point((n as Node2D).global_position):
+				return "Something's in the way"
+	return ""
+
+
+func place_kit() -> void:
+	if placing == "" or inv.count_of(placing) <= 0:
+		stop_placing()
+		return
+	var cell := build_cell()
+	var why := build_problem(cell)
+	if why != "":
+		say(why)
+		return
+	var kit := placing
+	start_busy("Building..", T_BUILD, func():
+		var main := get_tree().get_first_node_in_group("main")
+		if main == null or build_problem(cell) != "" or inv.remove(kit, 1) != 1:
+			return
+		main.add_structure(String(Items.def(kit)["builds"]), cell)
+		say("Built " + Items.name_of(kit).to_lower().trim_suffix(" kit"))
+		if inv.count_of(kit) <= 0:
+			placing = ""
+			start_placing() # carry on with another kit if you have one
+			if placing == "":
+				say("Out of kits"))
 
 
 ## Building a fire takes a moment.
@@ -841,10 +1076,10 @@ func build_fire() -> void:
 
 ## Using a fire: cook raw meat, add wood, or relight it.
 func use_fire(fire: Campfire) -> void:
-	if fire.lit and inv.count_of("meat") > 0:
+	if fire.lit and (inv.count_of("meat") > 0 or inv.count_of("fish") > 0):
 		if cook_t <= 0.0:
 			cook_t = 3.0
-			say("Cooking meat...")
+			say("Cooking...")
 		return
 	if inv.count_of("sticks") <= 0:
 		say("You need sticks to keep the fire going")
@@ -863,12 +1098,18 @@ func _finish_cooking() -> void:
 	if nearest_fire == null or not nearest_fire.lit:
 		say("You moved away from the fire")
 		return
-	var n := inv.count_of("meat")
-	inv.remove("meat", n)
-	var left := inv.pickup(Items.make("cooked_meat", n))
-	if left > 0:
-		drop_item(Items.make("cooked_meat", left))
-	say("Cooked %d meat" % n)
+	var parts := PackedStringArray()
+	for raw in ["meat", "fish"]:
+		var n := inv.count_of(raw)
+		if n <= 0:
+			continue
+		inv.remove(raw, n)
+		var done: String = "cooked_" + String(raw)
+		var left := inv.pickup(Items.make(done, n))
+		if left > 0:
+			drop_item(Items.make(done, left))
+		parts.append("%d %s" % [n, raw])
+	say("Cooked " + ", ".join(parts))
 
 
 ## Double-click in the inventory: wear / equip / select / use, or take it if it's lying nearby.
@@ -1152,14 +1393,14 @@ func _find_loot() -> void:
 		var l := n as LootSpot
 		if l.is_queued_for_deletion():
 			continue
-		if not l.is_bag and l.kind != "carcass" and l.opened and l.contents.is_empty():
+		if not l.is_bag and l.kind != "carcass" and l.kind != "chest" and l.opened and l.contents.is_empty():
 			continue # already searched
 		var d := l.global_position.distance_to(global_position)
 		# Closest relative to its reach, so a big car doesn't beat a box right next to you.
 		if d < l.reach and d / l.reach < best:
 			best = d / l.reach
 			nearest_loot = l
-		if l.is_bag and d < l.reach and (best_pile == null or d < best_pile.global_position.distance_to(global_position)):
+		if (l.is_bag or l.kind == "chest") and d < l.reach and (best_pile == null or d < best_pile.global_position.distance_to(global_position)):
 			best_pile = l
 	# The inventory's nearby list shows what's lying on the ground (searching a container drops its loot there).
 	inv.near = best_pile
@@ -1172,6 +1413,23 @@ func _find_loot() -> void:
 			best_t = d
 			nearest_tap = t
 	near_lake = world != null and world.water_near(global_position)
+	nearest_structure = null
+	var best_s := 44.0
+	for n in get_tree().get_nodes_in_group("structures"):
+		var st := n as Structure
+		if st.kind == "chest":
+			continue # chests are opened like loot
+		var d := st.global_position.distance_to(global_position)
+		if d < best_s:
+			best_s = d
+			nearest_structure = st
+	near_tree = Vector2i(-1, -1)
+	if world != null:
+		var c := world.cell_of(global_position)
+		for o in [Vector2i(0, -1), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(1, -1), Vector2i(-1, -1), Vector2i(0, 0)]:
+			if world.get_tile(c + o) == World.TREE:
+				near_tree = c + o
+				break
 	nearest_fire = null
 	var best_f := 56.0
 	for n in get_tree().get_nodes_in_group("fires"):
@@ -1290,6 +1548,12 @@ func _animate() -> void:
 
 
 func _draw() -> void:
+	if placing != "" and not dead:
+		var cell := build_cell()
+		var ok := build_problem(cell) == ""
+		var r := Rect2(to_local(Vector2(cell * World.T)), Vector2(World.T, World.T))
+		draw_rect(r, Color(0.4, 0.95, 0.4, 0.28) if ok else Color(0.95, 0.35, 0.3, 0.28))
+		draw_rect(r, Color(0.4, 0.95, 0.4, 0.8) if ok else Color(0.95, 0.35, 0.3, 0.8), false, 2.0)
 	draw_set_transform(Vector2(0, 1), 0.0, Vector2(1.0, 0.45))
 	draw_circle(Vector2.ZERO, RADIUS, Color(0, 0, 0, 0.35))
 	draw_set_transform(Vector2.ZERO)

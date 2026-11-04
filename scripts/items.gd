@@ -23,6 +23,13 @@ const DEFS := {
 	"chips_cheese": {"name": "Cheese chips", "icon": "item_chips_yellow", "stack": 1, "kind": "consumable", "hunger": 15.0, "thirst": -5.0},
 	"meat": {"name": "Raw meat", "icon": "px:meat", "stack": 4, "kind": "consumable", "hunger": 20.0, "poison": 0.35},
 	"cooked_meat": {"name": "Cooked meat", "icon": "px:cooked_meat", "stack": 4, "kind": "consumable", "hunger": 40.0},
+	"fish": {"name": "Raw fish", "icon": "px:fish", "stack": 3, "kind": "consumable", "hunger": 25.0, "poison": 0.25},
+	"cooked_fish": {"name": "Cooked fish", "icon": "px:cooked_fish", "stack": 3, "kind": "consumable", "hunger": 55.0},
+	# Crops (plant them in a garden bed). Tomatoes: 1.5 days, 3 per plant (+2 seeds) = 24 hunger / day.
+	# Potatoes: 3 days, 5 per plant = 30 hunger / day - slower, but more food. A potato is its own seed.
+	"tomato": {"name": "Tomato", "icon": "px:tomato", "stack": 6, "kind": "consumable", "hunger": 12.0, "thirst": 6.0},
+	"potato": {"name": "Potato", "icon": "px:potato", "stack": 8, "kind": "consumable", "hunger": 18.0, "plant": "potato"},
+	"tomato_seeds": {"name": "Tomato seeds", "icon": "px:tomato_seeds", "stack": 10, "kind": "seed", "plant": "tomato"},
 	"water": {"name": "Water bottle", "icon": "px:water", "stack": 1, "kind": "consumable", "thirst": 40.0},
 	"soda": {"name": "Soda can", "icon": "px:soda", "stack": 1, "kind": "consumable", "thirst": 25.0, "hunger": 5.0,
 		"colors": ["red", "blue", "green", "orange", "purple", "yellow", "black"]},
@@ -39,6 +46,15 @@ const DEFS := {
 	"sack": {"name": "Sack", "icon": "px:sack", "stack": 3, "kind": "material"},
 	"map": {"name": "Road map", "icon": "px:map", "stack": 1, "kind": "material"},
 	"scrap_metal": {"name": "Scrap metal", "icon": "px:scrap_metal", "stack": 5, "kind": "material"},
+	"planks": {"name": "Planks", "icon": "px:planks", "stack": 10, "kind": "material"},
+	"nails": {"name": "Nails", "icon": "px:nails", "stack": 30, "kind": "material"},
+	"fishing_rod": {"name": "Fishing rod", "icon": "px:fishing_rod", "stack": 1, "kind": "tool", "big": true},
+	# Building kits: craft them, then place them (item menu -> Build, or B)
+	"kit_wall": {"name": "Wooden wall kit", "icon": "px:kit_wall", "stack": 5, "kind": "kit", "builds": "wall"},
+	"kit_gate": {"name": "Wooden gate kit", "icon": "px:kit_gate", "stack": 2, "kind": "kit", "builds": "gate"},
+	"kit_chest": {"name": "Chest kit", "icon": "px:kit_chest", "stack": 2, "kind": "kit", "builds": "chest"},
+	"kit_bed": {"name": "Bed kit", "icon": "px:kit_bed", "stack": 1, "kind": "kit", "builds": "bed"},
+	"kit_garden": {"name": "Garden bed kit", "icon": "px:kit_garden", "stack": 3, "kind": "kit", "builds": "garden"},
 	"leather": {"name": "Leather", "icon": "px:leather", "stack": 5, "kind": "material"},
 	# Refillable: holds 4 bottles' worth (one drink each). Fill it at taps, lakes and rivers.
 	"gourd": {"name": "Water gourd", "icon": "px:gourd", "stack": 1, "kind": "tool", "capacity": 4, "thirst": 40.0},
@@ -300,6 +316,32 @@ static func roll(table: Array, rolls: Vector2i, empty_chance := 0.15) -> Array:
 		for row in table:
 			r -= int(row[1])
 			if r < 0:
-				out.append(used(make(row[0], randi_range(row[2], row[3]))))
+				var n := randi_range(row[2], row[3])
+				if kind(row[0]) == "ammo":
+					n *= mag_size(row[0]) # ammo rows count magazines
+				out.append_array(stacks(used(make(row[0], n))))
 				break
+	return out
+
+
+## Rounds in one magazine of the gun that takes this ammo (9mm 8, 12ga 5, 5.56 30, .308 5).
+static func mag_size(ammo: String) -> int:
+	for w in WEAPONS:
+		if WEAPONS[w].get("ammo", "") == ammo:
+			return int(WEAPONS[w]["mag"])
+	return 1
+
+
+## Splits an item into stacks no bigger than its max stack.
+static func stacks(it: Dictionary) -> Array:
+	var out := []
+	var n := int(it["count"])
+	var mx := max_stack(it["id"])
+	while n > mx:
+		var s: Dictionary = it.duplicate(true)
+		s["count"] = mx
+		out.append(s)
+		n -= mx
+	it["count"] = n
+	out.append(it)
 	return out

@@ -64,6 +64,7 @@ const MAP_INK := Color("2e2620")
 
 
 func _ready() -> void:
+	add_to_group("hud")
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_font = ThemeDB.fallback_font
@@ -446,6 +447,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		if not inventory_open:
 			left_tab = "near"
 		set_inventory_open(not inventory_open)
+	elif event.is_action_pressed("interact") and inventory_open:
+		set_inventory_open(false) # Q opened a chest: Q closes it again
+		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("map") and not p.dead and not get_tree().paused:
 		set_map_open(not map_open)
 	elif event.is_action_pressed("pause") and map_open:
@@ -666,6 +670,7 @@ func _draw() -> void:
 	_text(Vector2(vs.x - 20, 32), "Day %d  %s" % [main.day, main.clock_text()], 20, Color.WHITE, HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	_text(Vector2(vs.x - 20, 54), "Survived %d:%02d   Kills %d" % [st / 60, st % 60, main.kills], 14, Color(0.85, 0.85, 0.85), HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	_text(Vector2(vs.x - 20, 74), main.region_name, 14, Color(0.95, 0.85, 0.6), HORIZONTAL_ALIGNMENT_RIGHT, 0)
+	_text(Vector2(vs.x - 20, 94), {"clear": "Clear", "rain": "Rain", "snow": "Snow"}.get(main.weather, ""), 14, Color(0.75, 0.85, 0.95), HORIZONTAL_ALIGNMENT_RIGHT, 0)
 
 	# Action button: appears automatically near containers / items / fires / carcasses
 	if _has_action(p) and not p.dead and not inventory_open and p.busy_t <= 0.0:
@@ -677,15 +682,15 @@ func _draw() -> void:
 		var face_mid := ar.position.y + (6.0 if pressed else 0.0) + 8.5 * UI_SCALE
 		var baseline := face_mid + (_font.get_ascent(16) - _font.get_descent(16)) / 2.0
 		_text(Vector2(ar.position.x, roundf(baseline)), label, 16, C_EDGE, HORIZONTAL_ALIGNMENT_CENTER, ar.size.x, false)
-		_text(Vector2(ar.end.x + 8, ar.position.y + 38), "[E]", 14, C_DIM)
+		_text(Vector2(ar.end.x + 8, ar.position.y + 38), "[Q]", 14, C_DIM)
 
 	# Help
 	if show_help and not inventory_open and not map_open:
 		var lines := [
 			"WASD move   Shift sprint   Melee is automatic   Space shoot (aims for you - stand still to steady)",
-			"E search, pick up, skin, cook, drink   R reload   X lower weapon   C campfire   T auto / mouse aim",
-			"1 / 2 / 3: main / secondary / melee   Mouse wheel: zoom   K crafting   M map",
-			"Tab inventory: click an item to eat, drink, bandage, wear...   Esc pause   F1 hide help",
+			"Q search, pick up, skin, cook, drink, open chest, sleep   F fish   B build   C campfire   T auto / mouse aim",
+			"1 / 2 / 3: main / secondary / melee   R reload   X lower weapon / stop   Mouse wheel: zoom   K crafting   M map",
+			"E inventory: click an item to eat, drink, bandage, wear, build...   Esc pause   F1 hide help",
 		]
 		draw_rect(Rect2(14, 14, 660, 104), Color(0.08, 0.04, 0.07, 0.6))
 		for i in lines.size():
@@ -974,7 +979,7 @@ func _draw_map(p: Player, vs: Vector2) -> void:
 		if not r.grow(-4).has_point(pos):
 			continue
 		_settlement_icon(pos, String(st["type"]))
-		var fs: int = {"city": 20, "town": 17, "village": 15, "hamlet": 13}.get(st["type"], 13)
+		var fs: int = {"city": 20, "town": 17, "village": 15, "hamlet": 13, "military": 14}.get(st["type"], 13)
 		var label := String(st["name"])
 		if st["type"] == "city":
 			label = label.to_upper()
@@ -1025,15 +1030,15 @@ func _draw_map(p: Player, vs: Vector2) -> void:
 	# Legend
 	var lx := r.end.x + 30.0
 	var ly := r.position.y + 4.0
-	draw_rect(Rect2(lx - 10, ly - 4, 190, 330), Color(0.12, 0.08, 0.1, 0.85))
+	draw_rect(Rect2(lx - 10, ly - 4, 190, 356), Color(0.12, 0.08, 0.1, 0.85))
 	_text(Vector2(lx, ly + 18), main.region_name.to_upper(), 16, C_TEXT)
-	var rows := [["city", "City"], ["town", "Town"], ["village", "Village"], ["hamlet", "Hamlet"]]
+	var rows := [["city", "City"], ["town", "Town"], ["village", "Village"], ["hamlet", "Hamlet"], ["military", "Military camp"]]
 	for i in rows.size():
 		var y := ly + 46 + i * 26
 		draw_rect(Rect2(lx - 2, y - 12, 26, 22), MAP_PAPER)
 		_settlement_icon(Vector2(lx + 11, y - 1), rows[i][0])
 		_text(Vector2(lx + 34, y + 5), rows[i][1], 14, C_TEXT)
-	var y2 := ly + 46 + 4 * 26
+	var y2 := ly + 46 + 5 * 26
 	draw_line(Vector2(lx, y2), Vector2(lx + 24, y2), Color("6e5038"), 5.0)
 	draw_line(Vector2(lx, y2), Vector2(lx + 24, y2), Color("e0ad62"), 3.0)
 	_text(Vector2(lx + 34, y2 + 5), "Road", 14, C_TEXT)
@@ -1059,6 +1064,16 @@ func _draw_map(p: Player, vs: Vector2) -> void:
 
 ## Settlement symbol: blocks of buildings - 4 for the city, 3 for a town, 2 for a village, 1 for a hamlet.
 func _settlement_icon(pos: Vector2, kind: String) -> void:
+	if kind == "military":
+		# Olive square with a star
+		draw_rect(Rect2(pos - Vector2(7, 7), Vector2(14, 14)).grow(1), MAP_PAPER)
+		draw_rect(Rect2(pos - Vector2(7, 7), Vector2(14, 14)), Color("4e5a30"))
+		var star := PackedVector2Array()
+		for k in 10:
+			var a := -PI / 2.0 + k * PI / 5.0
+			star.append(pos + Vector2.from_angle(a) * (5.5 if k % 2 == 0 else 2.3))
+		draw_colored_polygon(star, Color("e8dcb0"))
+		return
 	var n: int = {"city": 4, "town": 3, "village": 2, "hamlet": 1}.get(kind, 1)
 	var sz := 6.0 if kind != "hamlet" else 5.0
 	var cells := [Vector2(-1, -1), Vector2(0, -1), Vector2(-1, 0), Vector2(0, 0)]

@@ -23,8 +23,8 @@ func _shot(name: String) -> void:
 
 func _process(_delta: float) -> void:
 	frame += 1
-	if frame > 145:
-		if frame == 155:
+	if frame > 175:
+		if frame == 185:
 			_shot("menu")
 			get_tree().quit()
 		return
@@ -165,8 +165,37 @@ func _process(_delta: float) -> void:
 		p.global_position = w.center_of(_door.cell + Vector2i(0, 1)) + Vector2(0, 6)
 	if frame == 126:
 		_shot("door_open")
+		# A little base in the rain
+		var at := _open_row(w) + Vector2(64, 0)
+		p.global_position = at + Vector2(0, 64)
+		var c0 := w.cell_of(at)
+		for k in range(-3, 4):
+			main.add_structure("wall", c0 + Vector2i(k, -2))
+		main.add_structure("wall", c0 + Vector2i(-3, -1))
+		main.add_structure("wall", c0 + Vector2i(3, -1))
+		main.add_structure("gate", c0 + Vector2i(3, 0))
+		main.add_structure("bed", c0 + Vector2i(-2, -1))
+		main.add_structure("chest", c0 + Vector2i(-1, -1))
+		var g1: Structure = main.add_structure("garden", c0 + Vector2i(1, -1))
+		g1.plant("tomato", main.world_days)
+		g1.growth = 1.0
+		g1.grow(main.world_days, false)
+		var g2: Structure = main.add_structure("garden", c0 + Vector2i(2, -1))
+		g2.plant("potato", main.world_days)
+		g2.growth = 0.5
+		g2.grow(main.world_days, false)
+		main._set_weather("rain", 500.0)
+		p.inv.gear["hands"] = Items.make("fishing_rod")
+	if frame == 140:
+		_shot("base_rain")
+		main._set_weather("clear", 500.0)
+		for i in w.settlements.size():
+			if w.settlements[i]["type"] == "military":
+				p.global_position = w.center_of(w.settlements[i]["center"]) + Vector2(0, 40)
+	if frame == 160:
+		_shot("camp")
 		main.time_of_day = 0.02
-	if frame == 145:
+	if frame == 175:
 		_shot("night")
 		main.hud.set_map_open(true)
 		await get_tree().process_frame

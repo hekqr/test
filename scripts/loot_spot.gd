@@ -31,7 +31,7 @@ func _draw_outline() -> void:
 		return
 	var t := _sprite.texture
 	for d in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1), Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]:
-		_outline.draw_set_transform(d * 1.5, _sprite.rotation, _sprite.scale)
+		_outline.draw_set_transform(d * 1.5 + _sprite.offset * _sprite.scale, _sprite.rotation, _sprite.scale * Vector2(-1 if _sprite.flip_h else 1, 1))
 		_outline.draw_texture(t, -t.get_size() / 2.0)
 
 
@@ -62,7 +62,6 @@ func _ready() -> void:
 		_sprite.modulate = Color(0.85, 0.7, 0.7)
 	elif is_bag:
 		_sprite.scale = Vector2(1.5, 1.5)
-		_sprite.rotation = randf_range(-0.4, 0.4)
 	else:
 		var spec := tex_name if tex_name != "" else String(Loot.CONTAINERS[kind]["sprite"])
 		if spec != "":
@@ -71,8 +70,8 @@ func _ready() -> void:
 			_sprite.flip_h = flip
 			# Stand on the bottom of the tile.
 			_sprite.offset = Vector2(0, 7.5 - _sprite.texture.get_height() / 2.0)
-	if is_bag:
-		# White outline around items on the ground, so they're easy to spot
+	if is_bag or (kind != "carcass" and not opened):
+		# White outline around items on the ground and unsearched containers, so they're easy to spot
 		_outline = Node2D.new()
 		var om := ShaderMaterial.new()
 		om.shader = _silhouette_shader()
@@ -80,7 +79,7 @@ func _ready() -> void:
 		_outline.draw.connect(_draw_outline)
 		add_child(_outline)
 	add_child(_sprite)
-	set_process(false) # the game redraws nearby unsearched containers for their glint (main.gd)
+	set_process(false)
 	refresh()
 
 
@@ -230,11 +229,8 @@ func _draw() -> void:
 		return
 	if _sprite and _sprite.texture:
 		_sprite.modulate = Color(0.6, 0.56, 0.6) if (opened and contents.is_empty()) else Color.WHITE
-	if not opened:
-		# small glint so unsearched containers stand out
-		var t := Time.get_ticks_msec() / 400.0 + position.x
-		if fmod(t, 6.0) < 0.6:
-			draw_circle(Vector2(6, -16), 2.0, Color(1, 0.95, 0.6, 0.9))
+	if _outline:
+		_outline.visible = is_bag or not opened # searched containers lose their outline
 
 
 

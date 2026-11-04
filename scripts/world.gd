@@ -6,7 +6,7 @@ extends Node2D
 ## forests, lakes, a river, nature and animals in the wilderness between them.
 ## Also provides pathfinding and line of sight.
 
-enum { GROUND, WALL, TREE, FLOOR, ROAD, WINDOW, FURN, WATER }
+enum { GROUND, WALL, TREE, FLOOR, ROAD, WINDOW, FURN, WATER, BUILT }
 enum { F_NONE, F_WOOD, F_TILE, F_CONCRETE }
 
 const W := 512
@@ -97,16 +97,18 @@ const TOWN_MIX := {
 	"town": {"house_small": 25, "house_large": 14, "hut_bed": 15, "hut_kitchen": 10, "hut_bath": 8, "shop": 8, "clinic": 4, "garage": 10},
 	"village": {"hut_bed": 30, "hut_kitchen": 25, "hut_bath": 15, "hut_shed": 10, "house_small": 15, "house_large": 5, "garage": 5},
 	"hamlet": {"hut_bed": 35, "hut_kitchen": 30, "hut_bath": 15, "hut_shed": 12, "house_small": 8},
+	"military": {"mil_tent": 60, "mil_barracks": 20, "mil_armory": 20},
 }
 ## Settlements to place, biggest first: [type, how many, buildings min, max]. What doesn't fit is skipped.
-const CLUSTERS := [["city", 1, 16, 16], ["town", 3, 11, 13], ["village", 8, 9, 12], ["hamlet", 26, 4, 7]]
+const CLUSTERS := [["city", 1, 16, 16], ["military", 1, 4, 4], ["town", 3, 11, 13], ["village", 8, 9, 12], ["hamlet", 26, 4, 7]]
 ## Buildings a settlement of a type gets first.
-const FORCED := {"city": ["police", "clinic", "shop", "shop", "garage"], "town": ["shop", "clinic"]}
+const FORCED := {"city": ["police", "clinic", "shop", "shop", "garage"], "town": ["shop", "clinic"],
+	"military": ["mil_armory", "mil_barracks", "mil_tent", "mil_tent"]}
 var _left: Array[int] = [] # buildings still to place, per settlement
 var _forced: Array = [] # kinds still to place first, per settlement
 ## How likely a container in each building type has already been looted by someone else
 const PRE_LOOTED := {"house_small": 0.4, "house_large": 0.4, "hut_bed": 0.4, "hut_kitchen": 0.4, "hut_bath": 0.4, "hut_shed": 0.35,
-	"shop": 0.5, "police": 0.3, "clinic": 0.4, "garage": 0.35}
+	"mil_tent": 0.15, "mil_barracks": 0.15, "mil_armory": 0.15, "shop": 0.5, "police": 0.3, "clinic": 0.4, "garage": 0.35}
 var roofs: Array[TileMapLayer] = [] # one per building, same order as `buildings`
 
 # Atlas coords in tiles_ground.png / tiles_building.png (16x16 tiles)
@@ -147,7 +149,62 @@ func is_walkable(c: Vector2i) -> bool:
 ## Walls, windows and closed doors block sight (so zombies can't spot you inside a closed house).
 func blocks_sight(c: Vector2i) -> bool:
 	var t := get_tile(c)
-	return t == WALL or t == WINDOW or (in_bounds(c) and door_closed[idx(c)] == 1)
+	return t == WALL or t == WINDOW or t == BUILT or (in_bounds(c) and door_closed[idx(c)] == 1)
+
+
+# ---------------------------------------------------------------- things you build
+
+var _built_body: StaticBody2D
+var _built_shapes := {} # cell -> CollisionShape2D
+var _built_prev := {} # cell -> the tile that was there
+
+
+## A wall you built: blocks walking (everyone), bullets and sight.
+func add_built(c: Vector2i) -> void:
+	if _built_body == null:
+		_built_body = StaticBody2D.new()
+		_built_body.collision_layer = Game.LAYER_WALL
+		_built_body.collision_mask = 0
+		add_child(_built_body)
+	_built_prev[c] = get_tile(c)
+	set_tile(c, BUILT)
+	astar.set_point_solid(c, true)
+	astar_z.set_point_solid(c, true)
+	var rs := RectangleShape2D.new()
+	rs.size = Vector2(T, T)
+	var cs := CollisionShape2D.new()
+	cs.shape = rs
+	cs.position = center_of(c)
+	_built_body.add_child(cs)
+	_built_shapes[c] = cs
+
+
+func remove_built(c: Vector2i) -> void:
+	set_tile(c, int(_built_prev.get(c, GROUND)))
+	_built_prev.erase(c)
+	astar.set_point_solid(c, not is_walkable(c))
+	astar_z.set_point_solid(c, not is_walkable(c))
+	if _built_shapes.has(c):
+		(_built_shapes[c] as Node).queue_free()
+		_built_shapes.erase(c)
+
+
+## A gate you built: a door (opens for people, not for zombies).
+func add_gate(c: Vector2i, door: Door) -> void:
+	_door_at[c] = true
+	var layer := get_node_or_null("Doors")
+	if layer == null:
+		layer = Node2D.new()
+		layer.name = "Doors"
+		layer.z_index = -6
+		add_child(layer)
+	layer.add_child(door)
+
+
+func remove_gate(c: Vector2i) -> void:
+	_door_at.erase(c)
+	door_closed[idx(c)] = 0
+	astar_z.set_point_solid(c, not is_walkable(c))
 
 
 func is_door(c: Vector2i) -> bool:
@@ -194,6 +251,7 @@ func generate(seed_value: int, entities: Node2D) -> void:
 		print("  _make_roads: %d ms" % ((Time.get_ticks_usec() - _tm) / 1000))
 	_tm = Time.get_ticks_usec()
 	_make_buildings()
+	_make_fences()
 	if timing:
 		print("  _make_buildings: %d ms" % ((Time.get_ticks_usec() - _tm) / 1000))
 	_tm = Time.get_ticks_usec()
@@ -297,6 +355,8 @@ func _make_settlements() -> void:
 						break
 				if ok:
 					st["name"] = names.pop_back() if not names.is_empty() else "Settlement %d" % settlements.size()
+					if kind == "military":
+						st["name"] = "Camp " + String(st["name"]).get_slice(" ", 0)
 					st["center"] = c
 					st["rect"] = r
 					st["streets"] = streets
@@ -314,6 +374,11 @@ func _make_settlements() -> void:
 func _layout(kind: String, count: int) -> Dictionary:
 	var st := {"type": kind, "vertical": rng.randf() < 0.5, "side": 1 if rng.randf() < 0.5 else -1}
 	match kind:
+		"military":
+			st["len"] = 36
+			st["cross"] = []
+			st["cross_len"] = 0
+			st["back"] = false
 		"hamlet":
 			st["len"] = maxi(24, ((count + 1) / 2) * 9 + 6)
 			st["cross"] = []
@@ -658,7 +723,7 @@ func _place_building(r: Rect2i, kind: String, plan: Array, town := -1) -> void:
 	building_town.append(town)
 	var styles := {"house_small": ["beige", "white", "gray", "dark"], "house_large": ["beige", "white", "gray"],
 		"hut_bed": ["beige", "white", "gray", "dark"], "hut_kitchen": ["beige", "white", "dark"], "hut_bath": ["beige", "white", "gray"],
-		"hut_shed": ["dark", "gray"],
+		"hut_shed": ["dark", "gray"], "mil_tent": ["gray", "dark"], "mil_barracks": ["gray", "dark"], "mil_armory": ["dark"],
 		"shop": ["gray", "white"], "police": ["gray", "white"], "clinic": ["white"], "garage": ["dark", "gray"]}
 	var options: Array = styles.get(kind, ["gray"])
 	building_style.append(options[rng.randi() % options.size()])
@@ -692,9 +757,9 @@ func _is_vertical_road(c: Vector2i) -> bool:
 
 
 func _make_street() -> void:
-	# Street lights along settlement streets
+	# Street lights along settlement streets (not in military camps)
 	for seg in segments:
-		if seg["kind"] != "street":
+		if seg["kind"] != "street" or settlements[seg["town"]]["type"] == "military":
 			continue
 		var i: int = seg["from"] + rng.randi_range(2, 8)
 		while i < int(seg["to"]) - 2:
@@ -727,6 +792,8 @@ func _make_street() -> void:
 	# Sidewalk clutter in settlements: hydrants, benches, garbage bins (searchable), trash bags, barrels
 	var cells := []
 	for st in settlements:
+		if st["type"] == "military":
+			continue # no benches, hydrants or bins in a military camp
 		var sr := (st["rect"] as Rect2i).grow(3).intersection(Rect2i(2, 2, W - 4, H - 4))
 		for y in range(sr.position.y, sr.end.y):
 			for x in range(sr.position.x, sr.end.x):
@@ -734,7 +801,7 @@ func _make_street() -> void:
 	for c0 in cells:
 		var c: Vector2i = c0
 		if true:
-			if _is_sidewalk(c) and not _near_intersection(c, 1):
+			if _is_sidewalk(c) and not _near_intersection(c, 1) and not _by_door(c):
 				var r := rng.randf()
 				var vert_road := _is_vertical_road(c + Vector2i(-1, 0)) or _is_vertical_road(c + Vector2i(1, 0))
 				if r < 0.012:
@@ -773,6 +840,8 @@ func _make_street() -> void:
 ## Abandoned cars: plenty in town streets, a few along highways. Each can be searched once (one item at most).
 func _make_cars() -> void:
 	for seg in segments:
+		if seg["kind"] == "street" and settlements[seg["town"]]["type"] == "military":
+			continue
 		var town: bool = seg["kind"] == "street"
 		var gap_min := 9 if town else 34
 		var gap_max := 20 if town else 45
@@ -1253,7 +1322,7 @@ func _make_wall_tops() -> Texture2D:
 
 func _is_wallish(c: Vector2i) -> bool:
 	var t := get_tile(c)
-	return t == WALL or t == WINDOW
+	return t == WALL or t == WINDOW or t == BUILT
 
 
 func _atlas(t: Texture2D, coords: Array) -> TileSetAtlasSource:
@@ -1562,6 +1631,33 @@ func _build_facades(entities: Node2D) -> void:
 				ds.set_meta("door_tex", door_tex)
 				spr.add_child(ds)
 				_front_doors[dc] = ds
+
+
+## Next to a building's door (keep it clear: no benches or bins blocking the way in).
+func _by_door(c: Vector2i) -> bool:
+	for d in [Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 2), Vector2i(0, -2), Vector2i(2, 0), Vector2i(-2, 0)]:
+		if _door_at.has(c + d):
+			return true
+	return false
+
+
+## Military camps are fenced in (gaps where the roads come in).
+func _make_fences() -> void:
+	for st in settlements:
+		if st["type"] != "military":
+			continue
+		var r: Rect2i = (st["rect"] as Rect2i).grow(1)
+		for x in range(r.position.x, r.end.x):
+			for y in [r.position.y, r.end.y - 1]:
+				_fence(Vector2i(x, y))
+		for y in range(r.position.y, r.end.y):
+			for x in [r.position.x, r.end.x - 1]:
+				_fence(Vector2i(x, y))
+
+
+func _fence(c: Vector2i) -> void:
+	if in_bounds(c) and get_tile(c) == GROUND:
+		set_tile(c, WALL)
 
 
 ## Homes have wooden doors; shops, garages, sheds and the like metal ones.

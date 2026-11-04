@@ -9,6 +9,12 @@ const RECIPES := [
 	{"id": "campfire", "name": "Campfire", "makes": "", "count": 0, "needs": {"sticks": 3, "matches": 1}, "tools": []},
 	{"id": "leather_sack", "name": "Sack (leather)", "makes": "sack", "count": 1, "needs": {"leather": 2}, "tools": []},
 	{"id": "gourd", "name": "Water gourd", "makes": "gourd", "count": 1, "needs": {"leather": 1}, "tools": []},
+	{"id": "fishing_rod", "name": "Fishing rod", "makes": "fishing_rod", "count": 1, "needs": {"sticks": 2, "rope": 1}, "tools": ["knife", "axe"]},
+	{"id": "kit_wall", "name": "Wooden wall", "makes": "kit_wall", "count": 1, "needs": {"planks": 3, "nails": 4}, "tools": []},
+	{"id": "kit_gate", "name": "Wooden gate", "makes": "kit_gate", "count": 1, "needs": {"planks": 4, "nails": 6, "rope": 1}, "tools": []},
+	{"id": "kit_chest", "name": "Chest", "makes": "kit_chest", "count": 1, "needs": {"planks": 4, "nails": 4}, "tools": []},
+	{"id": "kit_bed", "name": "Bed", "makes": "kit_bed", "count": 1, "needs": {"planks": 3, "nails": 2, "rags": 3}, "tools": []},
+	{"id": "kit_garden", "name": "Garden bed", "makes": "kit_garden", "count": 1, "needs": {"planks": 2, "nails": 2}, "tools": []},
 	{"id": "scrap_armour", "name": "Improvised armour", "makes": "scrap_armour", "count": 1, "needs": {"scrap_metal": 3, "rope": 2}, "tools": []},
 ]
 

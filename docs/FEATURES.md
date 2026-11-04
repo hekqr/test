@@ -253,10 +253,34 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
   containers aren't offered again. Skinning drops the meat and leather too
 - ✅ Zombies after you inside a building wait at its door (no more map-wide path searches)
 
+## Milestone 11 — Base building, crops, fishing, weather, military camps
+- ✅ **Keys**: E = inventory (E again closes it), Q = action (Q also closes a chest you opened), F = fish,
+  B = build; quit from the pause menu is Backspace
+- ✅ **Base building**: chop trees with an axe (Q, 4 s → 2 planks); nails from garages, sheds, cars, trash.
+  Craft kits (K): wooden wall (3 planks + 4 nails), gate (4 planks + 6 nails + rope), chest (4 planks + 4 nails),
+  bed (3 planks + 2 nails + 3 rags), garden bed (2 planks + 2 nails). B (or item menu → Build) shows the spot
+  in front of you (green = OK), Q builds it (2 s). Walls block everyone, bullets and sight; gates are doors
+  zombies can't open; chests store 16 stacks; Q at a wall / gate takes it apart (some materials back).
+  Everything you build is saved with the region
+- ✅ **Your base**: within 12 tiles of a bed zombies don't spawn and spot you from only half as far
+- ✅ **Sleep** in your bed (Q): through the night until 07:00 (4 h in the daytime). You wake up hungrier and
+  thirstier, healed if you were fed and warm; crops grow meanwhile. Not with zombies around
+- ✅ **Crops**: plant in a garden bed — tomatoes (seeds; 1.5 days; 3 tomatoes + 2 seeds = 24 hunger / day) or
+  potatoes (a potato is its own seed; 3 days; 5 potatoes = 30 hunger / day). Q to harvest; it drops on the ground
+- ✅ **Fishing**: F at a lake / river with a fishing rod (2 sticks + rope, or found). A bite takes 3–10 s, then
+  55% hooked (raw fish +25, cooked +55 hunger — cook it on a fire like meat)
+- ✅ **Weather**: clear, rain or snow every few in-game hours (falling rain / snow, greyer light). Rain / snow:
+  colder outside (−6 / −12) and you warm up at half speed; rain: fish bite faster (0.6× time, 70% hooked) and
+  crops grow 1.5× faster
+- ✅ **Military camps** (one per region): fenced, a road gate, tents, barracks and an armoury full of military
+  crates (guns, 2–4 magazines of ammo, vests, helmets, food, water, medicine). Guarded by a few armed zombies only
+- ✅ **Ammo comes in whole magazines** (at least one): 9mm 8, 12ga 5, 5.56 30, .308 5 per magazine
+- ✅ Unsearched containers have a white outline (like items on the ground); items on the ground lie straight
+- ✅ Benches, bins and hydrants are never placed right in front of a door
+
 ## Ideas for endless play (next)
-- 📌 Base building (walls, gates, storage, garden beds, rain collector, workbench)
-- 📌 Renewable food: fishing, snares, gardens, berries / mushrooms, slow loot respawn
-- 📌 Military camps (fenced, tents, watchtowers, military crates, armed zombies)
+- 📌 Zombies attacking walls; more base pieces (rain collector, workbench, watchtower)
+- 📌 More renewable food: snares, berries / mushrooms, slow loot respawn
 - 📌 Region biomes (snow, plains, coast) and danger rising with distance from home
 
 ## Planned

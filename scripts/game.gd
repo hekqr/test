@@ -14,6 +14,9 @@ signal noise_made(pos: Vector2, radius: float)
 
 ## 0 = full daylight, 1 = darkest night. Set by main.gd.
 var night := 0.0
+## "clear", "rain" or "snow". Set by main.gd. Rain / snow: colder, you warm up slower; rain: fish bite
+## faster and crops grow faster.
+var weather := "clear"
 ## True while a full-screen UI (inventory) is open: blocks attacking/moving.
 var ui_open := false
 ## Save file location (tests point this somewhere else).
@@ -55,7 +58,9 @@ func _ready() -> void:
 	_key("sprint", [KEY_SHIFT])
 	# Letter keys use the printed key label (so they work on any keyboard layout);
 	# movement and number keys use the physical key position.
-	_key("interact", [KEY_E], false)
+	_key("interact", [KEY_Q], false)
+	_key("fish", [KEY_F], false)
+	_key("build", [KEY_B], false)
 	_key("reload", [KEY_R], false)
 	_key("holster", [KEY_X], false)
 	_key("build_fire", [KEY_C], false)
@@ -67,11 +72,11 @@ func _ready() -> void:
 	# (The mouse wheel zooms the camera / the map; weapons are on 1 / 2 / 3.)
 	_key("fire", [KEY_SPACE])
 	_key("aim_mode", [KEY_T], false)
-	_key("inventory", [KEY_TAB, KEY_I], false)
+	_key("inventory", [KEY_E, KEY_TAB, KEY_I], false)
 	_key("help", [KEY_F1])
 	_key("pause", [KEY_ESCAPE])
 	_key("fullscreen", [KEY_F11])
-	_key("quit", [KEY_Q], false)
+	_key("quit", [KEY_BACKSPACE], false)
 	if not InputMap.has_action("attack"):
 		InputMap.add_action("attack")
 		var mb := InputEventMouseButton.new()
@@ -581,7 +586,7 @@ func sheet_frame(name: String, frames: int, idx: int) -> Texture2D:
 # ---------------------------------------------------------------- furniture (drawn, the packs have none)
 
 const FURNITURE := ["counter", "wardrobe", "medcabinet", "desk", "shelf", "shelf_white", "locker",
-	"bed_head", "bed_foot", "table", "sofa", "toilet", "bath"]
+	"bed_head", "bed_foot", "table", "sofa", "toilet", "bath", "milcrate", "chest", "garden_bed", "camp_bed"]
 const C_OUT := Color("1a1016")
 
 
@@ -662,6 +667,81 @@ func furniture(name: String) -> Texture2D:
 		"bath":
 			_box(img, Rect2i(0, 1, 16, 14), Color("e8e8e4"))
 			img.fill_rect(Rect2i(2, 3, 12, 10), Color("8ab0c8"))
+		"milcrate":
+			# Olive ammo / supply crate with a stencil mark
+			_box(img, Rect2i(0, 3, 16, 12), Color("5a6438"))
+			img.fill_rect(Rect2i(1, 4, 14, 2), Color("6e7a46"))
+			img.fill_rect(Rect2i(2, 8, 12, 1), Color("3e4628"))
+			img.fill_rect(Rect2i(6, 10, 4, 2), Color("d8d0a0"))
+			img.fill_rect(Rect2i(1, 7, 1, 6), Color("8a8e94"))
+			img.fill_rect(Rect2i(14, 7, 1, 6), Color("8a8e94"))
+		"chest":
+			_box(img, Rect2i(1, 4, 14, 11), wood)
+			img.fill_rect(Rect2i(2, 5, 12, 3), wood_l)
+			img.fill_rect(Rect2i(2, 8, 12, 1), wood_d)
+			img.fill_rect(Rect2i(7, 8, 2, 3), Color("c9a46a"))
+			img.fill_rect(Rect2i(3, 5, 1, 9), wood_d)
+			img.fill_rect(Rect2i(12, 5, 1, 9), wood_d)
+		"garden_bed":
+			_box(img, Rect2i(0, 1, 16, 14), Color("8a6440"))
+			img.fill_rect(Rect2i(2, 3, 12, 10), Color("4e3626"))
+			for x in [4, 8, 12]:
+				img.fill_rect(Rect2i(x, 4, 1, 8), Color("3e2a1e"))
+		"camp_bed":
+			_box(img, Rect2i(1, 0, 14, 16), wood)
+			img.fill_rect(Rect2i(2, 1, 12, 14), Color("6a7a5a"))
+			_box(img, Rect2i(3, 2, 10, 4), Color("e8e0d0"))
+			img.fill_rect(Rect2i(2, 8, 12, 1), Color("54623e"))
+	var t := ImageTexture.create_from_image(img)
+	_tex_cache[key] = t
+	return t
+
+
+## A wooden wall you built (3/4 view: plank tops and the plank face), 16 x 24.
+func built_wall() -> Texture2D:
+	if _tex_cache.has("_built_wall"):
+		return _tex_cache["_built_wall"]
+	var img := Image.create_empty(16, 24, false, Image.FORMAT_RGBA8)
+	var face := Color("8a5e3a")
+	img.fill_rect(Rect2i(0, 0, 16, 8), Color("5e3e26"))
+	for x in [0, 4, 8, 12]:
+		img.fill_rect(Rect2i(x, 0, 1, 8), Color("4a3020"))
+		img.fill_rect(Rect2i(x + 1, 0, 3, 1), Color("7a5636"))
+	img.fill_rect(Rect2i(0, 8, 16, 16), face)
+	for x in [0, 4, 8, 12]:
+		img.fill_rect(Rect2i(x, 8, 1, 16), Color("5e3e26"))
+		img.fill_rect(Rect2i(x + 1, 8, 1, 16), face.lightened(0.15))
+	img.fill_rect(Rect2i(0, 12, 16, 1), Color("4a3020"))
+	img.fill_rect(Rect2i(0, 20, 16, 1), Color("4a3020"))
+	for x in [2, 6, 10, 14]:
+		img.set_pixel(x, 13, Color("b0b0b8"))
+		img.set_pixel(x, 21, Color("b0b0b8"))
+	img.fill_rect(Rect2i(0, 23, 16, 1), Color("1a1016"))
+	var t := ImageTexture.create_from_image(img)
+	_tex_cache["_built_wall"] = t
+	return t
+
+
+## A crop growing in a garden bed: stage 0 sprout, 1 growing, 2 ripe. 16 x 16.
+func crop(kind: String, stage: int) -> Texture2D:
+	var key := "_crop_%s_%d" % [kind, stage]
+	if _tex_cache.has(key):
+		return _tex_cache[key]
+	var img := Image.create_empty(16, 16, false, Image.FORMAT_RGBA8)
+	var leaf := Color("4a9a3a")
+	var dark := Color("2e6a2a")
+	var h: int = [4, 9, 12][clampi(stage, 0, 2)]
+	for x in [4, 8, 12]:
+		img.fill_rect(Rect2i(x, 14 - h, 1, h), dark)
+		img.fill_rect(Rect2i(x - 1, 14 - h, 3, 2), leaf)
+		if stage >= 1:
+			img.fill_rect(Rect2i(x - 2, 14 - h / 2, 5, 2), leaf)
+		if stage == 2:
+			if kind == "tomato":
+				img.fill_rect(Rect2i(x - 2, 15 - h, 2, 2), Color("d83a2e"))
+				img.fill_rect(Rect2i(x + 1, 12 - h / 2, 2, 2), Color("d83a2e"))
+			else:
+				img.fill_rect(Rect2i(x - 1, 13, 3, 2), Color("b08a58"))
 	var t := ImageTexture.create_from_image(img)
 	_tex_cache[key] = t
 	return t

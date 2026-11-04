@@ -8,7 +8,9 @@ const OUTLINE := Color("1a1016")
 
 const NAMES := ["tshirt", "flannel", "hoodie", "jacket", "jeans", "cargo_pants", "boots", "vest",
 	"helmet", "cap", "beanie", "backpack_small", "backpack_large", "soda", "meat", "cooked_meat", "matches", "water",
-	"rags", "rope", "sack", "sack_backpack", "spear", "map", "sewing_kit", "toolbox", "scrap_metal", "scrap_armour", "leather", "gourd"]
+	"rags", "rope", "sack", "sack_backpack", "spear", "map", "sewing_kit", "toolbox", "scrap_metal", "scrap_armour", "leather", "gourd",
+	"fish", "cooked_fish", "tomato", "potato", "tomato_seeds", "planks", "nails", "fishing_rod",
+	"kit_wall", "kit_gate", "kit_chest", "kit_bed", "kit_garden"]
 
 ## Default colours for items without a random colour.
 const DEFAULT := {
@@ -18,6 +20,9 @@ const DEFAULT := {
 	"meat": "a83a3a", "cooked_meat": "7a4a2a", "matches": "a83838", "water": "7ab8e0",
 	"rags": "b8ae98", "rope": "a08458", "sack": "a08a60", "sack_backpack": "8a7450", "spear": "7a5a38", "map": "d8ccaa",
 	"leather": "a0703e", "gourd": "7a5030",
+	"fish": "7e9aa8", "cooked_fish": "b07a44", "tomato": "c8382e", "potato": "b08a58", "tomato_seeds": "d8c8a0",
+	"planks": "a07448", "nails": "9aa0a8", "fishing_rod": "8a6a44",
+	"kit_wall": "9a6e44", "kit_gate": "8a6440", "kit_chest": "8a5a34", "kit_bed": "8a6a50", "kit_garden": "6a4a30",
 	"sewing_kit": "5a7aa8", "toolbox": "b83a3a", "scrap_metal": "8a8e94", "scrap_armour": "767a80",
 }
 
@@ -336,6 +341,95 @@ static func _draw_item(img: Image, name: String, c: Color, silhouette: bool) -> 
 			for a in [0.0, 0.8, 1.6, 2.4, 3.2, 4.0, 4.8, 5.6]:
 				_px(img, int(16 + cos(a) * 7.5), int(19 + sin(a) * 7.5), dd)
 			_line(img, Vector2i(13, 10), Vector2i(18, 10), dd)
+		"fish", "cooked_fish":
+			# A fish lying on its side
+			_poly(img, [Vector2(4, 16), Vector2(10, 10), Vector2(19, 9), Vector2(24, 13), Vector2(29, 8), Vector2(29, 24), Vector2(24, 19), Vector2(19, 23), Vector2(10, 22)], c)
+			if silhouette:
+				return
+			_poly(img, [Vector2(12, 10), Vector2(16, 6), Vector2(19, 9)], d)
+			_line(img, Vector2i(6, 18), Vector2i(19, 20), l if name == "fish" else dd)
+			_circle(img, Vector2(9, 15), 1.3, Color("1a1016"))
+			if name == "cooked_fish":
+				for x in [12, 16, 20]:
+					_line(img, Vector2i(x, 11), Vector2i(x - 2, 21), dd)
+		"tomato":
+			_circle(img, Vector2(16, 18), 10.5, c)
+			if silhouette:
+				return
+			_circle(img, Vector2(12, 14), 2.5, l)
+			_poly(img, [Vector2(11, 8), Vector2(16, 10), Vector2(21, 8), Vector2(18, 12), Vector2(14, 12)], Color("3e7a32"))
+			_line(img, Vector2i(16, 4), Vector2i(16, 9), Color("3e7a32"))
+		"potato":
+			_poly(img, [Vector2(5, 15), Vector2(9, 9), Vector2(17, 7), Vector2(25, 10), Vector2(28, 17), Vector2(24, 24), Vector2(15, 26), Vector2(8, 23)], c)
+			if silhouette:
+				return
+			for e in [Vector2(11, 14), Vector2(19, 12), Vector2(22, 19), Vector2(14, 21)]:
+				_px(img, int(e.x), int(e.y), dd)
+			_line(img, Vector2i(10, 10), Vector2i(17, 9), l)
+		"tomato_seeds":
+			# A paper seed packet with a tomato on it
+			_rect(img, 7, 4, 18, 25, c)
+			if silhouette:
+				return
+			_rect(img, 7, 4, 18, 3, d)
+			_circle(img, Vector2(16, 18), 5.5, Color("c8382e"))
+			_poly(img, [Vector2(13, 12), Vector2(16, 13), Vector2(19, 12), Vector2(17, 14), Vector2(15, 14)], Color("3e7a32"))
+		"planks":
+			for i in 3:
+				_rect(img, 3, 7 + i * 7, 26, 5, c.darkened(i * 0.08))
+			if silhouette:
+				return
+			for i in 3:
+				_line(img, Vector2i(3, 7 + i * 7), Vector2i(28, 7 + i * 7), l)
+				_px(img, 8 + i * 6, 9 + i * 7, dd)
+		"nails":
+			for k in 4:
+				var x := 7 + k * 5
+				_rect(img, x, 6 + (k % 2) * 3, 4, 2, c.lightened(0.15))
+				_rect(img, x + 1, 8 + (k % 2) * 3, 2, 17, c)
+			if silhouette:
+				return
+			for k in 4:
+				_line(img, Vector2i(8 + k * 5, 9 + (k % 2) * 3), Vector2i(8 + k * 5, 24 + (k % 2) * 3), l)
+		"fishing_rod":
+			_line(img, Vector2i(3, 29), Vector2i(28, 3), c)
+			_line(img, Vector2i(4, 29), Vector2i(29, 3), c)
+			_rect(img, 4, 22, 5, 4, Color("3a3a42"))
+			if silhouette:
+				return
+			_line(img, Vector2i(28, 3), Vector2i(28, 22), Color("d8dce4"))
+			_rect(img, 27, 22, 3, 3, Color("c83a3a"))
+		"kit_wall", "kit_gate", "kit_chest", "kit_bed", "kit_garden":
+			# A bundle of planks tied with rope, with a picture of what it builds
+			_rect(img, 3, 18, 26, 10, Color("a07448"))
+			_line(img, Vector2i(3, 22), Vector2i(28, 22), Color("7a5432"))
+			_line(img, Vector2i(10, 18), Vector2i(10, 27), Color("c8b088"))
+			_line(img, Vector2i(22, 18), Vector2i(22, 27), Color("c8b088"))
+			if silhouette:
+				return
+			match name:
+				"kit_wall":
+					_rect(img, 7, 3, 18, 13, c)
+					for x in [11, 15, 19]:
+						_line(img, Vector2i(x, 3), Vector2i(x, 15), dd)
+				"kit_gate":
+					_rect(img, 7, 3, 18, 13, c)
+					_line(img, Vector2i(7, 3), Vector2i(24, 15), dd)
+					_line(img, Vector2i(16, 3), Vector2i(16, 15), dd)
+				"kit_chest":
+					_rect(img, 8, 6, 16, 10, c)
+					_rect(img, 8, 6, 16, 3, l)
+					_rect(img, 15, 9, 2, 3, Color("d8c070"))
+				"kit_bed":
+					_rect(img, 6, 7, 20, 8, Color("5a7aa8"))
+					_rect(img, 6, 7, 6, 8, Color("e8e0d0"))
+					_rect(img, 6, 14, 20, 2, c)
+				"kit_garden":
+					_rect(img, 6, 8, 20, 8, Color("5a3e28"))
+					for x in [10, 16, 22]:
+						_line(img, Vector2i(x, 4), Vector2i(x, 9), Color("4a9a3a"))
+						_px(img, x - 1, 5, Color("4a9a3a"))
+						_px(img, x + 1, 6, Color("4a9a3a"))
 		# --- symbols only
 		"hand":
 			_rect(img, 10, 13, 13, 14, c)
