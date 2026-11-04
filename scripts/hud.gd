@@ -452,6 +452,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		show_help = not show_help
 	elif p.dead and event.is_action_pressed("reload"):
 		main.restart()
+	elif get_tree().paused and not p.dead and (event.is_action_pressed("interact") or event.is_action_pressed("quit")):
+		main.quit_to_menu() # pause menu: Q (or Backspace) saves and quits to the menu
 	elif event.is_action_pressed("inventory") and not p.dead and not get_tree().paused:
 		if not inventory_open:
 			left_tab = "near"
@@ -473,8 +475,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		set_inventory_open(false)
 	elif event.is_action_pressed("pause") and not p.dead:
 		get_tree().paused = not get_tree().paused
-	elif get_tree().paused and event.is_action_pressed("quit"):
-		main.quit_to_menu()
 	elif p.dead and event.is_action_pressed("pause"):
 		main.quit_to_menu()
 

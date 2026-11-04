@@ -28,7 +28,7 @@ The game saves automatically (every 20 s, when you quit, and when you die) to
 | Mouse wheel | Zoom in / out |
 | X | Lower weapon (fists) |
 | E (or Tab / I) | Inventory (E again closes it): click an item to see what you can do with it (Eat, Drink, Use, Wear, Repair, Tear into rags, Drop...), double-click for its main action, drag to move, drag outside to drop |
-| Esc | Pause (Backspace = save & quit to menu) |
+| Esc | Pause (Q or Backspace = save & quit to menu) |
 | F11 | Fullscreen |
 | F1 | Toggle help |
 

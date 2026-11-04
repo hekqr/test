@@ -1306,6 +1306,7 @@ func _base_tests() -> void:
 	main.hud.set_inventory_open(true)
 	_press("interact")
 	check(not main.hud.inventory_open, "Q closes the inventory (after opening a chest)")
+	check(KEY_Q in keys.call("interact") and main.hud.has_method("_unhandled_input") and FileAccess.get_file_as_string("res://scripts/hud.gd").contains('get_tree().paused and not p.dead and (event.is_action_pressed("interact")'), "Q in the pause menu quits to the menu")
 	var cont: LootSpot = null
 	for n in get_tree().get_nodes_in_group("loot"):
 		if not n.is_bag and n.kind != "carcass" and n.kind != "chest" and not n.opened:
