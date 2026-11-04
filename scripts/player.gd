@@ -102,9 +102,9 @@ func _ready() -> void:
 	inv.pickup(Items.make("tshirt"))
 	inv.pickup(Items.make("jeans"))
 	update_outfit()
-	inv.add("food")
-	inv.add("water")
-	inv.add("bandage")
+	inv.pickup(Items.make("food"))
+	inv.pickup(Items.make("water"))
+	inv.pickup(Items.make("bandage"))
 	say("Find food, water and a weapon. Stay alive.")
 
 

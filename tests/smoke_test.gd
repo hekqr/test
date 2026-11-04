@@ -82,12 +82,13 @@ func _physics_process(_delta: float) -> void:
 			print("Inventory")
 			check(inv.gear["shirt"] != null and inv.gear["shirt"]["id"] == "tshirt", "starts wearing a t-shirt")
 			check(inv.gear["pants"] != null and inv.gear["pants"]["id"] == "jeans", "starts wearing jeans")
-			check(inv.storage_cells().size() == 3, "t-shirt 1 + jeans 2 = 3 storage slots")
-			check(inv.count_of("food") == 1 and inv.count_of("water") == 1 and inv.count_of("bandage") == 1, "starting items stored")
-			check(inv.free_slots() == 0, "storage full at start")
+			check(inv.storage_cells().size() == 2, "shirts give no storage: jeans 2 = 2 slots")
+			check(inv.count_of("food") == 1 and inv.count_of("water") == 1 and inv.count_of("bandage") == 1, "starting items carried")
+			check(inv.free_slots() == 0 and inv.gear["hands"] != null, "storage full at start, 3rd item in hands")
 			check(inv.add("food") == 1, "no free slot for another can")
+			var start_hands = inv.take(Inventory.gear_loc("hands"))
 			check(inv.pickup(Items.make("food")) == 0 and inv.gear["hands"]["id"] == "food", "hands is an extra slot")
-			inv.take(Inventory.gear_loc("hands"))
+			inv.gear["hands"] = start_hands
 			print("Clothing")
 			check(inv.pickup(Items.make("backpack_small")) == 0 and inv.gear["back"] != null, "backpack goes on your back")
 			check(inv.free_slots() == 6, "backpack adds 6 slots")
@@ -102,12 +103,12 @@ func _physics_process(_delta: float) -> void:
 			check(flannel_loc.get("s", "") == "back", "big item (shirt) only fits in the backpack")
 			check(inv.move(flannel_loc, Inventory.cargo_loc("pants", 0)) != "", "can't move a shirt into jeans pockets")
 			check(inv.equip(flannel_loc) == "" and inv.gear["shirt"]["id"] == "flannel", "right-click wears flannel (swaps t-shirt)")
-			check(inv.storage_cells().size() == 2 + 2 + 6, "flannel 2 + jeans 2 + backpack 6 slots")
+			check(inv.storage_cells().size() == 2 + 6, "jeans 2 + backpack 6 slots (flannel adds none)")
 			var ts_loc := {}
 			for loc in inv.storage_cells():
 				if inv.get_at(loc) != null and inv.get_at(loc)["id"] == "tshirt":
 					ts_loc = loc
-			check(not ts_loc.is_empty() and inv.get_at(ts_loc)["cargo"][0] != null, "old t-shirt kept its item inside")
+			check(not ts_loc.is_empty() and ts_loc["s"] == "back", "old t-shirt went into the backpack")
 			inv.pickup(Items.make("hoodie"))
 			check(inv.gear["coat"] != null and inv.gear["coat"]["id"] == "hoodie", "coat AND shirt worn together")
 			check(inv.move(Inventory.gear_loc("back"), Inventory.cargo_loc("back", 0)) != "", "can't put backpack inside itself")
@@ -197,7 +198,7 @@ func _physics_process(_delta: float) -> void:
 			var other := (b + 1) % w.roofs.size()
 			check(w.roofs[other].modulate.a > 0.9, "other roofs stay")
 			print("Items")
-			check(inv.count_of("food") == 0, "food inside the stored t-shirt isn't reachable")
+			inv.remove("food", 99)
 			inv.add("food")
 			p.hunger = 40.0
 			p.use_item("food")

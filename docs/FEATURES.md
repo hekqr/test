@@ -26,8 +26,8 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 ## Milestone 2 — Core survival loop
 - ✅ **Gear-slot inventory** (slots, not space): Head, Armour, Coat, Shirt, Pants, Boots, Back, Hands (extra slot),
   1 Main gun, 2 Secondary, 3 Melee
-- ✅ Clothing & backpacks give storage slots (T-shirt 1, Flannel 2, Hoodie 2, Jacket 4, Jeans 2, Cargo pants 4,
-  Vest 2, Small backpack 6, Hiking backpack 10). One item or one stack per slot. Clothes keep their contents
+- ✅ Clothing & backpacks give storage slots (Hoodie 2, Jacket 4, Jeans 2, Cargo pants 4,
+  Vest 2, Small backpack 6, Hiking backpack 10; shirts none). One item or one stack per slot. Clothes keep their contents
   when taken off or dropped
 - ✅ Coat + shirt can be worn together
 - ✅ Weapons & clothing are "big": only fit in a backpack, Hands, or their own slot
@@ -101,6 +101,15 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ **Double-click** an item: wear / equip / use (or take it from a nearby container)
 - ✅ **Keybind fix**: key presses are handled as events (never missed between frames); letter keys follow the
   printed key on any keyboard layout; F/G/H/1/2/3/R/X also work with the inventory open
+
+## Milestone 2.7 — Inventory redesign
+- ✅ Inventory screen in **two areas**: NEARBY (a list of what's in the container / on the ground, with icons
+  and a short info line: count, rounds loaded, condition, slots, warmth, food value...) and INVENTORY
+- ✅ Every gear slot is a big **two-colour symbol** of its item type (shirt shape for the shirt slot, etc.)
+- ✅ Each clothing slot has **fixed room** for the most storage that kind of item can give, so putting on a
+  coat or backpack never moves the menu
+- ✅ **Shirts give no storage** (coat, armour, pants and backpack do)
+- ✅ Drawn icons (clothing, soda, meat, matches) redone at **4× the detail** with smooth shapes and shading
 
 ## Planned
 - 📌 **Base building** (wooden & reinforced walls and gates are in the art pack)

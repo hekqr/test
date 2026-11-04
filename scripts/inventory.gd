@@ -15,7 +15,7 @@ extends RefCounted
 signal changed
 
 const GEAR := ["head", "armour", "coat", "shirt", "pants", "boots", "back", "hands", "primary", "secondary", "melee"]
-const STORAGE := ["coat", "shirt", "pants", "armour", "back"] # clothing whose cargo is shown, in order
+const STORAGE := ["coat", "armour", "pants", "back"] # clothing that has storage, in order (shirts have none)
 const WEAPON_SLOTS := ["primary", "secondary", "melee"]
 
 var gear := {}

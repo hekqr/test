@@ -445,6 +445,11 @@ static func shade(base: Color, role: String) -> Color:
 func pixel_icon(name: String, color := "") -> Texture2D:
 	if name.begins_with("furn_") or FURNITURE.has(name):
 		return furniture(name.trim_prefix("furn_"))
+	if name in Icons.NAMES:
+		var hk := "_hi_%s_%s" % [name, color]
+		if not _tex_cache.has(hk):
+			_tex_cache[hk] = Icons.make(name, color)
+		return _tex_cache[hk]
 	var key := "_px_%s_%s" % [name, color]
 	if _tex_cache.has(key):
 		return _tex_cache[key]
@@ -607,3 +612,11 @@ func temp_fill() -> Texture2D:
 	var t := ImageTexture.create_from_image(img)
 	_tex_cache["_temp_fill"] = t
 	return t
+
+
+## Two-colour symbol for an empty inventory slot (shirt shape for the shirt slot, etc.)
+func slot_symbol(slot: String) -> Texture2D:
+	var key := "_slot_" + slot
+	if not _tex_cache.has(key):
+		_tex_cache[key] = Icons.slot_symbol(slot, Color("4a3e4a"), Color("6e6070"))
+	return _tex_cache[key]

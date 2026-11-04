@@ -70,6 +70,9 @@ func refresh() -> void:
 		# Items on the ground show the icon of the first item.
 		if _sprite:
 			_sprite.texture = Items.item_icon(contents[0])
+			# Same size on the ground whether it's a small pack icon or a bigger drawn one
+			var m := maxf(_sprite.texture.get_width(), _sprite.texture.get_height())
+			_sprite.scale = Vector2.ONE * clampf(22.0 / m, 0.6, 1.5)
 	queue_redraw()
 
 

@@ -36,7 +36,7 @@ func _process(_delta: float) -> void:
 		p.inv.pickup(Items.make("bat"))
 		p.inv.pickup({"id": "shotgun", "count": 1, "mag": 3})
 		p.inv.pickup(Items.make("backpack_small"))
-		p.inv.pickup(Items.make("hoodie"))
+		p.inv.pickup(Items.make("jacket"))
 		p.inv.pickup(Items.make("vest"))
 		p.inv.pickup(Items.make("boots"))
 		p.inv.add("ammo_9mm", 14)
@@ -72,13 +72,11 @@ func _process(_delta: float) -> void:
 			if n.kind == "fridge":
 				l = n
 				break
-		l.contents = [Items.make("water"), Items.make("soda"), Items.make("meat"), Items.make("soup")]
+		l.contents = [Items.make("water"), Items.make("soda"), Items.make("meat", 2), Items.make("soup"), Items.make("flannel"), Items.make("ammo_9mm", 12)]
 		p.global_position = l.global_position + Vector2(0, 32)
 	if frame == 100:
 		_shot("inside")
 		main.hud.set_inventory_open(true)
-		var sl := Inventory.gear_loc("shirt")
-		main.hud._menu = {"loc": sl, "pos": main.hud.gear_cell("shirt").get_center() + Vector2(-150, 20), "items": p.actions_for(sl)}
 	if frame == 104:
 		_shot("inventory")
 		main.hud.set_inventory_open(false)
