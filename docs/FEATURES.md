@@ -48,7 +48,7 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ Action button appears automatically near containers ("Search") and ground items ("Pick up …")
 - ✅ Loose items lying on floors, dropped items show their own icon (and join a pile at your feet)
 - ✅ Night = uniform dark-blue tint (no limited light radius)
-- ✅ Melee fights for you (auto-swings at zombies in reach); guns are aimed and fired with the mouse
+- ✅ Melee fights for you (auto-swings at zombies in reach)
 - ✅ Baseball bat (melee) and shotgun (6-pellet spread, shells)
 - ✅ Roofs over buildings that fade when you walk inside
 - ✅ Pixel-art stat bars (health / hunger / thirst) and bullet indicators
@@ -110,6 +110,16 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
   coat or backpack never moves the menu
 - ✅ **Shirts give no storage** (coat, armour, pants and backpack do)
 - ✅ Drawn icons (clothing, soda, meat, matches) redone at **4× the detail** with smooth shapes and shading
+
+## Milestone 2.8 — Gun aiming
+- ✅ **Guns aim for you**: they lock onto the nearest zombie you can see in range (animals if no zombies,
+  the mouse direction if nothing), keeping the same target unless another gets clearly closer
+- ✅ **Aim cone** shows where the shot can land; it narrows while you stand still (red → green) and opens up
+  when you walk (more when sprinting), shoot (recoil) or switch targets. You click to fire whenever you like
+- ✅ Settle time per gun: pistol 0.7 s, assault rifle 1.1 s (tiny recoil), shotgun 1.5 s (never fully tight),
+  hunting rifle 2.2 s (pin-point when settled, big recoil)
+- ✅ **Damage shown** for every weapon (item info, tooltips, inventory, HUD); shotgun shows
+  "24 - 144 damage (1 - 6 pellets)"
 
 ## Planned
 - 📌 **Base building** (wooden & reinforced walls and gates are in the art pack)

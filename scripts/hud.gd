@@ -424,6 +424,7 @@ func _draw() -> void:
 	var wx := vs.x - 24.0
 	var wy := vs.y - 40.0
 	_text(Vector2(wx, wy), w["name"], 20, Color.WHITE, HORIZONTAL_ALIGNMENT_RIGHT, 0)
+	_text(Vector2(wx, wy + 20), Items.damage_text(p.weapon_id()), 12, Color(1, 0.75, 0.6), HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	if not w["melee"]:
 		var mag := int(p.gun()["mag"])
 		var full := Game.tex(w["bullet_ui"])
@@ -461,7 +462,7 @@ func _draw() -> void:
 	# Help
 	if show_help and not inventory_open:
 		var lines := [
-			"WASD move   Shift sprint   Melee is automatic   Click to shoot",
+			"WASD move   Shift sprint   Melee is automatic   Guns aim for you - stand still, then click",
 			"E / button: search, pick up, skin, cook   R reload   X lower weapon   C campfire",
 			"1 / 2 / 3 or wheel: main / secondary / melee   Tab inventory",
 			"F eat   G drink   H bandage / first aid   Esc pause   F1 hide help",
@@ -556,11 +557,12 @@ func _draw_inventory(p: Player, vs: Vector2) -> void:
 		# weapon info
 		if s in Inventory.WEAPON_SLOTS and g != null:
 			var w: Dictionary = Items.WEAPONS[g["id"]]
-			_text(Vector2(sr.end.x + 14, sr.position.y + 28), Items.name_of(g["id"]), 15, C_TEXT)
+			_text(Vector2(sr.end.x + 14, sr.position.y + 20), Items.name_of(g["id"]), 15, C_TEXT)
+			_text(Vector2(sr.end.x + 14, sr.position.y + 60), Items.damage_text(g["id"]), 12, Color(1, 0.75, 0.6))
 			var sub: String = "Selected" if inv.active == s else "Press " + SLOT_KEYS[s]
 			if not w["melee"]:
 				sub = "%d / %d loaded   +%d   %s" % [g["mag"], w["mag"], inv.count_of(w["ammo"]), sub]
-			_text(Vector2(sr.end.x + 14, sr.position.y + 48), sub, 12, C_DIM)
+			_text(Vector2(sr.end.x + 14, sr.position.y + 40), sub, 12, C_DIM)
 
 	# Stats
 	var stx := INV_RECT.position.x + 540
@@ -614,8 +616,8 @@ func _info(it: Dictionary) -> String:
 		parts.append("x%d (max %d)" % [it["count"], Items.max_stack(id)])
 	if it.has("mag"):
 		parts.append("%d / %d loaded" % [it["mag"], Items.WEAPONS[id]["mag"]])
-	if Items.is_weapon(id) and not it.has("mag"):
-		parts.append("melee, %d damage" % int(Items.WEAPONS[id]["damage"]))
+	if Items.is_weapon(id):
+		parts.append(("melee, " if Items.WEAPONS[id]["melee"] else "") + Items.damage_text(id))
 	if Items.kind(id) == "ammo":
 		for w in Items.WEAPONS:
 			if Items.WEAPONS[w].get("ammo", "") == id:

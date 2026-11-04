@@ -42,6 +42,14 @@ var _reload_t := 0.0
 var _reload_total := 1.0
 var _swing_t := 0.0
 var _shots: Array = [] # [from_local, to_global] for muzzle tracers
+var _sprinting := false
+
+# Gun aiming: the gun aims at the nearest zombie by itself; the aim cone (aim_spread, half-angle in
+# radians) narrows while you hold still and opens up when you move, shoot or switch targets.
+var aim_spread := 0.5
+var aim_target: Node2D = null
+const WALK_SPREAD := 0.22 # extra cone while walking
+const SPRINT_SPREAD := 0.5 # extra cone while sprinting
 var _shot_t := 0.0
 var _hurt_t := 0.0
 var _noise_t := 0.0
@@ -305,6 +313,7 @@ func _move(delta: float) -> void:
 	if not Game.ui_open:
 		dir = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	var sprinting := Input.is_action_pressed("sprint") and dir != Vector2.ZERO
+	_sprinting = sprinting
 	var speed := SPRINT_SPEED if sprinting else WALK_SPEED
 	if health < 30.0:
 		speed *= 0.8
@@ -316,6 +325,7 @@ func _move(delta: float) -> void:
 		var m := get_global_mouse_position() - (global_position + HAND)
 		if m.length() > 2.0:
 			aim = m.normalized()
+	_update_aim(delta)
 
 	if _moving:
 		_noise_t -= delta
@@ -571,6 +581,53 @@ func melee(dir: Vector2) -> void:
 	Game.make_noise(global_position, w["noise"])
 
 
+## Picks a target (nearest visible zombie in range, else a nearby animal, else the mouse direction)
+## and settles / disturbs the aim cone.
+func _update_aim(delta: float) -> void:
+	var w := weapon()
+	if w["melee"]:
+		aim_target = null
+		return
+	var reach: float = w["range"] * 0.85
+	var best: Node2D = null
+	var best_d := reach
+	for group in ["zombies", "animals"]:
+		for n in get_tree().get_nodes_in_group(group):
+			var t := n as Node2D
+			var d := t.global_position.distance_to(global_position)
+			# Keep the current target unless something is clearly closer (no flickering).
+			if t == aim_target:
+				d *= 0.75
+			if d < best_d and world.has_los(global_position + HAND, t.global_position + Vector2(0, -8)):
+				best_d = d
+				best = t
+		if best != null:
+			break # zombies first; animals only when no zombie is around
+	if best != aim_target:
+		aim_spread = maxf(aim_spread, lerpf(w["spread_min"], w["spread_max"], 0.6))
+		aim_target = best
+	if aim_target:
+		aim = (aim_target.global_position + Vector2(0, -8) - (global_position + HAND)).normalized()
+	var smin: float = w["spread_min"]
+	var smax: float = w["spread_max"]
+	var target_spread := smin
+	if _moving:
+		target_spread += SPRINT_SPREAD if _sprinting else WALK_SPREAD
+	target_spread = minf(target_spread, smax + 0.2)
+	if aim_spread > target_spread:
+		aim_spread = maxf(aim_spread - (smax - smin) / float(w["aim_time"]) * delta, target_spread)
+	else:
+		aim_spread = minf(aim_spread + 2.5 * delta, target_spread)
+
+
+## How settled the aim is: 0 = wide open, 1 = fully steady.
+func aim_steadiness() -> float:
+	var w := weapon()
+	if w["melee"]:
+		return 1.0
+	return clampf(1.0 - (aim_spread - w["spread_min"]) / (w["spread_max"] - w["spread_min"]), 0.0, 1.0)
+
+
 func shoot() -> void:
 	var w := weapon()
 	var g := gun()
@@ -586,8 +643,10 @@ func shoot() -> void:
 	_shots.clear()
 	var space := get_world_2d().direct_space_state
 	var origin := global_position + HAND
+	# The whole shot goes somewhere inside the aim cone; shotgun pellets spread a bit more around that.
+	var shot_dir := aim.rotated(randf_range(-aim_spread, aim_spread))
 	for i in int(w["pellets"]):
-		var dir := aim.rotated(randf_range(-w["spread"], w["spread"]) * (1.0 if w["pellets"] > 1 else 0.5))
+		var dir := shot_dir.rotated(randf_range(-w["spread"], w["spread"]))
 		var from := origin + dir * 14.0
 		var to := origin + dir * float(w["range"]) * randf_range(0.85, 1.0)
 		var q := PhysicsRayQueryParameters2D.create(from, to, Game.LAYER_WALL | Game.LAYER_ZOMBIE | Game.LAYER_ANIMAL, [get_rid()])
@@ -602,6 +661,7 @@ func shoot() -> void:
 				(col as Animal).take_damage(w["damage"], dir)
 		_shots.append(end)
 	_shot_t = 0.07
+	aim_spread = minf(aim_spread + float(w["recoil"]), float(w["spread_max"]) + 0.2)
 	Game.make_noise(global_position, w["noise"])
 
 
@@ -869,8 +929,37 @@ func _draw() -> void:
 	if _swing_t > 0.0:
 		var r: float = weapon()["range"] - 6.0
 		draw_arc(HAND, r, _melee_dir.angle() - 1.0, _melee_dir.angle() + 1.0, 12, Color(1, 1, 1, 0.4), 2.0)
+	_draw_aim_cone()
 	if _shot_t > 0.0:
 		var muzzle := HAND + aim * 24.0
 		for end in _shots:
 			draw_line(muzzle, to_local(end), Color(1, 0.9, 0.5, 0.85), 1.5)
 		draw_circle(muzzle, 4.0, Color(1, 0.85, 0.4))
+
+
+## The aim cone: where the next shot can land. Red = wide, green = steady.
+func _draw_aim_cone() -> void:
+	var w := weapon()
+	if w["melee"] or Game.ui_open:
+		return
+	var steady := aim_steadiness()
+	var col := Color(0.95, 0.35, 0.3).lerp(Color(0.45, 0.95, 0.45), steady)
+	var length := 170.0
+	if aim_target:
+		length = clampf(aim_target.global_position.distance_to(global_position) + 10.0, 40.0, 320.0)
+	var start := HAND + aim * 14.0
+	var a := aim.rotated(-aim_spread) * length
+	var b := aim.rotated(aim_spread) * length
+	var fill := col
+	fill.a = 0.12
+	draw_colored_polygon(PackedVector2Array([start, start + a, start + b]), fill)
+	var edge := col
+	edge.a = 0.55
+	draw_line(start, start + a, edge, 1.0)
+	draw_line(start, start + b, edge, 1.0)
+	if aim_target:
+		var tp := to_local(aim_target.global_position + Vector2(0, -8))
+		var r := 10.0 + aim_spread * 20.0
+		for k in 4:
+			var ang := PI * 0.25 + k * PI * 0.5
+			draw_arc(tp, r, ang - 0.35, ang + 0.35, 4, col, 2.0)

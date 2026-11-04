@@ -15,7 +15,7 @@ The game saves automatically (every 20 s, when you quit, and when you die) to
 |---|---|
 | WASD | Move |
 | Shift | Sprint (louder — attracts zombies) |
-| Mouse / Left click | Aim / Shoot (melee attacks automatically) |
+| Left click | Shoot (guns aim by themselves — stand still to steady the aim; melee attacks automatically) |
 | E (or the on-screen button) | Search container / pick up item / skin animal / use campfire |
 | C | Build campfire (3 sticks + 1 match) |
 | R | Reload (restart when dead) |

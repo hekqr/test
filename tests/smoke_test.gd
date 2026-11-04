@@ -363,6 +363,7 @@ func _physics_process(_delta: float) -> void:
 			inv.add("meat", 2)
 			p.use_fire(p.nearest_fire)
 			check(p.cook_t > 0.0, "cooking started")
+			p.cook_t = 0.5 # finish before later tests move the player away from the fire
 			var car_max := 0
 			for i in 100:
 				car_max = maxi(car_max, Loot.roll("car").size())
@@ -397,12 +398,41 @@ func _physics_process(_delta: float) -> void:
 			inv.add("ammo_9mm", 10)
 			p.switch_weapon("secondary")
 			check(p.weapon_id() == "pistol" and inv.gear["melee"] != null, "switching to pistol keeps bat in its slot")
+			p.global_position = _open_spot(w) # clear field: no car / tree / wall in the line of fire
 			z_test = main.add_zombie(p.global_position + Vector2(0, -60))
 			z_test.set_physics_process(false)
 		182:
-			p.aim = (z_test.global_position + Vector2(0, -6) - (p.global_position + Player.HAND)).normalized()
+			print("Auto-aim")
+			p._moving = false
+			p._update_aim(0.016)
+			check(p.aim_target == z_test, "gun aims at the nearest zombie by itself")
+			var to_z := (z_test.global_position + Vector2(0, -8) - (p.global_position + Player.HAND)).normalized()
+			check(p.aim.dot(to_z) > 0.99, "aim points at the target")
+			p.aim_spread = Items.WEAPONS["pistol"]["spread_max"]
+			for i in 30:
+				p._update_aim(0.016)
+			var half := p.aim_spread
+			for i in 40:
+				p._update_aim(0.016)
+			check(p.aim_spread < half and absf(p.aim_spread - Items.WEAPONS["pistol"]["spread_min"]) < 0.01, "aim settles while standing still (%.2f -> %.2f)" % [half, p.aim_spread])
+			p._moving = true
+			p._sprinting = false
+			for i in 10:
+				p._update_aim(0.016)
+			var walk_spread := p.aim_spread
+			p._sprinting = true
+			for i in 20:
+				p._update_aim(0.016)
+			check(walk_spread > 0.15 and p.aim_spread > walk_spread, "walking opens the aim, sprinting more (%.2f / %.2f)" % [walk_spread, p.aim_spread])
+			p._moving = false
+			p._sprinting = false
+			check(_settle_time("pistol") < _settle_time("rifle") and _settle_time("rifle") < _settle_time("shotgun") and _settle_time("shotgun") < _settle_time("hunting_rifle"), "pistol settles fastest, hunting rifle slowest")
+			check(Items.damage_text("shotgun") == "24 - 144 damage (1 - 6 pellets)", "shotgun lists min (1 pellet) and max damage")
+			check(Items.damage_text("pistol") == "45 damage" and Items.damage_text("bat") == "42 damage", "weapons list their damage")
+			p.aim_spread = 0.0
 			hp_before = z_test.health
 			p.shoot()
+			check(p.aim_spread > 0.1, "shooting kicks the aim open (recoil)")
 			check(int(p.gun()["mag"]) == 7, "shooting uses a round")
 			check(z_test.health < hp_before, "bullet hits zombie")
 			p.gun()["mag"] = 0
@@ -417,7 +447,8 @@ func _physics_process(_delta: float) -> void:
 			p.cycle_weapon(-1)
 			check(p.weapon_id() == "shotgun", "mouse wheel cycles to shotgun")
 			z_test.health = 70.0
-			p.aim = (z_test.global_position + Vector2(0, -6) - (p.global_position + Player.HAND)).normalized()
+			p._update_aim(0.016)
+			p.aim_spread = Items.WEAPONS["shotgun"]["spread_min"]
 			p.shoot()
 			check(p._shots.size() == 6, "shotgun fires 6 pellets")
 			check(z_test.health < 70.0 - 24.0 or z_test.dead, "multiple pellets hit (hp %.0f)" % z_test.health)
@@ -578,3 +609,26 @@ func _press(action: String) -> void:
 	up.action = action
 	up.pressed = false
 	get_viewport().push_input(up)
+
+
+## Seconds a gun needs to settle from its widest aim to its tightest.
+func _settle_time(id: String) -> float:
+	var w: Dictionary = Items.WEAPONS[id]
+	return float(w["aim_time"])
+
+
+## Centre of a 7x7 patch of open ground (nothing that blocks bullets).
+func _open_spot(w: World) -> Vector2:
+	for y in range(5, World.H - 5):
+		for x in range(5, World.W - 5):
+			var ok := true
+			for dy in range(-3, 4):
+				for dx in range(-3, 4):
+					if w.get_tile(Vector2i(x + dx, y + dy)) != World.GROUND:
+						ok = false
+						break
+				if not ok:
+					break
+			if ok:
+				return w.center_of(Vector2i(x, y))
+	return w.center_of(w.spawn_cell)
