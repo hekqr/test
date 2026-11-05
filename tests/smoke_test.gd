@@ -1330,6 +1330,14 @@ func _base_tests() -> void:
 					mags_ok = false
 	check(mags_ok, "ammo always comes in whole magazines (at least one)")
 	check(big_ok, "big ammo finds are split into proper stacks")
+	var hp0 := p.health
+	p.hit_flash = 0.0
+	p.take_damage(1.0)
+	check(p.hit_flash == 1.0, "getting hit flashes the screen red")
+	p._timers(1.0)
+	check(p.hit_flash == 0.0, "the red flash fades out quickly")
+	p.health = hp0
+	p.bleeding = false
 	var paths := {}
 	for i in SaveGame.SLOTS:
 		paths[SaveGame.slot_path(i + 1)] = true

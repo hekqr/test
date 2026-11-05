@@ -89,6 +89,7 @@ const FISH_HOOK := 0.55
 const FISH_HOOK_RAIN := 0.7
 var _thirst_msg_t := 0.0
 var _hurt_t := 0.0
+var hit_flash := 0.0 # 1 when you get hit, fades out: the screen flashes red (drawn by the HUD)
 var _noise_t := 0.0
 var _sprite: AnimatedSprite2D
 var _held: Sprite2D
@@ -619,6 +620,7 @@ func _timers(delta: float) -> void:
 	_swing_t -= delta
 	_shot_t -= delta
 	_hurt_t -= delta
+	hit_flash = maxf(hit_flash - delta * 2.5, 0.0)
 	message_t -= delta
 	if reloading:
 		_reload_t -= delta
@@ -1488,6 +1490,7 @@ func take_damage(amount: float, can_bleed := true) -> void:
 	health -= amount
 	if can_bleed:
 		_hurt_t = 0.2
+		hit_flash = 1.0
 		var covered := inv.gear["coat"] != null or inv.gear["armour"] != null
 		if not bleeding and randf() < (0.18 if covered else 0.3):
 			bleeding = true

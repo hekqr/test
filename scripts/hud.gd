@@ -479,6 +479,21 @@ func _unhandled_input(event: InputEvent) -> void:
 		main.quit_to_menu()
 
 
+## Red flash when you get hit: a light red tint plus darker red edges.
+func _draw_hit_flash(vs: Vector2, f: float) -> void:
+	draw_rect(Rect2(Vector2.ZERO, vs), Color(0.8, 0.05, 0.05, 0.16 * f))
+	var steps := 8
+	var edge := 70.0
+	for i in steps:
+		var a := 0.08 * f * (1.0 - float(i) / steps)
+		var w := edge / steps
+		var o := i * w
+		draw_rect(Rect2(0, o, vs.x, w), Color(0.7, 0.0, 0.0, a))
+		draw_rect(Rect2(0, vs.y - o - w, vs.x, w), Color(0.7, 0.0, 0.0, a))
+		draw_rect(Rect2(o, 0, w, vs.y), Color(0.7, 0.0, 0.0, a))
+		draw_rect(Rect2(vs.x - o - w, 0, w, vs.y), Color(0.7, 0.0, 0.0, a))
+
+
 # ---------------------------------------------------------------- drawing helpers
 
 func _text(pos: Vector2, s: String, size_px := 16, col := Color.WHITE, align := HORIZONTAL_ALIGNMENT_LEFT, width := -1.0, shadow := true) -> void:
@@ -594,6 +609,8 @@ func _draw() -> void:
 	var p: Player = main.player
 	var vs := get_viewport_rect().size
 	var st := int(main.survived)
+	if p.hit_flash > 0.0:
+		_draw_hit_flash(vs, p.hit_flash)
 
 	# Stat bars (bottom-left)
 	var bx := 18.0
