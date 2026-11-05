@@ -479,6 +479,26 @@ func _unhandled_input(event: InputEvent) -> void:
 		main.quit_to_menu()
 
 
+const LOW_HP := 30.0
+
+
+## Below 30% health the screen keeps a red tint (stronger the lower you are), slowly pulsing.
+func _draw_low_hp(vs: Vector2, hp: float) -> void:
+	var k := clampf(1.0 - hp / LOW_HP, 0.0, 1.0)
+	var pulse := 0.85 + 0.15 * sin(Time.get_ticks_msec() / 1000.0 * 3.0)
+	draw_rect(Rect2(Vector2.ZERO, vs), Color(0.75, 0.0, 0.0, (0.16 + 0.14 * k) * pulse))
+	var steps := 12
+	var edge := 160.0
+	for i in steps:
+		var a := (0.1 + 0.1 * k) * pulse * (1.0 - float(i) / steps)
+		var w := edge / steps
+		var o := i * w
+		draw_rect(Rect2(0, o, vs.x, w), Color(0.5, 0.0, 0.0, a))
+		draw_rect(Rect2(0, vs.y - o - w, vs.x, w), Color(0.5, 0.0, 0.0, a))
+		draw_rect(Rect2(o, 0, w, vs.y), Color(0.5, 0.0, 0.0, a))
+		draw_rect(Rect2(vs.x - o - w, 0, w, vs.y), Color(0.5, 0.0, 0.0, a))
+
+
 ## Red flash when you get hit: a light red tint plus darker red edges.
 func _draw_hit_flash(vs: Vector2, f: float) -> void:
 	draw_rect(Rect2(Vector2.ZERO, vs), Color(0.8, 0.05, 0.05, 0.16 * f))
@@ -609,6 +629,8 @@ func _draw() -> void:
 	var p: Player = main.player
 	var vs := get_viewport_rect().size
 	var st := int(main.survived)
+	if p.health < LOW_HP and not p.dead:
+		_draw_low_hp(vs, p.health)
 	if p.hit_flash > 0.0:
 		_draw_hit_flash(vs, p.hit_flash)
 
