@@ -1330,6 +1330,17 @@ func _base_tests() -> void:
 					mags_ok = false
 	check(mags_ok, "ammo always comes in whole magazines (at least one)")
 	check(big_ok, "big ammo finds are split into proper stacks")
+	var paths := {}
+	for i in SaveGame.SLOTS:
+		paths[SaveGame.slot_path(i + 1)] = true
+	check(SaveGame.SLOTS == 3 and paths.size() == 3 and SaveGame.slot_path(1) == "user://save.json", "3 save slots, each its own file (slot 1 = the old save)")
+	var keep_path: String = Game.save_path
+	var keep_slot: int = Game.save_slot
+	SaveGame.use_slot(2)
+	check(Game.save_path == SaveGame.slot_path(2) and Game.save_slot == 2, "choosing a slot saves into it")
+	Game.save_slot = keep_slot
+	Game.save_path = keep_path
+	Game.save_settings()
 	check(["ammo_9mm", "ammo_12ga", "ammo_308"].all(func(id): return Items.max_stack(id) == 30) and Items.max_stack("ammo_556") == 100, "ammo stacks to 30 (assault rifle 5.56: 100)")
 	print("Weather")
 	p.global_position = _open_spot(w, 3)

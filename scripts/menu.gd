@@ -1,5 +1,6 @@
 extends Control
-## Title screen: Continue (auto-save), New Game, Quit.
+## Title screen: 3 save slots (click one to continue it, or to start in an empty one; New starts over
+## in that slot), Quit. Q continues the slot you played last.
 
 const SCALE := 4.0
 const C_EDGE := Color("1a1016")
@@ -7,8 +8,8 @@ const C_TEXT := Color(0.95, 0.9, 0.82)
 const C_DIM := Color(0.8, 0.75, 0.7)
 
 var _font: Font
-var _save := {}
-var _confirm_new := false
+var _saves: Array = [] # each slot's save (empty = free slot)
+var _confirm_new := 0 # slot waiting for a second click on New
 var _down := ""
 var _mouse := Vector2.ZERO
 var _bg_tiles: Array = []
@@ -21,7 +22,8 @@ func _ready() -> void:
 	Game.ui_open = false
 	Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 	_font = ThemeDB.fallback_font
-	_save = SaveGame.read()
+	for i in SaveGame.SLOTS:
+		_saves.append(SaveGame.read_slot(i + 1))
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 7
 	for i in 400:
@@ -33,51 +35,70 @@ func _process(_d: float) -> void:
 	queue_redraw()
 
 
+const PANEL_W := 600.0
+const PANEL_H := 74.0
+
+
+## [id, rect]: "slot1".."slot3" (play / continue), "new1".."new3" (start over), "quit".
 func _buttons() -> Array:
 	var vs := get_viewport_rect().size
-	var sz := Game.tex("ui_button").get_size() * SCALE
 	var out := []
-	var names := ["continue", "new", "quit"]
-	for i in names.size():
-		out.append([names[i], Rect2(Vector2((vs.x - sz.x) / 2.0, vs.y * 0.42 + i * (sz.y + 22)), sz)])
+	for i in SaveGame.SLOTS:
+		var r := Rect2((vs.x - PANEL_W) / 2.0, vs.y * 0.33 + i * (PANEL_H + 14), PANEL_W, PANEL_H)
+		out.append(["slot%d" % (i + 1), r])
+		if not _saves[i].is_empty():
+			out.append(["new%d" % (i + 1), Rect2(r.end.x - 118, r.position.y + 15, 104, PANEL_H - 30)])
+	var sz := Game.tex("ui_button").get_size() * SCALE
+	out.append(["quit", Rect2(Vector2((vs.x - sz.x) / 2.0, vs.y * 0.33 + SaveGame.SLOTS * (PANEL_H + 14) + 20), sz)])
 	return out
 
 
-func _enabled(id: String) -> bool:
-	return id != "continue" or SaveGame.can_continue()
+## The button under the mouse (the small New button wins over its slot panel).
+func _hit(pos: Vector2) -> String:
+	var hit := ""
+	for b in _buttons():
+		if b[1].has_point(pos):
+			hit = b[0]
+	return hit
 
 
 func _gui_input(event: InputEvent) -> void:
 	if not (event is InputEventMouseButton) or event.button_index != MOUSE_BUTTON_LEFT:
 		return
-	for b in _buttons():
-		if b[1].has_point(event.position) and _enabled(b[0]):
-			if event.pressed:
-				_down = b[0]
-			elif _down == b[0]:
-				_press(b[0])
+	var id := _hit(event.position)
+	if event.pressed:
+		_down = id
+	elif _down == id and id != "":
+		_press(id)
 	if not event.pressed:
 		_down = ""
 
 
+## Q: continue the last slot you played.
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("interact") and SaveGame.can_continue():
-		_press("continue")
+	if event.is_action_pressed("interact") and SaveGame.slot_can_continue(Game.save_slot):
+		_press("slot%d" % Game.save_slot)
 
 
 func _press(id: String) -> void:
-	match id:
-		"continue":
-			Game.pending_load = SaveGame.read()
-			_load_world()
-		"new":
-			if SaveGame.can_continue() and not _confirm_new:
-				_confirm_new = true # click again to overwrite the living survivor
-				return
-			Game.pending_load = {}
-			_load_world()
-		"quit":
-			get_tree().quit()
+	if id == "quit":
+		get_tree().quit()
+		return
+	var slot := int(id.right(1))
+	if id.begins_with("slot"):
+		SaveGame.use_slot(slot)
+		if SaveGame.slot_can_continue(slot):
+			Game.pending_load = SaveGame.read_slot(slot)
+		else:
+			Game.pending_load = {} # empty, dead or old: a new survivor
+		_load_world()
+	elif id.begins_with("new"):
+		if SaveGame.slot_can_continue(slot) and _confirm_new != slot:
+			_confirm_new = slot # click again to replace the living survivor
+			return
+		SaveGame.use_slot(slot)
+		Game.pending_load = {}
+		_load_world()
 
 
 func _text(pos: Vector2, s: String, size_px: int, col: Color, width: float) -> void:
@@ -121,31 +142,51 @@ func _draw() -> void:
 	for b in _buttons():
 		var id: String = b[0]
 		var r: Rect2 = b[1]
-		var on := _enabled(id)
-		var pressed := _down == id and r.has_point(_mouse)
-		var mod := Color.WHITE if on else Color(0.5, 0.45, 0.5)
-		if on and r.has_point(_mouse) and not pressed:
-			mod = Color(1.1, 1.08, 1.0)
-		draw_texture_rect(Game.tex("ui_button_pressed" if pressed else "ui_button"), Rect2(r.position + Vector2(0, 8 if pressed else 0), Game.tex("ui_button_pressed" if pressed else "ui_button").get_size() * SCALE), false, mod)
-		var label: String = {"continue": "Continue", "new": "New Game", "quit": "Quit"}[id]
-		if id == "new" and _confirm_new:
-			label = "Overwrite?"
-		draw_string(_font, Vector2(r.position.x, r.position.y + (58 if pressed else 50)), label, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 26, C_EDGE if on else Color(0.2, 0.15, 0.2, 0.7))
+		var hover := _hit(_mouse) == id
+		if id == "quit":
+			var pressed := _down == id and hover
+			var mod := Color(1.1, 1.08, 1.0) if hover and not pressed else Color.WHITE
+			var tn := "ui_button_pressed" if pressed else "ui_button"
+			draw_texture_rect(Game.tex(tn), Rect2(r.position + Vector2(0, 8 if pressed else 0), Game.tex(tn).get_size() * SCALE), false, mod)
+			draw_string(_font, Vector2(r.position.x, r.position.y + (58 if pressed else 50)), "Quit", HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 26, C_EDGE)
+		elif id.begins_with("slot"):
+			_draw_slot(int(id.right(1)), r, hover)
+		else:
+			var slot := int(id.right(1))
+			var sure := _confirm_new == slot
+			draw_rect(r, C_EDGE)
+			draw_rect(r.grow(-3), Color("8a3a32") if sure else (Color("6e5a4a") if hover else Color("54443a")))
+			draw_string(_font, Vector2(r.position.x, r.position.y + 29), "Sure?" if sure else "New", HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 18, C_TEXT)
+	if _confirm_new > 0:
+		_text(Vector2(0, _buttons()[-1][1].end.y + 40), "This replaces the survivor in slot %d. Click Sure? to confirm." % _confirm_new, 15, Color(1, 0.75, 0.6), vs.x)
+	_text(Vector2(0, vs.y - 24), "The game saves automatically   -   Q continues your last game", 14, C_DIM, vs.x)
 
-	# Save summary under the buttons
-	var info := "No survivor yet"
+
+## One save slot: its number and what's in it.
+func _draw_slot(slot: int, r: Rect2, hover: bool) -> void:
+	var save: Dictionary = _saves[slot - 1]
+	var last := slot == Game.save_slot and not save.is_empty()
+	draw_rect(r, C_EDGE)
+	draw_rect(r.grow(-3), Color("4e4250") if hover else Color("3a3040"))
+	if last:
+		draw_rect(r.grow(-3), Color(0.9, 0.8, 0.5, 0.6), false, 2.0)
+	var x := r.position.x + 22
+	draw_string(_font, Vector2(x, r.position.y + 32), "Slot %d" % slot, HORIZONTAL_ALIGNMENT_LEFT, -1, 24, C_TEXT)
+	var info := "Empty - click to start a new game"
 	var col := C_DIM
-	if not _save.is_empty():
-		var st := int(_save.get("survived", 0.0))
-		if int(_save.get("version", 0)) != SaveGame.VERSION:
-			info = "Old save from an earlier version - start a New Game"
+	var action := ""
+	if not save.is_empty():
+		var st := int(save.get("survived", 0.0))
+		if int(save.get("version", 0)) != SaveGame.VERSION:
+			info = "Old save from an earlier version - click to start over"
 			col = Color(1, 0.75, 0.4)
-		elif _save.get("dead", false):
-			info = "Your survivor died on day %d  (survived %d:%02d, %d kills)" % [int(_save["day"]), st / 60, st % 60, int(_save["kills"])]
+		elif save.get("dead", false):
+			info = "Died on day %d  (survived %d:%02d, %d kills) - click to start over" % [int(save["day"]), st / 60, st % 60, int(save["kills"])]
 			col = Color(1, 0.55, 0.5)
 		else:
-			info = "Day %d   survived %d:%02d   %d kills" % [int(_save["day"]), st / 60, st % 60, int(_save["kills"])]
-	_text(Vector2(0, _buttons()[2][1].end.y + 50), info, 18, col, vs.x)
-	if _confirm_new:
-		_text(Vector2(0, _buttons()[2][1].end.y + 78), "Starting a new game replaces your current survivor. Click New Game again to confirm.", 15, C_DIM, vs.x)
-	_text(Vector2(0, vs.y - 24), "The game saves automatically", 14, C_DIM, vs.x)
+			info = "Day %d   survived %d:%02d   %d kills" % [int(save["day"]), st / 60, st % 60, int(save["kills"])]
+			col = Color(0.75, 0.95, 0.65)
+			action = "Continue"
+	draw_string(_font, Vector2(x, r.position.y + 58), info, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 160, 15, col)
+	if action != "":
+		draw_string(_font, Vector2(r.position.x + 130, r.position.y + 32), action + (" (Q)" if last else ""), HORIZONTAL_ALIGNMENT_LEFT, -1, 18, C_DIM)

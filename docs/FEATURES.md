@@ -294,6 +294,9 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ Crafting list scrolls (mouse wheel)
 - Base walls stay unbreakable: the base is meant to be fully safe
 
+- ✅ **3 save slots** on the title screen: click a slot to continue it (or start in an empty one), New starts
+  over in that slot (asks first); Q continues the slot you played last. Your old save is slot 1
+
 ## Ideas for endless play (next)
 - 📌 Watchtower
 - 📌 More renewable food: berries / mushrooms, slow loot respawn

@@ -20,7 +20,8 @@ var weather := "clear"
 ## True while a full-screen UI (inventory) is open: blocks attacking/moving.
 var ui_open := false
 ## Save file location (tests point this somewhere else).
-var save_path := "user://save.json"
+var save_path := "user://save.json" # the slot being played (see SaveGame.slot_path)
+var save_slot := 1 # last slot played (remembered in the settings)
 ## Save data to load when the game scene starts; empty = new game.
 var pending_load := {}
 
@@ -40,12 +41,14 @@ func load_settings() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SETTINGS_PATH) == OK:
 		aim_mode = String(cfg.get_value("controls", "aim_mode", "auto"))
+		save_slot = clampi(int(cfg.get_value("game", "slot", 1)), 1, SaveGame.SLOTS)
 
 
 func save_settings() -> void:
 	var cfg := ConfigFile.new()
 	cfg.load(SETTINGS_PATH)
 	cfg.set_value("controls", "aim_mode", aim_mode)
+	cfg.set_value("game", "slot", save_slot)
 	cfg.save(SETTINGS_PATH)
 
 
