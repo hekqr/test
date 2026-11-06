@@ -165,6 +165,25 @@ func _drive(delta: float) -> void:
 	if _stuck_t > 2.0:
 		if p.global_position.distance_to(_last_pos) < 8.0 and _path.size() > 0 and not Game.ui_open and p.busy_t <= 0.0:
 			_note("stuck")
+			if int(_events["stuck"]) <= 8:
+				var w: World = main.world
+				var c := w.cell_of(p.global_position)
+				var rows := PackedStringArray()
+				for dy in range(-2, 3):
+					var row := ""
+					for dx in range(-2, 3):
+						var n := c + Vector2i(dx, dy)
+						var ch := str(w.get_tile(n))
+						if w.is_door(n):
+							ch = "D" if w.door_closed[w.idx(n)] == 1 else "d"
+						if n == w.cell_of(_path[0]):
+							ch = "*"
+						row += ("[" + ch + "]") if n == c else (" " + ch + " ")
+					rows.append(row)
+				print("  STUCK at %s (offset %s) next %s: %s" % [c, (p.global_position - w.center_of(c)).round(), (_path[0] - p.global_position).round(), " / ".join(rows)])
+				var nc := w.cell_of(_path[0])
+				var col := p.get_last_slide_collision()
+				print("     next cell %s tile %d door %s closed %s walkable %s | collider %s at %s" % [nc, w.get_tile(nc), w.is_door(nc), w.door_closed[w.idx(nc)] if w.is_door(nc) else -1, w.is_walkable(nc), col.get_collider() if col else "-", (col.get_position() - p.global_position).round() if col else Vector2.ZERO])
 			_goal = Vector2.INF
 		_last_pos = p.global_position
 		_stuck_t = 0.0
@@ -236,7 +255,7 @@ func _arrived() -> void:
 func _random_action() -> void:
 	if p.busy_t > 0.0:
 		return
-	var r := randi() % 16
+	var r := randi() % 20
 	match r:
 		0, 1:
 			# Eat / drink / bandage something from the inventory
@@ -313,8 +332,41 @@ func _random_action() -> void:
 					break
 		15:
 			main.time_of_day = randf()
+		16, 17:
+			_fight()
+		18:
+			if randf() < 0.5:
+				_note("wolves")
+				main.spawn_wolf_pack(300.0)
+			else:
+				_note("bandits")
+				main.spawn_survivor_group(300.0, 700.0)
+		19:
+			# Reload / melee / holster
+			_note("reload")
+			var ev := InputEventAction.new()
+			ev.action = "reload"
+			ev.pressed = true
+			Input.parse_input_event(ev)
 		_:
 			pass
+
+
+## A fight: a gun with ammo (or a melee weapon) and a few zombies of every type close by.
+func _fight() -> void:
+	_note("fight")
+	var guns := ["pistol", "shotgun", "rifle", "hunting_rifle"]
+	var g: String = guns.pick_random()
+	var slot := Items.equip_of(g)
+	p.inv.gear[slot] = Items.make(g)
+	p.inv.add(Items.WEAPONS[g]["ammo"], 20)
+	p.inv.gear["melee"] = Items.make(["bat", "axe", "knife"].pick_random())
+	p.switch_weapon(slot if randf() < 0.8 else "melee")
+	for i in randi_range(2, 5):
+		var pos: Vector2 = p.global_position + Vector2.from_angle(randf() * TAU) * randf_range(140.0, 300.0)
+		if main.world.is_walkable(main.world.cell_of(pos)):
+			var type: String = ["walker", "runner", "brute", "axe", "armed"].pick_random()
+			main.add_zombie(pos, type, "pistol" if type == "armed" else "", 8)
 
 
 func _travel() -> void:

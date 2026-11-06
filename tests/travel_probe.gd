@@ -29,6 +29,10 @@ func _process(_d: float) -> void:
 		var t0 := Time.get_ticks_msec()
 		main.travel(dir)
 		print("travel %s -> %s: %d ms   (zombies %d, loot %d, nodes %d)" % [dir, main.region, Time.get_ticks_msec() - t0, get_tree().get_nodes_in_group("zombies").size(), get_tree().get_nodes_in_group("loot").size(), get_tree().get_node_count()])
+	if frame == 215:
+		var t0 := Time.get_ticks_usec()
+		main.save_game(true)
+		print("autosave main-thread part after 5 travels: %.1f ms, regions kept %d, save %d KB" % [(Time.get_ticks_usec() - t0) / 1000.0, main.regions_state.size(), FileAccess.get_file_as_bytes(Game.save_path).size() / 1024])
 	if frame == 220:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(Game.save_path))
 		get_tree().quit()

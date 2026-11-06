@@ -636,6 +636,21 @@ func _timers(delta: float) -> void:
 				say("Reloaded")
 
 
+## Walking into the edge of a doorway (or round a corner): slide sideways into the gap instead of
+## sticking on the corner.
+func _corner_assist(dir: Vector2, speed: float, delta: float, before: Vector2) -> void:
+	if dir == Vector2.ZERO or global_position.distance_to(before) > speed * delta * 0.5:
+		return
+	var axis := Vector2(signf(dir.x), 0) if absf(dir.x) >= absf(dir.y) else Vector2(0, signf(dir.y))
+	var side := Vector2(absf(axis.y), absf(axis.x))
+	for k in [3.0, 6.0, 9.0, 12.0, 15.0]:
+		for sgn in [1.0, -1.0]:
+			var off: Vector2 = side * k * sgn
+			if not test_move(global_transform, off) and not test_move(global_transform.translated(off), axis * 6.0):
+				move_and_collide(side * sgn * minf(speed * delta, k))
+				return
+
+
 func _move(delta: float) -> void:
 	var dir := Vector2.ZERO
 	if not Game.ui_open:
@@ -648,7 +663,9 @@ func _move(delta: float) -> void:
 	if busy_t > 0.0:
 		speed *= 0.5 # eating / bandaging / searching: you can only shuffle along
 	velocity = dir * speed
+	var before := global_position
 	move_and_slide()
+	_corner_assist(dir, speed, delta, before)
 	_moving = dir != Vector2.ZERO
 
 	if Game.aim_mode == "mouse":

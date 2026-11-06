@@ -68,7 +68,9 @@ func _ready() -> void:
 ## fires, tap water, the map you've explored).
 var region := Vector2i.ZERO
 var region_name := ""
-var regions_state := {} # "x,y" -> {loot, taps, fires, explored} for the regions you're not in
+## "x,y" -> the regions you're not in: {loot, taps, fires, structures, explored} kept as JSON text, so
+## autosaves don't have to copy and convert every region you've visited each time.
+var regions_state := {}
 var _travelling := false
 
 
@@ -324,8 +326,8 @@ func travel(dir: Vector2i) -> void:
 		return
 	_travelling = true
 	var data: Dictionary = to_save().duplicate(true)
-	regions_state[_rkey(region)] = {"loot": data["loot"], "taps": data["taps"], "fires": data["fires"], "structures": data["structures"],
-		"explored": Marshalls.raw_to_base64(explored.compress(FileAccess.COMPRESSION_DEFLATE))}
+	regions_state[_rkey(region)] = JSON.stringify({"loot": data["loot"], "taps": data["taps"], "fires": data["fires"], "structures": data["structures"],
+		"explored": Marshalls.raw_to_base64(explored.compress(FileAccess.COMPRESSION_DEFLATE))})
 	var nr := region + dir
 	var nk := _rkey(nr)
 	data.erase("explored_raw")
@@ -333,7 +335,8 @@ func travel(dir: Vector2i) -> void:
 	data["zombies"] = []
 	data["survivors"] = []
 	if regions_state.has(nk):
-		var st: Dictionary = regions_state[nk]
+		var raw = regions_state[nk]
+		var st: Dictionary = (JSON.parse_string(raw) if raw is String else raw) # older saves: a dictionary
 		data["loot"] = st["loot"]
 		data["taps"] = st["taps"]
 		data["fires"] = st["fires"]
@@ -348,7 +351,7 @@ func travel(dir: Vector2i) -> void:
 		data["structures"] = []
 		data["fresh_region"] = true
 	data["region"] = [nr.x, nr.y]
-	data["regions"] = regions_state.duplicate(true)
+	data["regions"] = regions_state.duplicate()
 	var sides := {Vector2i(1, 0): "W", Vector2i(-1, 0): "E", Vector2i(0, 1): "N", Vector2i(0, -1): "S"}
 	data["arrive"] = {"side": sides[dir], "along": player.position.y if dir.x != 0 else player.position.x}
 	hud.travel_text = "Travelling to %s..." % World.region_name(world_seed, nr)
