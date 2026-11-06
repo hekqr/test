@@ -28,7 +28,7 @@ var main2: Node
 
 
 func _ready() -> void:
-	Game.save_path = "user://test_save.json"
+	Game.save_path = "user://test_save_%d.json" % OS.get_process_id() # own file: runs can go in parallel
 	main = load("res://scenes/main.tscn").instantiate()
 	add_child(main)
 
@@ -181,6 +181,7 @@ func _physics_process(_delta: float) -> void:
 				if st["center"] != w.spawn_cell and w.find_path(w.center_of(w.spawn_cell), w.center_of(st["center"])).size() < 2:
 					unreachable += 1
 			check(unreachable == 0, "every settlement reachable from the start (roads connect them)")
+			check(_unsearchable(w) == 0, "every container in the region can be reached and searched (nothing blocks a door)")
 			var in_towns := 0
 			for i in w.buildings.size():
 				if w.building_town[i] >= 0:
@@ -1495,6 +1496,9 @@ func _base_tests() -> void:
 	check(garden != null and garden.kind == "garden", "garden bed built")
 	inv.add("tomato_seeds", 2)
 	p._find_loot()
+	if not (p.interact_choice() == "build" and p.action_label() == "Plant tomatoes"):
+		print("    DBG garden: choice=%s label=%s ns=%s nl=%s nf=%s lake=%s tap=%s" % [p.interact_choice(), p.action_label(), p.nearest_structure.kind if p.nearest_structure else "-", (p.nearest_loot.kind + " bag=" + str(p.nearest_loot.is_bag) + " d=" + str(int(p.nearest_loot.global_position.distance_to(p.global_position)))) if p.nearest_loot else "-", p.nearest_fire, p.near_lake, p.nearest_tap])
+		print("    DBG garden d=%d g_cell=%s pcell=%s" % [int(garden.global_position.distance_to(p.global_position)) if garden else -1, g_cell, w.cell_of(p.global_position)])
 	check(p.interact_choice() == "build" and p.action_label() == "Plant tomatoes", "Q at the garden bed: Plant tomatoes")
 	p.interact()
 	p.finish_busy()
@@ -1757,6 +1761,35 @@ func _utility_tests() -> void:
 		p.interact()
 		p.finish_busy()
 		check(trap.caught == 0 and _pile_count("fish") == fish0 + Structure.TRAP_CAP, "fish from the trap")
+
+
+## Containers no walkable, connected cell is in reach of (e.g. a street light right outside a door).
+func _unsearchable(w: World) -> int:
+	var seen := PackedByteArray()
+	seen.resize(World.W * World.H)
+	var q: Array[Vector2i] = [w.spawn_cell]
+	seen[w.idx(w.spawn_cell)] = 1
+	while not q.is_empty():
+		var c: Vector2i = q.pop_back()
+		for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n: Vector2i = c + o
+			if w.in_bounds(n) and seen[w.idx(n)] == 0 and (w.is_walkable(n) or w.is_door(n)):
+				seen[w.idx(n)] = 1
+				q.append(n)
+	var bad := 0
+	for ct in w.containers:
+		var pos: Vector2 = ct["pos"]
+		var cc := w.cell_of(pos)
+		var ok := false
+		for dy in range(-3, 4):
+			for dx in range(-3, 4):
+				var n := cc + Vector2i(dx, dy)
+				if w.in_bounds(n) and seen[w.idx(n)] == 1 and w.center_of(n).distance_to(pos) < float(ct["reach"]) - 2.0:
+					ok = true
+		if not ok:
+			bad += 1
+			print("    can't search %s at %s" % [ct["kind"], cc])
+	return bad
 
 
 ## Turns the player towards the first direction where the kit can be built; returns that cell.

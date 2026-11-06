@@ -634,29 +634,30 @@ func _draw() -> void:
 	if p.hit_flash > 0.0:
 		_draw_hit_flash(vs, p.hit_flash)
 
-	# Stat bars (bottom-left)
-	var bx := 18.0
-	var by := vs.y - 192.0
-	_stat_bar(Vector2(bx, by), Game.tex("ui_hp_bar"), Game.tex("ui_hp_fill"), Vector2(11, 4), p.health, p.health < 25.0)
-	_stat_bar(Vector2(bx + 9, by + 44), Game.tex("ui_hunger_bar"), Game.tex("ui_hunger_fill"), Vector2(11, 6), p.hunger, p.hunger < 20.0)
-	_stat_bar(Vector2(bx, by + 92), Game.thirst_bar(), Game.thirst_fill(), Vector2(11, 4), p.thirst, p.thirst < 20.0)
-	var tcol := _temp_color(p.body_temp)
-	_stat_bar(Vector2(bx, by + 136), Game.temp_bar(), Game.temp_fill(), Vector2(11, 4), p.body_temp, p.body_temp < Player.TEMP_FREEZING, tcol)
-	var status := p.temp_status()
-	var trend := p.target_temp() - p.body_temp
-	var arrow := " ^" if trend > 1.0 else (" v" if trend < -1.0 else "")
-	_text(Vector2(bx + 176, by + 162), status + arrow, 14, tcol.lightened(0.3) if status != "Warm" else C_DIM)
-	if p.indoors():
-		_text(Vector2(bx + 176, by + 146), "indoors", 11, C_DIM)
-	elif p.near_fire():
-		_text(Vector2(bx + 176, by + 146), "near fire", 11, Color(1, 0.75, 0.4))
-	if not p.can_heal() and p.health < 100.0 and not p.dead and not p.bleeding:
-		_text(Vector2(bx + 176, by + 26), "not healing", 11, C_DIM)
-	if p.bleeding:
-		_tex(Game.tex("blood_2"), Vector2(bx + 176, by + 4), 3.0)
-		_text(Vector2(bx + 210, by + 26), "Bleeding", 15, Color(1, 0.4, 0.4))
-	if p.poison_t > 0.0:
-		_text(Vector2(bx + 186, by + 70), "Sick (%ds)" % int(ceil(p.poison_t)), 15, Color(0.7, 0.9, 0.4))
+	if not inventory_open and not map_open and not p.dead: # (the panels cover them)
+		# Stat bars (bottom-left)
+		var bx := 18.0
+		var by := vs.y - 192.0
+		_stat_bar(Vector2(bx, by), Game.tex("ui_hp_bar"), Game.tex("ui_hp_fill"), Vector2(11, 4), p.health, p.health < 25.0)
+		_stat_bar(Vector2(bx + 9, by + 44), Game.tex("ui_hunger_bar"), Game.tex("ui_hunger_fill"), Vector2(11, 6), p.hunger, p.hunger < 20.0)
+		_stat_bar(Vector2(bx, by + 92), Game.thirst_bar(), Game.thirst_fill(), Vector2(11, 4), p.thirst, p.thirst < 20.0)
+		var tcol := _temp_color(p.body_temp)
+		_stat_bar(Vector2(bx, by + 136), Game.temp_bar(), Game.temp_fill(), Vector2(11, 4), p.body_temp, p.body_temp < Player.TEMP_FREEZING, tcol)
+		var status := p.temp_status()
+		var trend := p.target_temp() - p.body_temp
+		var arrow := " ^" if trend > 1.0 else (" v" if trend < -1.0 else "")
+		_text(Vector2(bx + 176, by + 162), status + arrow, 14, tcol.lightened(0.3) if status != "Warm" else C_DIM)
+		if p.indoors():
+			_text(Vector2(bx + 176, by + 146), "indoors", 11, C_DIM)
+		elif p.near_fire():
+			_text(Vector2(bx + 176, by + 146), "near fire", 11, Color(1, 0.75, 0.4))
+		if not p.can_heal() and p.health < 100.0 and not p.dead and not p.bleeding:
+			_text(Vector2(bx + 176, by + 26), "not healing", 11, C_DIM)
+		if p.bleeding:
+			_tex(Game.tex("blood_2"), Vector2(bx + 176, by + 4), 3.0)
+			_text(Vector2(bx + 210, by + 26), "Bleeding", 15, Color(1, 0.4, 0.4))
+		if p.poison_t > 0.0:
+			_text(Vector2(bx + 186, by + 70), "Sick (%ds)" % int(ceil(p.poison_t)), 15, Color(0.7, 0.9, 0.4))
 
 	# Timed action (eating, bandaging, searching...): a progress bar
 	if p.busy_t > 0.0 and not p.dead:
@@ -672,10 +673,11 @@ func _draw() -> void:
 	var cs := Game.tex("ui_cell").get_size() * UI_SCALE
 	var hx := vs.x / 2.0 - cs.x * 1.5 - 8
 	var hy := vs.y - cs.y - 12.0
-	if not inventory_open:
+	var hide_slots := inventory_open or map_open or p.dead
+	if not hide_slots:
 		var aim_txt := "AUTO AIM  -  Space: shoot  -  T: mouse aim" if Game.aim_mode == "auto" else "MOUSE AIM  -  click: shoot  -  T: auto aim"
 		_text(Vector2(0, hy - 8), aim_txt, 12, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
-	for i in (0 if inventory_open else 3):
+	for i in (0 if hide_slots else 3):
 		var slot: String = Inventory.WEAPON_SLOTS[i]
 		var r := Rect2(Vector2(hx + i * (cs.x + 8), hy), cs)
 		var it = p.inv.gear[slot]
@@ -684,35 +686,36 @@ func _draw() -> void:
 		if it != null:
 			_item_icon(it, r, 2.0, Color.WHITE if active else Color(1, 1, 1, 0.55))
 		_text(r.position + Vector2(7, 17), SLOT_KEYS[slot], 12, C_DIM)
-	if not inventory_open:
+	if not hide_slots:
 		_text(Vector2(hx + 3 * (cs.x + 8) + 6, hy + 36), "%d free slots" % p.inv.free_slots(), 13, C_DIM)
 
-	# Weapon + ammo (bottom-right)
-	var w := p.weapon()
-	var wx := vs.x - 24.0
-	var wy := vs.y - 40.0
-	_text(Vector2(wx, wy), w["name"], 20, Color.WHITE, HORIZONTAL_ALIGNMENT_RIGHT, 0)
-	_text(Vector2(wx, wy + 20), Items.damage_text(p.weapon_id()), 12, Color(1, 0.75, 0.6), HORIZONTAL_ALIGNMENT_RIGHT, 0)
-	if not w["melee"]:
-		var mag := int(p.gun()["mag"])
-		var full := Game.tex(w["bullet_ui"])
-		var empty := Game.tex(w["bullet_ui"] + "_empty")
-		var step := full.get_width() * 2.0 + 2.0
-		var n := int(w["mag"])
-		var start := wx - n * step - 70.0
-		if n > 10:
-			# Big magazines: one bullet icon + count
-			start = wx - 160.0
-			_tex(full, Vector2(start, wy - 58), 2.0)
-			_text(Vector2(start + 20, wy - 40), "%d / %d" % [mag, n], 18, Color.WHITE)
-		else:
-			for i in n:
-				_tex(full if i < mag else empty, Vector2(start + i * step, wy - 58), 2.0)
-		_text(Vector2(wx, wy - 32), "+%d" % p.inv.count_of(w["ammo"]), 18, Color(0.95, 0.85, 0.6), HORIZONTAL_ALIGNMENT_RIGHT, 0)
-		if p.reloading:
-			var rr := Rect2(Vector2(start, wy - 16), Vector2(minf(n, 10) * step, 6))
-			draw_rect(rr.grow(2), C_EDGE)
-			draw_rect(Rect2(rr.position, Vector2(rr.size.x * p.reload_progress, rr.size.y)), Color(0.9, 0.8, 0.5))
+	if not inventory_open and not map_open and not p.dead:
+		# Weapon + ammo (bottom-right)
+		var w := p.weapon()
+		var wx := vs.x - 24.0
+		var wy := vs.y - 40.0
+		_text(Vector2(wx, wy), w["name"], 20, Color.WHITE, HORIZONTAL_ALIGNMENT_RIGHT, 0)
+		_text(Vector2(wx, wy + 20), Items.damage_text(p.weapon_id()), 12, Color(1, 0.75, 0.6), HORIZONTAL_ALIGNMENT_RIGHT, 0)
+		if not w["melee"]:
+			var mag := int(p.gun()["mag"])
+			var full := Game.tex(w["bullet_ui"])
+			var empty := Game.tex(w["bullet_ui"] + "_empty")
+			var step := full.get_width() * 2.0 + 2.0
+			var n := int(w["mag"])
+			var start := wx - n * step - 70.0
+			if n > 10:
+				# Big magazines: one bullet icon + count
+				start = wx - 160.0
+				_tex(full, Vector2(start, wy - 58), 2.0)
+				_text(Vector2(start + 20, wy - 40), "%d / %d" % [mag, n], 18, Color.WHITE)
+			else:
+				for i in n:
+					_tex(full if i < mag else empty, Vector2(start + i * step, wy - 58), 2.0)
+			_text(Vector2(wx, wy - 32), "+%d" % p.inv.count_of(w["ammo"]), 18, Color(0.95, 0.85, 0.6), HORIZONTAL_ALIGNMENT_RIGHT, 0)
+			if p.reloading:
+				var rr := Rect2(Vector2(start, wy - 16), Vector2(minf(n, 10) * step, 6))
+				draw_rect(rr.grow(2), C_EDGE)
+				draw_rect(Rect2(rr.position, Vector2(rr.size.x * p.reload_progress, rr.size.y)), Color(0.9, 0.8, 0.5))
 
 	# Clock / stats (top-right)
 	_text(Vector2(vs.x - 20, 32), "Day %d  %s" % [main.day, main.clock_text()], 20, Color.WHITE, HORIZONTAL_ALIGNMENT_RIGHT, 0)
@@ -733,7 +736,7 @@ func _draw() -> void:
 		_text(Vector2(ar.end.x + 8, ar.position.y + 38), "[Q]", 14, C_DIM)
 
 	# Help
-	if show_help and not inventory_open and not map_open:
+	if show_help and not inventory_open and not map_open and not p.dead:
 		var lines := [
 			"WASD move   Shift sprint   Melee is automatic   Space shoot (aims for you - stand still to steady)",
 			"Q search, pick up, skin, cook, drink, open, sleep, use   F fish   B build (Q on built = take apart)   C campfire   T aim mode",
@@ -894,7 +897,7 @@ func _draw_gear(p: Player, inv: Inventory, vs: Vector2) -> void:
 	_text(Vector2(stx, sty + 22), "Warmth +%d   -   %s" % [int(round(inv.warmth())), p.temp_status()], 14, C_DIM)
 	_text(Vector2(stx, sty + 44), "%d free storage slots" % inv.free_slots(), 14, C_DIM)
 
-	_text(Vector2(0, vs.y - 30), "Click an item: what you can do with it   -   Double-click: equip / wear / use   -   Drag to move, outside to drop   -   Tab to close", 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+	_text(Vector2(0, vs.y - 30), "Click an item: what you can do with it   -   Double-click: equip / wear / use   -   Drag to move, outside to drop   -   E to close", 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 
 	# Right-click menu
 	if not _menu.is_empty():
@@ -1040,6 +1043,10 @@ func _draw_map(p: Player, vs: Vector2) -> void:
 		if st["type"] == "city":
 			label = label.to_upper()
 		var tp := pos + Vector2(14, fs * 0.35)
+		var lw := _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+		if tp.x + lw > r.end.x - 4:
+			tp.x = pos.x - 14 - lw # no room on the right: name on the left of the icon
+		tp.y = clampf(tp.y, r.position.y + fs, r.end.y - 4)
 		for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
 			draw_string(_font, tp + o, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(MAP_PAPER, 0.9))
 		draw_string(_font, tp, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, MAP_INK)

@@ -772,7 +772,7 @@ func _make_street() -> void:
 				else:
 					c = Vector2i(i + (0 if side < 0 else 5), int(seg["at"]) + side)
 					tex = "prop_light_down" if side < 0 else "prop_light_up"
-				if _is_sidewalk(c) and not _near_intersection(c, 0):
+				if _is_sidewalk(c) and not _near_intersection(c, 0) and not _by_door(c):
 					set_tile(c, FURN)
 					props.append({"pos": center_of(c) + Vector2(0, 12), "tex": tex, "flip": seg["vertical"] and side < 0, "tall": true})
 			i += 11
@@ -785,7 +785,7 @@ func _make_street() -> void:
 		done[key] = true
 		for off in [Vector2i(-2, -2), Vector2i(2, 2)]:
 			var c: Vector2i = c0 + off
-			if _is_sidewalk(c):
+			if _is_sidewalk(c) and not _by_door(c):
 				set_tile(c, FURN)
 				props.append({"pos": center_of(c) + Vector2(0, 12), "tex": "prop_stop_down" if off.y < 0 else "prop_stop_up", "flip": false, "tall": true})
 				break
@@ -1082,78 +1082,84 @@ func _find_spawn() -> void:
 
 # ---------------------------------------------------------------- physics / pathing
 
-func _build_collision() -> void:
-	var walls := StaticBody2D.new()
-	walls.collision_layer = Game.LAYER_WALL
-	walls.collision_mask = 0
-	add_child(walls)
+## Static collision (walls, windows, furniture, cars, water, trees, the region edge) lives straight in the
+## physics server: tens of thousands of CollisionShape2D nodes took seconds to free when you changed region.
+var _bodies: Array[RID] = []
+var _shapes := {} # size / radius -> shape RID (shared)
+
+
+func _make_body(layer: int) -> RID:
+	var b := PhysicsServer2D.body_create()
+	PhysicsServer2D.body_set_mode(b, PhysicsServer2D.BODY_MODE_STATIC)
+	PhysicsServer2D.body_set_collision_layer(b, layer)
+	PhysicsServer2D.body_set_collision_mask(b, 0)
+	PhysicsServer2D.body_attach_object_instance_id(b, get_instance_id())
+	_bodies.append(b)
+	return b
+
+
+func _rect_shape(size: Vector2) -> RID:
+	if not _shapes.has(size):
+		var r := PhysicsServer2D.rectangle_shape_create()
+		PhysicsServer2D.shape_set_data(r, size * 0.5)
+		_shapes[size] = r
+	return _shapes[size]
+
+
+func _add_rect(body: RID, rect: Rect2) -> void:
+	PhysicsServer2D.body_add_shape(body, _rect_shape(rect.size), Transform2D(0.0, rect.get_center()))
+
+
+## Horizontal runs of `kinds` tiles, one rectangle per run.
+func _add_runs(body: RID, kinds: Array) -> void:
 	for y in H:
 		var x := 0
 		while x < W:
-			var t := tiles[y * W + x]
-			if t != WALL and t != WINDOW and t != FURN:
+			if not kinds.has(tiles[y * W + x]):
 				x += 1
 				continue
 			var start := x
-			while x < W and tiles[y * W + x] in [WALL, WINDOW, FURN]:
+			while x < W and kinds.has(tiles[y * W + x]):
 				x += 1
-			var rs := RectangleShape2D.new()
-			rs.size = Vector2((x - start) * T, T)
-			var cs := CollisionShape2D.new()
-			cs.shape = rs
-			cs.position = Vector2(start * T + (x - start) * T * 0.5, y * T + T * 0.5)
-			walls.add_child(cs)
+			_add_rect(body, Rect2(start * T, y * T, (x - start) * T, T))
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		for b in _bodies:
+			# Last shape first: removing from the front shifts every other shape (seconds for the trees).
+			for i in range(PhysicsServer2D.body_get_shape_count(b) - 1, -1, -1):
+				PhysicsServer2D.body_remove_shape(b, i)
+			PhysicsServer2D.free_rid(b)
+		for k in _shapes:
+			PhysicsServer2D.free_rid(_shapes[k])
+		_bodies.clear()
+		_shapes.clear()
+
+
+func _build_collision() -> void:
+	var walls := _make_body(Game.LAYER_WALL)
+	_add_runs(walls, [WALL, WINDOW, FURN])
 	for r in car_rects:
-		var rs := RectangleShape2D.new()
-		rs.size = r.size
-		var cs := CollisionShape2D.new()
-		cs.shape = rs
-		cs.position = r.get_center()
-		walls.add_child(cs)
+		_add_rect(walls, r)
 	# Region edge: keeps creatures in; you can walk out (into the next region)
-	var edge := StaticBody2D.new()
-	edge.collision_layer = Game.LAYER_EDGE
-	edge.collision_mask = 0
-	add_child(edge)
+	var edge := _make_body(Game.LAYER_EDGE)
 	var sz := size_px()
 	for rr in [Rect2(-32, -32, sz.x + 64, 32), Rect2(-32, sz.y, sz.x + 64, 32), Rect2(-32, 0, 32, sz.y), Rect2(sz.x, 0, 32, sz.y)]:
-		var rs := RectangleShape2D.new()
-		rs.size = rr.size
-		var cs := CollisionShape2D.new()
-		cs.shape = rs
-		cs.position = rr.get_center()
-		edge.add_child(cs)
+		_add_rect(edge, rr)
 	# Water blocks walking, not bullets or sight (its own layer).
-	var water := StaticBody2D.new()
-	water.collision_layer = Game.LAYER_WATER
-	water.collision_mask = 0
-	add_child(water)
-	for y in H:
-		var x := 0
-		while x < W:
-			if tiles[y * W + x] != WATER:
-				x += 1
-				continue
-			var start := x
-			while x < W and tiles[y * W + x] == WATER:
-				x += 1
-			var rs := RectangleShape2D.new()
-			rs.size = Vector2((x - start) * T, T)
-			var cs := CollisionShape2D.new()
-			cs.shape = rs
-			cs.position = Vector2(start * T + (x - start) * T * 0.5, y * T + T * 0.5)
-			water.add_child(cs)
-	var trees := StaticBody2D.new()
-	trees.collision_layer = Game.LAYER_WALL
-	trees.collision_mask = 0
-	add_child(trees)
-	var circle := CircleShape2D.new()
-	circle.radius = 10.0
+	var water := _make_body(Game.LAYER_WATER)
+	_add_runs(water, [WATER])
+	var trees := _make_body(Game.LAYER_WALL)
+	var circle := PhysicsServer2D.circle_shape_create()
+	PhysicsServer2D.shape_set_data(circle, 10.0)
+	_shapes["tree"] = circle
 	for c in tree_cells:
-		var cs := CollisionShape2D.new()
-		cs.shape = circle
-		cs.position = center_of(c) + Vector2(0, 6)
-		trees.add_child(cs)
+		PhysicsServer2D.body_add_shape(trees, circle, Transform2D(0.0, center_of(c) + Vector2(0, 6)))
+	# Into the physics space once all their shapes are added (adding shapes to a body already in the
+	# space updates the broadphase every time).
+	for b in _bodies:
+		PhysicsServer2D.body_set_space(b, get_world_2d().space)
 
 
 func _build_astar() -> void:

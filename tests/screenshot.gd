@@ -24,7 +24,7 @@ func _shot(name: String) -> void:
 func _process(_delta: float) -> void:
 	frame += 1
 	if frame > 175:
-		if frame == 185:
+		if frame == 240:
 			_shot("menu")
 			get_tree().quit()
 		return
@@ -231,6 +231,15 @@ func _process(_delta: float) -> void:
 		await get_tree().process_frame
 		_shot("map_full")
 		main.hud.set_map_open(false)
+		get_tree().paused = true
+		await get_tree().process_frame
+		await get_tree().process_frame
+		_shot("pause")
+		get_tree().paused = false
+		p.take_damage(500.0)
+		for k in 30:
+			await get_tree().process_frame
+		_shot("death")
 		main.save_game()
 		main.queue_free()
 		add_child(load("res://scenes/menu.tscn").instantiate())
