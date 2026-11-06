@@ -298,6 +298,24 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ **3 save slots** on the title screen: click a slot to continue it (or start in an empty one), New starts
   over in that slot (asks first); Q continues the slot you played last. Your old save is slot 1
 
+## Milestone 13 — Bug testing & polish
+- ✅ Changing region took 8–14 s (freeing ~23k collision nodes) and quitting to the menu ~6 s: static
+  collision now lives in the physics server in 64×64-tile blocks — travel ~2 s, no catch-up stall after
+- ✅ World generation ~25% faster; autosaves don't copy every visited region any more
+- ✅ Physics frame ~5 ms → ~1.3 ms (nearby loot found through a spatial grid instead of scanning ~2500 spots)
+- ✅ Zombies / bandits no longer search the whole map for a way into a walled base (~60 ms each)
+- ✅ ~2% of buildings couldn't be entered (a street light or stop sign right outside the door)
+- ✅ Walking into a doorway's edge slides you through instead of sticking on the corner
+- ✅ Inventory: taking a stack that only partly fits no longer crashes / loses items; items dropped onto a
+  just-emptied pile aren't lost; clothes with things in them can't be packed into a bag
+- ✅ Sleeping: not while bleeding; starving / thirst still hurt (not below 5 hp)
+- ✅ Map: place names don't overlap or run off the paper; neighbouring regions never share a name
+- ✅ Military camps: buildings on both sides of the street, no trees inside, olive roofs
+- ✅ Building mode: the action button shows (and does) what Q does — build, take apart, or why not
+- ✅ HUD bars / help hidden behind open panels and on the death screen; inventory hint says E to close
+- ✅ Test tools: `tests/soak.tscn` (a bot plays: loots, fights, builds, travels, saves / loads),
+  `tests/ui_fuzz.tscn` (random inventory clicks and drags; checks nothing is lost or duplicated)
+
 ## Ideas for endless play (next)
 - 📌 Watchtower
 - 📌 More renewable food: berries / mushrooms, slow loot respawn

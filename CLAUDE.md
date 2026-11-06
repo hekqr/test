@@ -18,6 +18,9 @@ Top-down 2D zombie survival game for Windows. Godot 4.7.2, GDScript. The user do
 - After adding a new `class_name` script: `godot --headless --path . --import`
 - Windows build: `godot --headless --path . --export-release "Windows Desktop" build/windows/Project0.exe`, zip to `build/Project0-windows.zip` and send it to the user.
 - Bump `SaveGame.VERSION` when the save format changes.
+- Bot play-test: `timeout 600 godot --headless --path . res://tests/soak.tscn -- 300` (seconds); inventory fuzz:
+  `godot --headless --path . res://tests/ui_fuzz.tscn -- 500` (steps). Smoke tests can run in parallel; keep
+  to 2-3 godot processes at once (more ran the container out of memory).
 
 ## Design decisions (from the user)
 - Base walls/gates are unbreakable: the base is a fully safe, sustainable place. No raids on bases.
