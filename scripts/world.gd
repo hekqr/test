@@ -972,10 +972,7 @@ func _make_water() -> void:
 	var noise := FastNoiseLite.new()
 	noise.seed = rng.randi()
 	noise.frequency = 0.12
-	_near_built = _dilate(_mask_of([WALL, WINDOW, FLOOR]), 2)
-	var furn := _dilate(_mask_of([FURN]), 1)
-	for i in W * H:
-		_near_built[i] = _near_built[i] | furn[i]
+	_near_built = _dilate(_mask_of([WALL, WINDOW, FLOOR, FURN]), 2)
 	var near_road2 := _dilate(_mask_of([ROAD]), 2)
 	var near_road6 := _dilate(_mask_of([ROAD]), 6)
 	if rng.randf() < 0.85:
@@ -1181,12 +1178,24 @@ func _build_astar() -> void:
 		g.offset = Vector2(T * 0.5, T * 0.5)
 		g.diagonal_mode = AStarGrid2D.DIAGONAL_MODE_ONLY_IF_NO_OBSTACLES
 		g.update()
+	# Solid runs per row (much quicker than a call per cell)
 	for y in H:
-		for x in W:
-			var c := Vector2i(x, y)
-			if not is_walkable(c):
-				astar.set_point_solid(c, true)
-				astar_z.set_point_solid(c, true)
+		var row := y * W
+		var x := 0
+		while x < W:
+			var t := tiles[row + x]
+			if t == GROUND or t == FLOOR or t == ROAD:
+				x += 1
+				continue
+			var start := x
+			while x < W:
+				t = tiles[row + x]
+				if t == GROUND or t == FLOOR or t == ROAD:
+					break
+				x += 1
+			var r := Rect2i(start, y, x - start, 1)
+			astar.fill_solid_region(r, true)
+			astar_z.fill_solid_region(r, true)
 
 
 # ---------------------------------------------------------------- rendering
