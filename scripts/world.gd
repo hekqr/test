@@ -1086,6 +1086,7 @@ func _find_spawn() -> void:
 ## physics server: tens of thousands of CollisionShape2D nodes took seconds to free when you changed region.
 var _bodies: Array[RID] = []
 var _shapes := {} # size / radius -> shape RID (shared)
+var _block_bodies := {} # [layer, 64x64-tile block] -> body: many small bodies keep the physics step quick
 
 
 func _make_body(layer: int) -> RID:
@@ -1110,8 +1111,16 @@ func _add_rect(body: RID, rect: Rect2) -> void:
 	PhysicsServer2D.body_add_shape(body, _rect_shape(rect.size), Transform2D(0.0, rect.get_center()))
 
 
-## Horizontal runs of `kinds` tiles, one rectangle per run.
-func _add_runs(body: RID, kinds: Array) -> void:
+## The body for static collision of `layer` around `pos` (one per 64x64-tile block).
+func _block_body(layer: int, pos: Vector2) -> RID:
+	var k := [layer, int(pos.x) >> 11, int(pos.y) >> 11] # 64 tiles x 32 px = 2048 = 2^11
+	if not _block_bodies.has(k):
+		_block_bodies[k] = _make_body(layer)
+	return _block_bodies[k]
+
+
+## Horizontal runs of `kinds` tiles, one rectangle per run (split at block edges).
+func _add_runs(layer: int, kinds: Array) -> void:
 	for y in H:
 		var x := 0
 		while x < W:
@@ -1119,9 +1128,10 @@ func _add_runs(body: RID, kinds: Array) -> void:
 				x += 1
 				continue
 			var start := x
-			while x < W and kinds.has(tiles[y * W + x]):
+			while x < W and kinds.has(tiles[y * W + x]) and (x == start or x % 64 != 0):
 				x += 1
-			_add_rect(body, Rect2(start * T, y * T, (x - start) * T, T))
+			var rr := Rect2(start * T, y * T, (x - start) * T, T)
+			_add_rect(_block_body(layer, rr.position), rr)
 
 
 func _notification(what: int) -> void:
@@ -1135,27 +1145,26 @@ func _notification(what: int) -> void:
 			PhysicsServer2D.free_rid(_shapes[k])
 		_bodies.clear()
 		_shapes.clear()
+		_block_bodies.clear()
 
 
 func _build_collision() -> void:
-	var walls := _make_body(Game.LAYER_WALL)
-	_add_runs(walls, [WALL, WINDOW, FURN])
+	_add_runs(Game.LAYER_WALL, [WALL, WINDOW, FURN])
 	for r in car_rects:
-		_add_rect(walls, r)
+		_add_rect(_block_body(Game.LAYER_WALL, r.get_center()), r)
 	# Region edge: keeps creatures in; you can walk out (into the next region)
 	var edge := _make_body(Game.LAYER_EDGE)
 	var sz := size_px()
 	for rr in [Rect2(-32, -32, sz.x + 64, 32), Rect2(-32, sz.y, sz.x + 64, 32), Rect2(-32, 0, 32, sz.y), Rect2(sz.x, 0, 32, sz.y)]:
 		_add_rect(edge, rr)
 	# Water blocks walking, not bullets or sight (its own layer).
-	var water := _make_body(Game.LAYER_WATER)
-	_add_runs(water, [WATER])
-	var trees := _make_body(Game.LAYER_WALL)
+	_add_runs(Game.LAYER_WATER, [WATER])
+	# Trees: one body per 64x64-tile block (a single body with ~20k shapes made the physics step crawl).
 	var circle := PhysicsServer2D.circle_shape_create()
 	PhysicsServer2D.shape_set_data(circle, 10.0)
 	_shapes["tree"] = circle
 	for c in tree_cells:
-		PhysicsServer2D.body_add_shape(trees, circle, Transform2D(0.0, center_of(c) + Vector2(0, 6)))
+		PhysicsServer2D.body_add_shape(_block_body(Game.LAYER_WALL, center_of(c)), circle, Transform2D(0.0, center_of(c) + Vector2(0, 6)))
 	# Into the physics space once all their shapes are added (adding shapes to a body already in the
 	# space updates the broadphase every time).
 	for b in _bodies:

@@ -22,7 +22,7 @@ func _process(_d: float) -> void:
 			_worst = ms
 			_worst_f = frame
 		if ms > 100.0:
-			print("   frame %d: %.0f ms (region %s)  process %.0f ms, physics %.0f ms" % [frame, ms, main.region, Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0])
+			print("   frame %d: %.0f ms (phys frames %d) (region %s)  process %.0f ms, physics %.0f ms" % [frame, ms, Engine.get_physics_frames(), main.region, Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0])
 	_last = now
 	if frame in [20, 60, 100, 140, 180]:
 		var dir: Vector2i = [Vector2i.RIGHT, Vector2i.DOWN, Vector2i.LEFT, Vector2i.UP, Vector2i.RIGHT][frame / 40 - 0]
