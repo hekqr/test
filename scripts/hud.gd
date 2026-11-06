@@ -135,7 +135,7 @@ func take_all_rect() -> Rect2:
 
 
 func _has_action(p: Player) -> bool:
-	return p.interact_choice() != ""
+	return p.placing != "" or p.interact_choice() != ""
 
 
 func _action_label(p: Player) -> String:
@@ -316,7 +316,10 @@ func _input(event: InputEvent) -> void:
 				Game.click_used = true
 			elif _btn_down:
 				_btn_down = false
-				p.interact()
+				if p.placing != "":
+					p.place_kit()
+				else:
+					p.interact()
 			get_viewport().set_input_as_handled()
 		return
 

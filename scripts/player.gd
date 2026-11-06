@@ -866,6 +866,8 @@ func has_axe() -> bool:
 
 
 func action_label() -> String:
+	if placing != "":
+		return build_action_label()
 	match interact_choice():
 		"fire":
 			return nearest_fire.label(self)
@@ -1088,6 +1090,19 @@ func next_kit() -> void:
 			placing = cand
 			say("Building: " + Items.name_of(cand).to_lower())
 			return
+
+
+## What Q does in building mode: place the kit, take apart what's in front of you, or why not.
+func build_action_label() -> String:
+	var cell := build_cell()
+	var main := get_tree().get_first_node_in_group("main")
+	var st: Structure = main.structure_at(cell) if main else null
+	if st != null:
+		return "Take apart " + st.title().to_lower()
+	if placing == NO_KIT:
+		return "Nothing to take apart"
+	var why := build_problem(cell)
+	return "Build " + Items.name_of(placing).to_lower().trim_suffix(" kit") if why == "" else why
 
 
 func stop_placing() -> void:

@@ -203,6 +203,14 @@ func _process(_delta: float) -> void:
 		sn.tick(main.world_days + 0.001, "clear")
 		main._set_weather("rain", 500.0)
 		p.inv.gear["hands"] = Items.make("fishing_rod")
+	if frame == 132:
+		_shot("base_clear")
+		p.inv.add("kit_wall", 3)
+		p.start_placing("kit_wall")
+		p.facing = Vector2.DOWN
+	if frame == 135:
+		_shot("build_mode")
+		p.stop_placing()
 	if frame == 138:
 		p.health = 15.0
 		p.hit_flash = 0.0

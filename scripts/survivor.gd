@@ -334,8 +334,13 @@ func hear(pos: Vector2) -> void:
 
 
 func _set_path(to: Vector2) -> void:
-	_path = world.find_path(global_position, to)
 	_path_i = 0
+	# A spot walled in all round (a base with no gate): no way in, so no whole-map path search.
+	var pocket := world.small_pocket(world.nearest_walkable(world.cell_of(to)), 900, false)
+	if not pocket.is_empty() and not pocket.has(world.nearest_walkable(world.cell_of(global_position))):
+		_path = PackedVector2Array()
+		return
+	_path = world.find_path(global_position, to)
 
 
 func _follow_path() -> Vector2:
