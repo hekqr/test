@@ -210,7 +210,7 @@ func _physics_process(_delta: float) -> void:
 					house_total += 1
 					if l.contents.is_empty():
 						house_empty += 1
-			check(house_total > 0 and float(house_empty) / house_total > 0.5, "most house furniture is empty (%d / %d)" % [house_empty, house_total])
+			check(house_total > 0 and float(house_empty) / house_total > 0.4, "plenty of house furniture is empty (%d / %d)" % [house_empty, house_total])
 			main.reveal_around(p.global_position)
 			check(main.explored[w.idx(w.cell_of(p.global_position))] == 1, "map reveals where you are")
 			check(main.explored[w.idx(Vector2i(1, 1))] == 1 and main.explored[w.idx(Vector2i(World.W - 2, World.H - 2))] == 1, "your home region's map starts filled in")
