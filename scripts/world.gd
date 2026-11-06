@@ -55,10 +55,10 @@ const REGION_NAMES := ["Ashen Vale", "Coldwater Basin", "Greyridge", "Northmarch
 	"Saltmere", "Briarwood", "Kestrel Heath", "Larchmoor", "Elderglen", "Westerling", "Cinderfall", "Rookmoor"]
 
 
+## Steps of 7 east and 11 south through the list: regions next to each other (and a couple apart)
+## never share a name.
 static func region_name(game_seed: int, r: Vector2i) -> String:
-	if r == Vector2i.ZERO:
-		return REGION_NAMES[posmod(game_seed, 8)]
-	return REGION_NAMES[posmod(hash([game_seed, "region", r.x, r.y]), REGION_NAMES.size())]
+	return REGION_NAMES[posmod(posmod(game_seed, 8) + r.x * 7 + r.y * 11, REGION_NAMES.size())]
 
 
 ## Where the road crosses an edge of this region ("N", "S", "W", "E"): a border cell.

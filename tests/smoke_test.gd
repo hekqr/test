@@ -176,6 +176,14 @@ func _physics_process(_delta: float) -> void:
 				names[st["name"]] = true
 			check(w.settlements.size() >= 5 and kinds2.has("city") and kinds2.has("village"), "city, towns and villages placed (%s)" % str(kinds2))
 			check(names.size() == w.settlements.size(), "every settlement has its own name")
+			var region_names_ok := true
+			for x in range(-4, 5):
+				for y in range(-4, 5):
+					var nm := World.region_name(main.world_seed, Vector2i(x, y))
+					for o in [Vector2i(1, 0), Vector2i(0, 1), Vector2i(1, 1), Vector2i(1, -1), Vector2i(2, 0), Vector2i(0, 2)]:
+						if World.region_name(main.world_seed, Vector2i(x, y) + o) == nm:
+							region_names_ok = false
+			check(region_names_ok, "regions next to each other never share a name")
 			var unreachable := 0
 			for st in w.settlements:
 				if st["center"] != w.spawn_cell and w.find_path(w.center_of(w.spawn_cell), w.center_of(st["center"])).size() < 2:
