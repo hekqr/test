@@ -18,6 +18,38 @@ var _outline: Node2D
 var _display: Node2D # shelves / weapon rack: what's on them
 static var _silhouette: Shader
 const STORES := ["chest", "store_shelf", "store_rack"]
+## Every loot spot in the world, by 128 px square: finding what's near you looks at a few squares
+## instead of all ~2500 spots (that cost a few ms every tenth of a second).
+const BUCKET := 128.0
+static var _grid := {}
+var _bucket := Vector2i(1 << 30, 0)
+
+
+func _enter_tree() -> void:
+	_bucket = Vector2i((global_position / BUCKET).floor())
+	if not _grid.has(_bucket):
+		_grid[_bucket] = []
+	_grid[_bucket].append(self)
+
+
+func _exit_tree() -> void:
+	if _grid.has(_bucket):
+		_grid[_bucket].erase(self)
+		if _grid[_bucket].is_empty():
+			_grid.erase(_bucket)
+
+
+## Loot spots within `r` px of `pos` (roughly: whole squares; check the distance yourself).
+static func around(pos: Vector2, r: float) -> Array:
+	var out := []
+	var a := Vector2i(((pos - Vector2(r, r)) / BUCKET).floor())
+	var b := Vector2i(((pos + Vector2(r, r)) / BUCKET).floor())
+	for y in range(a.y, b.y + 1):
+		for x in range(a.x, b.x + 1):
+			var k := Vector2i(x, y)
+			if _grid.has(k):
+				out.append_array(_grid[k])
+	return out
 
 
 ## Storage you built (chest, shelves, weapon rack): keeps what you put in, never "searched".
@@ -237,9 +269,9 @@ func spill(p: Player) -> String:
 	var toward := (p.global_position - global_position)
 	var at := global_position + (toward.normalized() * minf(toward.length(), 22.0) if toward.length() > 1.0 else Vector2(0, 18))
 	var pile: LootSpot = null
-	for n in get_tree().get_nodes_in_group("loot"):
+	for n in LootSpot.around(at, 40.0):
 		var l := n as LootSpot
-		if l != self and l.is_bag and not l.is_queued_for_deletion() and l.global_position.distance_to(at) < 26.0:
+		if l != self and l.is_in_group("loot") and l.is_bag and not l.is_queued_for_deletion() and l.global_position.distance_to(at) < 26.0:
 			pile = l
 			break
 	if pile == null:

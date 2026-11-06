@@ -58,6 +58,26 @@ func _process(_delta: float) -> void:
 		var t5 := Time.get_ticks_usec()
 		main.save_game(true)
 		print("background autosave, main-thread part: %.1f ms" % ((Time.get_ticks_usec() - t5) / 1000.0))
+	if frame % 300 == 0:
+		print("  frame %d: process %.2f ms, physics %.2f ms, objects %d, nodes %d, draw calls %d" % [frame, Performance.get_monitor(Performance.TIME_PROCESS) * 1000.0, Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS) * 1000.0, Performance.get_monitor(Performance.OBJECT_COUNT), Performance.get_monitor(Performance.OBJECT_NODE_COUNT), Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)])
+	if frame == 610 and OS.has_environment("STRIP"):
+		for g in OS.get_environment("STRIP").split(","):
+			for n in get_tree().get_nodes_in_group(g):
+				n.queue_free()
+		main._spawn_t = 1e9
+		main._animal_t = 1e9
+		main._survivor_t = 1e9
+		print("  stripped ", OS.get_environment("STRIP"))
+	if frame == 610 and OS.has_environment("STRIP_OUTLINES"):
+		for n in get_tree().get_nodes_in_group("loot"):
+			if n._outline:
+				n._outline.free()
+				n._outline = null
+		print("  stripped outlines")
+	if frame == 610 and OS.has_environment("STRIP_GROUP"):
+		for n in get_tree().get_nodes_in_group("loot"):
+			n.remove_from_group("loot")
+		print("  removed loot group")
 	if frame == 1500:
 		print("worst frame over ~10 s: %.1f ms" % worst)
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(Game.save_path))

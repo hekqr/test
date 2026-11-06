@@ -1473,9 +1473,9 @@ func drop_item(item) -> void:
 		return
 	reloading = false
 	var pile: LootSpot = null
-	for n in get_tree().get_nodes_in_group("loot"):
+	for n in LootSpot.around(global_position, 40.0):
 		var l := n as LootSpot
-		if l.is_bag and l.global_position.distance_to(global_position) < 30.0:
+		if l.is_in_group("loot") and l.is_bag and l.global_position.distance_to(global_position) < 30.0:
 			pile = l
 			break
 	if pile == null:
@@ -1530,9 +1530,9 @@ func _find_loot() -> void:
 	nearest_loot = null
 	var best := INF
 	var best_pile: LootSpot = null
-	for n in get_tree().get_nodes_in_group("loot"):
+	for n in LootSpot.around(global_position, 140.0): # the biggest reach (a bus) is ~100 px
 		var l := n as LootSpot
-		if l.is_queued_for_deletion():
+		if l.is_queued_for_deletion() or not l.is_in_group("loot"):
 			continue
 		if not l.is_bag and l.kind != "carcass" and not l.is_store() and l.opened and l.contents.is_empty():
 			continue # already searched
