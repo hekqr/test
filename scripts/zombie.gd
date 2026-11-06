@@ -350,6 +350,12 @@ func _set_path(to: Vector2) -> void:
 		# Wait outside the door; once it's open and they can see you, they come straight in (chasing
 		# by sight needs no path search).
 		to = best
+	# A walled-in spot (your base, gate shut) they can't get into: don't search the whole map for a way.
+	var pocket := world.small_pocket(world.nearest_walkable(world.cell_of(to)), 900)
+	if not pocket.is_empty() and not pocket.has(world.nearest_walkable(world.cell_of(global_position))):
+		path = PackedVector2Array()
+		_path_i = 0
+		return
 	path = world.find_path(global_position, to, true)
 	_path_i = 0
 

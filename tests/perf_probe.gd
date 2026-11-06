@@ -53,6 +53,12 @@ func _process(_delta: float) -> void:
 		var t4 := Time.get_ticks_usec()
 		path = w.find_path(w.center_of(outside), w.center_of(inside), false)
 		print("person path into a house: %.1f ms" % ((Time.get_ticks_usec() - t4) / 1000.0))
+	if frame == 11:
+		var w2: World = main.world
+		var t6 := Time.get_ticks_usec()
+		for k in 20:
+			w2.small_pocket(w2.nearest_walkable(w2.cell_of(main.player.global_position + Vector2(k * 40, 0))), 900)
+		print("small_pocket (open area, hits the limit): %.2f ms each" % ((Time.get_ticks_usec() - t6) / 1000.0 / 20.0))
 	if frame == 12:
 		worst = 0.0
 		var t5 := Time.get_ticks_usec()

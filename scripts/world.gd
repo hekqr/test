@@ -1762,6 +1762,42 @@ func nearest_walkable(c: Vector2i) -> Vector2i:
 	return c
 
 
+## The cells you can walk to from `c` (zombies: not through closed doors), if there are fewer than
+## `limit` of them - a closed-in spot like a walled base or a shut house. Empty when the area is bigger.
+## Lets a zombie give up on an unreachable spot without searching the whole map.
+func small_pocket(c: Vector2i, limit: int, zombie := true) -> Dictionary:
+	var g := astar_z if zombie else astar
+	if not in_bounds(c) or g.is_point_solid(c) or not _built_within(c, 40):
+		return {} # only walls you built close spots in (houses are handled by their doors)
+	return _pocket(c, limit, g)
+
+
+## Is there a wall you built within `r` tiles?
+func _built_within(c: Vector2i, r: int) -> bool:
+	for k in _built_prev:
+		var b: Vector2i = k
+		if absi(b.x - c.x) <= r and absi(b.y - c.y) <= r:
+			return true
+	return false
+
+
+func _pocket(c: Vector2i, limit: int, g: AStarGrid2D) -> Dictionary:
+	var seen := {c: true}
+	var q: Array[Vector2i] = [c]
+	var i := 0
+	while i < q.size():
+		var cur: Vector2i = q[i]
+		i += 1
+		for o in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n: Vector2i = cur + o
+			if not seen.has(n) and in_bounds(n) and not g.is_point_solid(n):
+				seen[n] = true
+				if seen.size() >= limit:
+					return {}
+				q.append(n)
+	return seen
+
+
 ## Path between two points. Zombies (zombie = true) can't go through closed doors: they get as close
 ## as they can instead.
 func find_path(from: Vector2, to: Vector2, zombie := false) -> PackedVector2Array:

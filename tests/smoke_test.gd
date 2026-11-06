@@ -1776,6 +1776,18 @@ func _utility_tests() -> void:
 	p.finish_busy()
 	check(main.structure_at(shelf_cell) == null and _pile_count("matches") >= 2 and _pile_count("planks") > planks0, "Q in building mode takes it apart (materials + what was on it drop)")
 	p.stop_placing()
+	print("Walled-in base vs zombie paths")
+	var ring_c := w.cell_of(_far_spot(w, 6))
+	for dx in range(-3, 4):
+		for dy in range(-3, 4):
+			if absi(dx) == 3 or absi(dy) == 3:
+				main.add_structure("wall", ring_c + Vector2i(dx, dy))
+	var zr: Zombie = main.add_zombie(w.center_of(ring_c + Vector2i(8, 0)))
+	var t_path := Time.get_ticks_usec()
+	zr._set_path(w.center_of(ring_c))
+	var path_ms := (Time.get_ticks_usec() - t_path) / 1000.0
+	check(zr.path.is_empty() and path_ms < 15.0, "zombies don't search the whole map for a way into a walled base (%.1f ms)" % path_ms)
+	zr.free()
 	print("Fish trap")
 	var bank := Vector2i(-1, -1)
 	var built := get_tree().get_nodes_in_group("structures")
