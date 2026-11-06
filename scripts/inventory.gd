@@ -20,7 +20,16 @@ const WEAPON_SLOTS := ["primary", "secondary", "melee"]
 
 var gear := {}
 var active := "" # "", "primary", "secondary" or "melee"
-var near: LootSpot = null # container / ground pile next to the player
+## Container / ground pile next to the player. A pile that was just emptied is on its way out: it no
+## longer counts (anything put into it would be lost with it).
+var near: LootSpot:
+	get:
+		if _near != null and (not is_instance_valid(_near) or _near.is_queued_for_deletion()):
+			_near = null
+		return _near
+	set(v):
+		_near = v
+var _near: LootSpot = null
 
 
 func _init() -> void:
@@ -95,6 +104,16 @@ func free_slots() -> int:
 	return n
 
 
+## Clothing / a bag with things stored in it.
+static func has_contents(item) -> bool:
+	if item == null or not item.has("cargo"):
+		return false
+	for c in item["cargo"]:
+		if c != null:
+			return true
+	return false
+
+
 ## "" if the item may go at loc, otherwise the reason it can't.
 func can_place(item: Dictionary, loc: Dictionary) -> String:
 	var id: String = item["id"]
@@ -117,6 +136,8 @@ func can_place(item: Dictionary, loc: Dictionary) -> String:
 				return "Too big - only fits in a backpack or hands"
 			if Items.equip_of(id) == "back":
 				return "Can't put a backpack in a backpack"
+			if has_contents(item):
+				return "Empty it first" # no hidden pockets inside pockets
 		"near":
 			if near == null:
 				return "Nothing nearby"

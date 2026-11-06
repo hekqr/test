@@ -225,7 +225,7 @@ func grow(now: float, rain: bool) -> void:
 
 
 func ripe() -> bool:
-	return crop != "" and growth >= 1.0
+	return crop != "" and growth >= 0.999 # (float sums like 2/3 + 1/3 can land a hair under 1)
 
 
 ## The harvest: what the plant gives. Clears the bed.
@@ -244,7 +244,7 @@ func _update_crop_sprite() -> void:
 		return
 	_crop_sprite.visible = crop != ""
 	if crop != "":
-		_crop_sprite.texture = Game.crop(crop, 2 if growth >= 1.0 else (1 if growth >= 0.4 else 0))
+		_crop_sprite.texture = Game.crop(crop, 2 if ripe() else (1 if growth >= 0.4 else 0))
 
 
 # ---------------------------------------------------------------- saving

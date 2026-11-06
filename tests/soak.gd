@@ -49,6 +49,7 @@ func _start(save: Dictionary) -> void:
 	main = load("res://scenes/main.tscn").instantiate()
 	add_child(main)
 	p = main.player
+	main.world.timing = true # prints slow path searches
 	_path = []
 	_goal = Vector2.INF
 	_last_us = Time.get_ticks_usec()

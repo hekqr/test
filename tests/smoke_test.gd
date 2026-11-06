@@ -1351,6 +1351,33 @@ func _base_tests() -> void:
 	Game.save_path = keep_path
 	Game.save_settings()
 	check(["ammo_9mm", "ammo_12ga", "ammo_308"].all(func(id): return Items.max_stack(id) == 30) and Items.max_stack("ammo_556") == 100, "ammo stacks to 30 (assault rifle 5.56: 100)")
+	print("Inventory edge cases")
+	var keep_gear: Dictionary = inv.gear.duplicate(true)
+	inv.gear["back"] = Items.make("backpack_small")
+	inv.gear["hands"] = null
+	for loc in inv.storage_cells():
+		inv.take(loc)
+	for i in inv.free_slots():
+		inv.add("bandage", 1)
+		inv.add("bandage", Items.max_stack("bandage"))
+	var pile2 := LootSpot.new()
+	pile2.is_bag = true
+	pile2.contents = [Items.make("nails", 10)]
+	pile2.position = p.global_position
+	main.entities.add_child(pile2)
+	inv.near = pile2
+	inv.gear["hands"] = Items.make("rags", 1)
+	p.do_action(Inventory.near_loc(0), "take")
+	check(is_instance_valid(pile2) and not pile2.is_queued_for_deletion() and pile2.contents.size() == 1 and int(pile2.contents[0]["count"]) == 10,
+		"taking a stack with no room leaves it on the ground (nothing lost)")
+	var full_jacket := Items.make("jacket")
+	full_jacket["cargo"][0] = Items.make("bandage", 2)
+	inv.gear["hands"] = null
+	for loc in inv.storage_cells():
+		inv.take(loc)
+	check(inv.can_place(full_jacket, Inventory.cargo_loc("back", 0)).contains("Empty"), "clothes with things in them can't go into a bag (empty it first)")
+	pile2.free()
+	inv.gear = keep_gear
 	print("Weather")
 	p.global_position = _open_spot(w, 3)
 	main._set_weather("clear", 100.0)
@@ -1482,6 +1509,17 @@ func _base_tests() -> void:
 	main.sleep()
 	check(main.time_of_day * 24.0 > 21.0, "can't sleep with zombies around")
 	zz2.free()
+	p.bleeding = true
+	main.sleep()
+	check(main.time_of_day * 24.0 > 21.0 and p.message.contains("bleeding"), "can't sleep while bleeding")
+	p.bleeding = false
+	p.hunger = 3.0
+	p.thirst = 100.0
+	p.health = 100.0
+	main.sleep()
+	check(p.health < 95.0 and p.health >= 5.0 and p.message.contains("starving"), "sleeping while starving hurts (%.0f hp)" % p.health)
+	p.health = 100.0
+	p.hunger = 100.0
 	print("Crops")
 	_clear_wildlife()
 	p.global_position = _open_spot(w, 3) + Vector2(0, 32 * 2)

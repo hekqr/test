@@ -280,7 +280,7 @@ func do_action(loc: Dictionary, action: String) -> void:
 			var taken = inv.take(loc)
 			if inv.pickup_to_storage(taken) > 0:
 				inv.put(loc, taken)
-				say("No room to put it away")
+				say("Empty it first" if Inventory.has_contents(taken) else "No room to put it away")
 		"tear":
 			start_busy("Tearing..", T_TEAR, func():
 				var it2 = inv.get_at(loc)
@@ -311,12 +311,15 @@ func do_action(loc: Dictionary, action: String) -> void:
 			if hud:
 				hud.set_inventory_open(false)
 		"take":
+			var pile := inv.near
 			var left := inv.pickup(it)
-			var taken: Dictionary = inv.take(loc)
-			if left > 0:
-				taken["count"] = left
-				inv.near.contents.append(taken)
-				inv.near.refresh()
+			if left <= 0:
+				inv.take(loc)
+			else:
+				it["count"] = left # what didn't fit stays on the ground
+				if pile:
+					pile.refresh()
+				inv.changed.emit()
 				say("No free slots")
 		"drop":
 			drop(loc)

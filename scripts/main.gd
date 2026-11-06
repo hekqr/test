@@ -267,6 +267,9 @@ func sleep() -> void:
 		if (n as Survivor).state == Survivor.State.FIGHT:
 			player.say("You can't sleep now")
 			return
+	if player.bleeding:
+		player.say("You need to stop the bleeding first")
+		return
 	var hour := time_of_day * 24.0
 	var hours := 4.0
 	if hour >= 18.0:
@@ -275,10 +278,16 @@ func sleep() -> void:
 		hours = 7.0 - hour
 	var secs := hours / 24.0 * DAY_LENGTH # the same real time that would have passed
 	var healed := player.can_heal()
+	# Hours spent starving / without water hurt like they do awake (but don't kill you in your sleep).
+	var starving := maxf(secs - player.hunger / (100.0 / 900.0), 0.0)
+	var parched := maxf(secs - player.thirst / (100.0 / 600.0), 0.0)
 	player.hunger = maxf(player.hunger - secs * 100.0 / 900.0, 0.0)
 	player.thirst = maxf(player.thirst - secs * 100.0 / 600.0, 0.0)
 	if healed:
 		player.health = minf(player.health + 0.4 * secs, 100.0)
+	var hurt := starving * 1.0 + parched * 1.5
+	if hurt > 0.0:
+		player.health = maxf(player.health - hurt, minf(player.health, 5.0))
 	var t0 := time_of_day
 	var t1 := t0 + hours / 24.0
 	for k in [0.25, 1.25]: # a new day starts at 06:00
@@ -295,7 +304,7 @@ func sleep() -> void:
 	for n in get_tree().get_nodes_in_group("structures"):
 		(n as Structure).tick(world_days, weather)
 	player.body_temp = player.target_temp()
-	player.say("You slept until %s" % clock_text())
+	player.say("You slept until %s" % clock_text() + (" - and woke up %s" % ("starving" if parched <= 0.0 else "parched") if hurt > 0.0 else ""))
 	save_game()
 
 
