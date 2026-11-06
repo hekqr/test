@@ -100,7 +100,7 @@ const TOWN_MIX := {
 	"military": {"mil_tent": 60, "mil_barracks": 20, "mil_armory": 20},
 }
 ## Settlements to place, biggest first: [type, how many, buildings min, max]. What doesn't fit is skipped.
-const CLUSTERS := [["city", 1, 16, 16], ["military", 1, 4, 4], ["town", 3, 11, 13], ["village", 8, 9, 12], ["hamlet", 26, 4, 7]]
+const CLUSTERS := [["city", 1, 16, 16], ["military", 1, 6, 7], ["town", 3, 11, 13], ["village", 8, 9, 12], ["hamlet", 26, 4, 7]]
 ## Buildings a settlement of a type gets first.
 const FORCED := {"city": ["police", "clinic", "shop", "shop", "garage"], "town": ["shop", "clinic"],
 	"military": ["mil_armory", "mil_barracks", "mil_tent", "mil_tent"]}
@@ -925,6 +925,8 @@ func _make_trees() -> void:
 				continue
 			var p := 0.35 if noise.get_noise_2d(x, y) > 0.15 else 0.02
 			if _town_id[i] >= 0:
+				if settlements[_town_id[i]]["type"] == "military":
+					continue # a cleared camp: no trees inside the fence
 				p *= 0.12 # gardens, not forests, inside towns
 			if rng.randf() >= p:
 				continue
@@ -1569,6 +1571,9 @@ func _build_roofs() -> void:
 		roof.scale = Vector2(2, 2)
 		roof.z_index = 5
 		var base := 8 if rng.randf() < 0.5 else 0
+		if String(building_types[bi]).begins_with("mil_"):
+			base = 0 # military: the grey-blue roof, painted olive
+			roof.self_modulate = Color(0.72, 0.84, 0.5)
 		var top := r.position.y - 1
 		var bottom := r.end.y - 3 # last roof row; the front wall covers the 2 rows below it
 		var mid := (top + bottom) / 2

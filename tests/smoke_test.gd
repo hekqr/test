@@ -80,11 +80,11 @@ func _physics_process(_delta: float) -> void:
 			var by_type := {}
 			for i in w.settlements.size():
 				var t: String = w.settlements[i]["type"]
-				var lim: Array = {"hamlet": [2, 7], "village": [5, 12], "town": [8, 13], "city": [12, 16], "military": [3, 4]}[t]
+				var lim: Array = {"hamlet": [2, 7], "village": [5, 12], "town": [8, 13], "city": [12, 16], "military": [5, 7]}[t]
 				if per.get(i, 0) < int(lim[0]) or per.get(i, 0) > int(lim[1]):
 					sizes_ok = false
 				by_type[t] = by_type.get(t, 0) + 1
-			check(sizes_ok, "settlement sizes: hamlets 4-7, villages ~9-12, towns ~11-13, city 16 (%s)" % str(per))
+			check(sizes_ok, "settlement sizes: hamlets 4-7, villages ~9-12, towns ~11-13, city 16, camps 6-7 (%s)" % str(per))
 			check(by_type.get("hamlet", 0) >= 5 and by_type.get("village", 0) >= 3 and by_type.get("town", 0) >= 1 and by_type.get("city", 0) == 1, "hamlets, villages, towns and a city (%s)" % str(by_type))
 			var multi := 0
 			for st in w.settlements:
