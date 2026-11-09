@@ -858,6 +858,10 @@ func _on_zombie_died(z: Zombie) -> void:
 
 
 func _on_player_died() -> void:
+	if hud:
+		hud.set_inventory_open(false)
+		hud.set_map_open(false)
+	player.placing = ""
 	Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 	save_game() # kept, but marked dead: it can't be continued
 

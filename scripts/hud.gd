@@ -77,7 +77,7 @@ func _process(_delta: float) -> void:
 	if Game.open_inventory:
 		Game.open_inventory = false
 		set_inventory_open(true)
-	_mouse = get_viewport().get_mouse_position()
+	_mouse = get_viewport().get_mouse_position() - (inv_ofs() if inventory_open else Vector2.ZERO)
 	# Auto aim needs no mouse while walking around: hide the cursor (it comes back in menus)
 	var hide: bool = Game.aim_mode == "auto" and not Game.ui_open and not get_tree().paused and main != null and main.player != null and not main.player.dead
 	var want := Input.MOUSE_MODE_HIDDEN if hide else Input.MOUSE_MODE_VISIBLE
@@ -325,6 +325,8 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 		return
 
+	mb = mb.duplicate() as InputEventMouseButton
+	mb.position -= inv_ofs() # inventory layout space (it's centred on big screens)
 	var inv := p.inv
 	var loc := loc_at(mb.position)
 	# Scroll the nearby list
@@ -399,7 +401,7 @@ func open_menu(p: Player, loc: Dictionary, at: Vector2) -> void:
 
 
 func _menu_rect() -> Rect2:
-	var vs := get_viewport_rect().size
+	var vs := get_viewport_rect().size - inv_ofs() * 2.0
 	var h: float = _menu["items"].size() * MENU_ROW + 8
 	var pos: Vector2 = _menu["pos"]
 	pos.x = minf(pos.x, vs.x - MENU_W - 4)
@@ -761,7 +763,11 @@ func _draw() -> void:
 
 	# Message
 	if p.message_t > 0.0:
-		var my := 52.0 if inventory_open else vs.y - 245.0
+		var my := vs.y - 245.0
+		if inventory_open:
+			my = inv_ofs().y + 52.0
+		elif map_open:
+			my = 26.0 # above the map, not across it
 		_text(Vector2(0, my), p.message, 18, Color(1, 1, 1, clampf(p.message_t, 0, 1)), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 
 	# Pause
@@ -779,9 +785,18 @@ func _draw() -> void:
 		_text(Vector2(0, vs.y * 0.42 + 80), "R  new survivor (new world)      Esc  main menu", 18, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 
 
+## The inventory screen is laid out for 1280 x 720; on taller / wider screens it sits in the middle.
+func inv_ofs() -> Vector2:
+	var vs := get_viewport_rect().size
+	return Vector2(maxf(floorf((vs.x - 1280.0) / 2.0), 0.0), maxf(floorf((vs.y - 720.0) / 2.0), 0.0))
+
+
 func _draw_inventory(p: Player, vs: Vector2) -> void:
 	var inv := p.inv
 	draw_rect(Rect2(Vector2.ZERO, vs), Color(0.05, 0.02, 0.05, 0.65))
+	var ofs := inv_ofs()
+	draw_set_transform(ofs)
+	vs -= ofs * 2.0
 
 	# ---- Left panel: NEARBY (list of what's here) or CRAFTING
 	_panel(NEAR_RECT)
@@ -915,6 +930,7 @@ func _draw_gear(p: Player, inv: Inventory, vs: Vector2) -> void:
 			if i == hi:
 				draw_rect(row, C_LIGHT)
 			_text(row.position + Vector2(8, 18), _menu["items"][i][0], 15, C_TEXT)
+		draw_set_transform(Vector2.ZERO)
 		return
 
 	# Tooltip / dragged item
@@ -935,6 +951,7 @@ func _draw_gear(p: Player, inv: Inventory, vs: Vector2) -> void:
 		var dragged = inv.get_at(_drag)
 		if dragged != null:
 			_item_icon(dragged, Rect2(_mouse - Vector2(30, 30), Vector2(60, 60)))
+	draw_set_transform(Vector2.ZERO)
 
 
 ## Short info line for an item: count, rounds, condition, storage, food value...

@@ -1228,7 +1228,9 @@ func _water_tests() -> void:
 
 
 ## A real left click (press + release) at a screen position.
+## A click at `pos` in the inventory's layout (it's centred on screens bigger than 1280 x 720).
 func _click(pos: Vector2) -> void:
+	pos += main.hud.inv_ofs()
 	for pressed in [true, false]:
 		var ev := InputEventMouseButton.new()
 		ev.button_index = MOUSE_BUTTON_LEFT

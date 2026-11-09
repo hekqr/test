@@ -97,6 +97,7 @@ func _process(_d: float) -> void:
 	p.busy_t = 0.0
 	p._find_loot()
 	main.hud.set_inventory_open(true)
+	main.hud.left_tab = "near" # (crafting turns items into others - not a loss)
 	var vs: Vector2 = main.hud.get_viewport_rect().size
 	var r := randf()
 	var desc := ""
@@ -151,7 +152,7 @@ func _process(_d: float) -> void:
 		ev.button_index = MOUSE_BUTTON_LEFT
 		ev.pressed = true
 		ev.double_click = true
-		ev.position = a
+		ev.position = a + main.hud.inv_ofs()
 		main.hud._input(ev)
 	else:
 		desc = "take all"
@@ -186,7 +187,9 @@ func _process(_d: float) -> void:
 	_log.append(desc)
 
 
+## (pos is in the inventory's layout; the screen has it centred)
 func _mouse(pos: Vector2, pressed: bool) -> void:
+	pos += main.hud.inv_ofs()
 	var ev := InputEventMouseButton.new()
 	ev.button_index = MOUSE_BUTTON_LEFT
 	ev.pressed = pressed
