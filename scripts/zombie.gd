@@ -287,8 +287,9 @@ func _think() -> void:
 		_lose_t = 5.0
 		target = foe.global_position
 		return
-	if type == "axe" and not has_axe and _axe_waiting() and state != State.FETCH:
+	if type == "axe" and not has_axe and _axe_waiting() and state != State.FETCH and _fetch_t > -999.0:
 		state = State.FETCH
+		_fetch_t = 15.0
 		_set_path(axe_spot.global_position)
 		return
 	match state:
@@ -307,14 +308,20 @@ func _think() -> void:
 			if _lose_t <= 0.0:
 				state = State.WANDER
 		State.FETCH:
-			if not _axe_waiting():
-				state = State.WANDER
+			_fetch_t -= THINK_INTERVAL
+			if not _axe_waiting() or _fetch_t <= 0.0:
+				state = State.WANDER # gone, or it can't get to it: carry on without
+				if _fetch_t <= 0.0:
+					_fetch_t = -1000.0 # (gave up on that axe)
 			elif global_position.distance_to(axe_spot.global_position) < 18.0:
 				_special_t = 0.4 # bend down and take it
 			elif _path_i >= path.size():
 				_set_path(axe_spot.global_position)
 		State.WANDER:
 			_wander(THINK_INTERVAL)
+
+
+var _fetch_t := 0.0 # time left to get the thrown axe back (then it gives up on it)
 
 
 func _wander(dt: float) -> void:
@@ -435,6 +442,7 @@ func _release_axe(aim_at: Vector2) -> void:
 	if dead or not is_inside_tree():
 		return
 	has_axe = false
+	_fetch_t = 0.0 # a new throw: it will go and get this one
 	var axe := ThrownAxe.new()
 	axe.world = world
 	axe.thrower = self
