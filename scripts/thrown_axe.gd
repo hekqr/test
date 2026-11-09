@@ -31,7 +31,7 @@ func _physics_process(delta: float) -> void:
 	var next := global_position + step
 	# Hits a wall, window, closed door, tree or furniture: drops right in front of it.
 	var nc := world.cell_of(next + Vector2(0, 10))
-	if not world.is_walkable(nc) or world.blocks_sight(nc): # (a closed door stops it too)
+	if not world.is_walkable(nc) or world.blocks_sight(nc) or world.gate_cells.has(nc): # (closed doors and your gates too)
 		_land()
 		return
 	global_position = next

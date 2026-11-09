@@ -190,8 +190,12 @@ func remove_built(c: Vector2i) -> void:
 
 
 ## A gate you built: a door (opens for people, not for zombies).
+var gate_cells := {} # gates you built (nothing gets through them but you: bullets, axes, zombies...)
+
+
 func add_gate(c: Vector2i, door: Door) -> void:
 	_door_at[c] = true
+	gate_cells[c] = true
 	var layer := get_node_or_null("Doors")
 	if layer == null:
 		layer = Node2D.new()
@@ -203,6 +207,7 @@ func add_gate(c: Vector2i, door: Door) -> void:
 
 func remove_gate(c: Vector2i) -> void:
 	_door_at.erase(c)
+	gate_cells.erase(c)
 	door_closed[idx(c)] = 0
 	astar_z.set_point_solid(c, not is_walkable(c))
 
