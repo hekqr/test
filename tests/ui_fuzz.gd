@@ -62,6 +62,13 @@ func _totals() -> Dictionary:
 
 func _setup_items() -> void:
 	var p: Player = main.player
+	# Nothing else around: a bandit dying nearby would drop his things into the count
+	for g in ["zombies", "survivors", "animals"]:
+		for n in get_tree().get_nodes_in_group(g):
+			n.free()
+	main._spawn_t = 1e9
+	main._survivor_t = 1e9
+	main._animal_t = 1e9
 	var inv := p.inv
 	inv.gear["back"] = Items.make("backpack_large")
 	inv.gear["coat"] = Items.make("jacket")
