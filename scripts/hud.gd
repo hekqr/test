@@ -1055,7 +1055,7 @@ func _draw_map(p: Player, vs: Vector2) -> void:
 	var order := range(w.settlements.size())
 	var rank := {"city": 0, "town": 1, "military": 2, "village": 3, "hamlet": 4}
 	order.sort_custom(func(a, b): return rank.get(w.settlements[a]["type"], 5) < rank.get(w.settlements[b]["type"], 5))
-	var taken: Array[Rect2] = []
+	var taken := [] # [rect, owner]: owner = settlement index (its icon / name), -1 for road labels
 	var labels := []
 	for i in order:
 		var st: Dictionary = w.settlements[i]
@@ -1066,42 +1066,9 @@ func _draw_map(p: Player, vs: Vector2) -> void:
 		var pos: Vector2 = to_screen.call(Vector2(c) + Vector2(0.5, 0.5))
 		if not r.grow(-4).has_point(pos):
 			continue
-		taken.append(Rect2(pos - Vector2(8, 8), Vector2(16, 16)))
+		taken.append([Rect2(pos - Vector2(8, 8), Vector2(16, 16)), i])
 		labels.append([i, pos])
-	for lab in labels:
-		var st: Dictionary = w.settlements[lab[0]]
-		var pos: Vector2 = lab[1]
-		_settlement_icon(pos, String(st["type"]))
-		var fs: int = {"city": 20, "town": 17, "village": 15, "hamlet": 13, "military": 14}.get(st["type"], 13)
-		var label := String(st["name"])
-		if st["type"] == "city":
-			label = label.to_upper()
-		var sz := _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
-		var spots := [pos + Vector2(14, -sz.y * 0.5), pos + Vector2(-14 - sz.x, -sz.y * 0.5),
-			pos + Vector2(-sz.x * 0.5, -12 - sz.y), pos + Vector2(-sz.x * 0.5, 12)]
-		var best: Vector2 = spots[0]
-		var found := false
-		for sp in spots:
-			var lr := Rect2(sp, sz).grow(1)
-			if not r.grow(-2).encloses(lr):
-				continue
-			var hit := false
-			for t in taken:
-				if t.intersects(lr) and not t.has_point(pos):
-					hit = true
-					break
-			if not hit:
-				best = sp
-				found = true
-				break
-		if not found and st["type"] == "hamlet":
-			continue # no room: small places just show their icon
-		taken.append(Rect2(best, sz))
-		var tp := best + Vector2(0, sz.y * 0.78)
-		for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
-			draw_string(_font, tp + o, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(MAP_PAPER, 0.9))
-		draw_string(_font, tp, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, MAP_INK)
-	# Roads out of the region: arrows to the neighbouring regions
+	# Roads out of the region: arrows to the neighbouring regions (labelled first: they have the least room)
 	for side in ["N", "S", "W", "E"]:
 		var ep: Vector2i = w.edge_exit(side)
 		var spos: Vector2 = to_screen.call(Vector2(ep) + Vector2(0.5, 0.5))
@@ -1125,12 +1092,45 @@ func _draw_map(p: Player, vs: Vector2) -> void:
 			var c2: Vector2 = cnd
 			c2.x = clampf(c2.x, r.position.x + 4, r.end.x - lw - 4)
 			var lr := Rect2(c2 - Vector2(0, 10), Vector2(lw, 12))
-			if not taken.any(func(t): return t.intersects(lr)):
+			if not taken.any(func(t): return (t[0] as Rect2).intersects(lr)):
 				lp = c2
 				break
 		lp.x = clampf(lp.x, r.position.x + 4, r.end.x - lw - 4)
-		taken.append(Rect2(lp - Vector2(0, 10), Vector2(lw, 12)))
+		taken.append([Rect2(lp - Vector2(0, 10), Vector2(lw, 12)), -1])
 		draw_string(_font, lp, lbl, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color("6e5038"))
+	for lab in labels:
+		var st: Dictionary = w.settlements[lab[0]]
+		var pos: Vector2 = lab[1]
+		_settlement_icon(pos, String(st["type"]))
+		var fs: int = {"city": 20, "town": 17, "village": 15, "hamlet": 13, "military": 14}.get(st["type"], 13)
+		var label := String(st["name"])
+		if st["type"] == "city":
+			label = label.to_upper()
+		var sz := _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+		var spots := [pos + Vector2(14, -sz.y * 0.5), pos + Vector2(-14 - sz.x, -sz.y * 0.5),
+			pos + Vector2(-sz.x * 0.5, -12 - sz.y), pos + Vector2(-sz.x * 0.5, 12)]
+		var best: Vector2 = spots[0]
+		var found := false
+		for sp in spots:
+			var lr := Rect2(sp, sz).grow(1)
+			if not r.grow(-2).encloses(lr):
+				continue
+			var hit := false
+			for t in taken:
+				if t[1] != lab[0] and (t[0] as Rect2).intersects(lr):
+					hit = true
+					break
+			if not hit:
+				best = sp
+				found = true
+				break
+		if not found and st["type"] == "hamlet":
+			continue # no room: small places just show their icon
+		taken.append([Rect2(best, sz), lab[0]])
+		var tp := best + Vector2(0, sz.y * 0.78)
+		for o in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1)]:
+			draw_string(_font, tp + o, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(MAP_PAPER, 0.9))
+		draw_string(_font, tp, label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, MAP_INK)
 	# You are here
 	var me: Vector2 = to_screen.call(p.global_position / World.T)
 	if r.has_point(me):
