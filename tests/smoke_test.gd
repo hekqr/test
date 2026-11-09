@@ -11,6 +11,7 @@ var loot: LootSpot
 var wolf: Animal
 var home_name := ""
 var marker_pos := Vector2.ZERO
+var searched_pos := Vector2.INF
 var east_road_y := 0
 var wall_cell := Vector2i(-1, -1)
 
@@ -940,6 +941,14 @@ func _physics_process(_delta: float) -> void:
 			marker.position = pr.global_position + Vector2(20, 0)
 			main.entities.add_child(marker)
 			marker_pos = marker.position
+			searched_pos = Vector2.INF
+			for n in get_tree().get_nodes_in_group("loot"):
+				var l := n as LootSpot
+				if not l.is_bag and not l.is_store() and l.kind != "carcass" and not l.opened:
+					l.opened = true
+					l.contents = []
+					searched_pos = l.position
+					break
 			pr.inv.gear["hands"] = Items.make("rope")
 			check(main.world.edge_exit("E").x == World.W - 1 and main.world.get_tile(main.world.edge_exit("E")) == World.ROAD, "a road leaves the region at its east edge")
 			east_road_y = main.world.edge_exit("E").y
@@ -961,6 +970,14 @@ func _physics_process(_delta: float) -> void:
 					found = true
 			check(found, "what you left in a region is still there when you come back")
 			check(main.structure_at(wall_cell) != null and main.world.get_tile(wall_cell) == World.BUILT, "your walls are still standing when you come back")
+			check(get_tree().get_nodes_in_group("structures").any(func(st): return st.kind == "chest" and st.chest != null and not st.chest.contents.is_empty()), "your chest still has your things in it")
+			check(get_tree().get_nodes_in_group("structures").any(func(st): return st.kind == "collector" and st.water > 0.0), "your rain collector kept its water")
+			var still_searched := false
+			for n in get_tree().get_nodes_in_group("loot"):
+				var l := n as LootSpot
+				if not l.is_bag and l.position.distance_to(searched_pos) < 1.0:
+					still_searched = l.opened and l.contents.is_empty()
+			check(still_searched, "a container you searched is still empty when you come back")
 			check(main.player.global_position.x > (World.W - 5) * World.T, "you come back in at the east edge")
 			main.save_game()
 			var d := SaveGame.read()

@@ -7,8 +7,9 @@ Top-down 2D zombie survival game for PC, made with [Godot 4.7](https://godotengi
 ## Play
 Download `Project0.exe` (Windows) and double-click it. No install needed.
 
-The game saves automatically (every 20 s, when you quit, and when you die) to
-`%APPDATA%\Godot\app_userdata\Project 0\save.json`. A dead survivor's save is kept but can't be continued.
+The game saves automatically (every 30 s, when you quit, and when you die). There are 3 save slots, in
+`%APPDATA%\Godot\app_userdata\Project 0\` (`save.json`, `save_2.json`, `save_3.json`). A dead survivor's save
+is kept but can't be continued.
 
 ## Controls
 | Key | Action |
@@ -17,7 +18,7 @@ The game saves automatically (every 20 s, when you quit, and when you die) to
 | Shift | Sprint (louder — attracts zombies) |
 | Space | Shoot — guns aim at the nearest enemy by themselves (stand still to steady the aim); melee attacks automatically |
 | T | Switch between auto aim (Space, no mouse needed) and mouse aim (aim with the mouse, click to shoot) |
-| Q (or the on-screen button) | Search (1 s — what you find drops on the floor) / pick up / skin / cook / drink & fill gourd / open chest / sleep / plant / harvest / chop wood (with an axe) |
+| Q (or the on-screen button) | Search (what you find drops on the floor; bins, car trunks and medicine cabinets take 1 s) / pick up / skin / cook / drink & fill gourd / open chest / use workbench / sleep / plant / harvest / chop wood (with an axe) |
 | F | Fish (at a lake or river, with a fishing rod) |
 | B | Build: place a building kit in front of you (Q to place, B for the next kit, X to stop). Q on something you built takes it apart |
 | C | Build campfire (3 sticks + 1 match) |
