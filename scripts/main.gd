@@ -324,7 +324,8 @@ func _arrive(side: String, along: float) -> void:
 					c = Vector2i(a + off, depth)
 				_:
 					c = Vector2i(a + off, World.H - 1 - depth)
-			if world.is_walkable(c) and world.building_at(world.center_of(c)) < 0:
+			# (not a little spot closed in by trees, water or walls)
+			if world.is_walkable(c) and world.building_at(world.center_of(c)) < 0 and world._pocket(c, 300, world.astar).is_empty():
 				player.position = world.center_of(c)
 				return
 
