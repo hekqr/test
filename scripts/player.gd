@@ -1574,8 +1574,9 @@ func _find_loot() -> void:
 	var best_s := 44.0
 	for n in get_tree().get_nodes_in_group("structures"):
 		var st := n as Structure
-		if st.chest != null or st.kind == "stove":
-			continue # storage is opened like loot, a stove is used like a fire
+		if st.chest != null or st.kind == "stove" or st.kind == "wall" or st.kind == "gate":
+			continue # storage is opened like loot, a stove is used like a fire; walls and gates are taken
+			# apart in building mode only (B), so Q can't knock a hole in your base by accident
 		var d := st.global_position.distance_to(global_position)
 		if d < best_s:
 			best_s = d

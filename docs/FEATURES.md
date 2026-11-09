@@ -316,6 +316,22 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ Test tools: `tests/soak.tscn` (a bot plays: loots, fights, builds, travels, saves / loads),
   `tests/ui_fuzz.tscn` (random inventory clicks and drags; checks nothing is lost or duplicated)
 
+## Milestone 14 — More bug testing
+- ✅ Base gates open for you only: zombies, animals and bandits never get through, and their bullets / thrown
+  axes stop at gates; no wolves, animals or bandits spawn inside your base
+- ✅ Melee (yours and theirs) needs a clear line: nothing gets hit through walls, windows or shut doors
+- ✅ Shots fired while hugging a wall stop at the wall; point-blank shots hit the zombie in your face
+- ✅ Thrown axes stop at closed doors
+- ✅ Q no longer takes apart walls or gates by accident (use B, building mode, for that)
+- ✅ Map and inventory can't both be open (closing one used to unlock controls while the other showed);
+  screens close when you die
+- ✅ Inventory centred on taller / wider screens; messages above the map, not across it
+- ✅ Map: road-exit names placed first, no name sits on another place's icon
+- ✅ Crafting list: long requirement lines fit, workbench recipes tagged, clearer scroll hint
+- ✅ Rain / snow don't fall indoors
+- ✅ New test tools: `key_fuzz` (random keys in random situations), `build_fuzz` (random building / taking
+  apart / save-load), `base_siege` and `house_siege` (crowds outside your base or a shut house)
+
 ## Ideas for endless play (next)
 - 📌 Watchtower
 - 📌 More renewable food: berries / mushrooms, slow loot respawn
