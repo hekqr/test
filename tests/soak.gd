@@ -162,6 +162,12 @@ func _drive(delta: float) -> void:
 		if _goal != Vector2.INF and p.global_position.distance_to(_goal) < 30.0:
 			_arrived()
 		_pick_goal()
+	if _goal != Vector2.INF and _path.is_empty() and p.global_position.distance_to(_goal) >= 30.0:
+		# Walked as close as it gets but can't reach it: give up on that one
+		if _target and is_instance_valid(_target):
+			_bad[_target.get_instance_id()] = true
+		_target = null
+		_goal = Vector2.INF
 	_stuck_t += delta
 	if _stuck_t > 2.0:
 		if p.global_position.distance_to(_last_pos) < 8.0 and _path.size() > 0 and not Game.ui_open and p.busy_t <= 0.0:

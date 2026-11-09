@@ -836,13 +836,19 @@ func _draw_crafting(p: Player) -> void:
 			parts.append("%d/%d %s" % [mini(p.inv.count_of(item), int(r["needs"][item])), int(r["needs"][item]), Items.name_of(item).to_lower()])
 		if not r["tools"].is_empty():
 			parts.append("tool: " + " / ".join(PackedStringArray(r["tools"])))
-		if r.get("station", "") == "workbench":
-			parts.append("at a workbench")
-		_text(row.position + Vector2(54, 38), ", ".join(parts), 12, Color(0.6, 0.9, 0.55) if ok else Color(0.95, 0.6, 0.5))
+		var bench_tag: bool = r.get("station", "") == "workbench"
+		var need := ", ".join(parts)
+		var nfs := 12
+		while nfs > 9 and _font.get_string_size(need, HORIZONTAL_ALIGNMENT_LEFT, -1, nfs).x > row.size.x - 62:
+			nfs -= 1 # long lists: a smaller font rather than running off the panel
+		_text(row.position + Vector2(54, 38), need, nfs, Color(0.6, 0.9, 0.55) if ok else Color(0.95, 0.6, 0.5))
+		if bench_tag:
+			var name_w := _font.get_string_size(String(r["name"]), HORIZONTAL_ALIGNMENT_LEFT, -1, 15).x
+			_text(row.position + Vector2(60 + name_w, 20), "(workbench)", 11, Color(0.6, 0.9, 0.55) if bench else C_DIM)
 		if ok:
 			_text(Vector2(row.end.x - 10, row.position.y + 20), "Click to craft", 11, C_DIM, HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	var more := Crafting.RECIPES.size() - craft_visible_rows()
-	_text(Vector2(NEAR_RECT.position.x, NEAR_RECT.end.y - 40), "Scroll for more recipes (%d/%d)" % [mini(_craft_scroll + craft_visible_rows(), Crafting.RECIPES.size()), Crafting.RECIPES.size()] if more > 0 else "Tear shirts into rags (right-click a shirt)", 12, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, NEAR_RECT.size.x)
+	_text(Vector2(NEAR_RECT.position.x, NEAR_RECT.end.y - 40), "Recipes %d-%d of %d - scroll for more" % [_craft_scroll + 1, mini(_craft_scroll + craft_visible_rows(), Crafting.RECIPES.size()), Crafting.RECIPES.size()] if more > 0 else "Tear shirts into rags (click a shirt)", 12, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, NEAR_RECT.size.x)
 	_text(Vector2(NEAR_RECT.position.x, NEAR_RECT.end.y - 22), "At a workbench: more kits" if not bench else "At your workbench", 12, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, NEAR_RECT.size.x)
 
 

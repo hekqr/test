@@ -152,6 +152,11 @@ func _process(_delta: float) -> void:
 		await get_tree().process_frame
 		await get_tree().process_frame
 		_shot("crafting")
+		main.hud._craft_scroll = 99
+		await get_tree().process_frame
+		await get_tree().process_frame
+		_shot("crafting2")
+		main.hud._craft_scroll = 0
 		main.hud.left_tab = "near"
 		main.hud.set_inventory_open(false)
 		# Stand a few steps from a house's front door (closed)
