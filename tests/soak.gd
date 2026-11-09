@@ -126,7 +126,7 @@ func _check_state() -> void:
 	var c := w.cell_of(p.global_position)
 	if not w.in_bounds(c):
 		_issue("player outside the map at %s" % c)
-	elif not w.is_walkable(c) and not w.is_door(c) and w.get_tile(c) != World.WATER:
+	elif not w.is_walkable(c) and not w.is_door(c) and not w.get_tile(c) in [World.WATER, World.TREE]: # (a tree's trunk is smaller than its tile)
 			_issue("player stuck inside a solid tile %s (tile %d)" % [c, w.get_tile(c)])
 	for z in get_tree().get_nodes_in_group("zombies"):
 		if not is_finite((z as Node2D).global_position.x):

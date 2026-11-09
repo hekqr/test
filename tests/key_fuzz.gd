@@ -74,7 +74,7 @@ func _process(_d: float) -> void:
 		Game.ui_open = menus
 	var w: World = main.world
 	var c := w.cell_of(p.global_position)
-	if w.in_bounds(c) and not w.is_walkable(c) and not w.is_door(c) and w.get_tile(c) != World.WATER:
+	if w.in_bounds(c) and not w.is_walkable(c) and not w.is_door(c) and not w.get_tile(c) in [World.WATER, World.TREE]:
 		_issue("player inside a solid tile (%d)" % w.get_tile(c))
 	if p.dead and get_tree().paused:
 		_issue("paused while dead")
