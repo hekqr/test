@@ -495,6 +495,7 @@ func _fire(g: Array) -> void:
 	var dir := (foe.global_position + Vector2(0, -8) - origin).normalized().rotated(randf_range(-0.2, 0.2))
 	var to := origin + dir * float(g[4])
 	var q := PhysicsRayQueryParameters2D.create(origin + dir * 14.0, to, Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_NPC | Game.LAYER_GATE, [get_rid()])
+	q.hit_from_inside = true # pressed up against a wall or gate, the muzzle is already inside it
 	var hit_info := get_world_2d().direct_space_state.intersect_ray(q)
 	var end := to
 	if not hit_info.is_empty():

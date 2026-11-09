@@ -424,6 +424,7 @@ func _shoot(w: Dictionary, g: Dictionary) -> void:
 		var dir := shot_dir.rotated(randf_range(-w["spread"], w["spread"]))
 		var to := origin + dir * float(w["range"]) * randf_range(0.85, 1.0)
 		var q := PhysicsRayQueryParameters2D.create(origin + dir * 14.0, to, Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_ZOMBIE | Game.LAYER_ANIMAL | Game.LAYER_NPC | Game.LAYER_GATE, [get_rid()])
+		q.hit_from_inside = true
 		var hit := space.intersect_ray(q)
 		var end := to
 		if not hit.is_empty():
