@@ -177,7 +177,7 @@ func set_map_open(open: bool) -> void:
 	if open and inventory_open:
 		set_inventory_open(false)
 	map_open = open
-	Game.ui_open = open
+	Game.ui_open = inventory_open or map_open
 	if open:
 		_refresh_map()
 
@@ -292,8 +292,10 @@ func _map_input(event: InputEvent) -> bool:
 
 
 func set_inventory_open(open: bool) -> void:
+	if open and map_open:
+		map_open = false # one screen at a time
 	inventory_open = open
-	Game.ui_open = open
+	Game.ui_open = inventory_open or map_open
 	_drag = {}
 	_menu = {}
 	Input.set_default_cursor_shape(Input.CURSOR_ARROW if open else Input.CURSOR_CROSS)
