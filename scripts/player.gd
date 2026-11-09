@@ -1413,6 +1413,7 @@ func shoot() -> void:
 		var from := origin + dir * 14.0
 		var to := origin + dir * float(w["range"]) * randf_range(0.85, 1.0)
 		var q := PhysicsRayQueryParameters2D.create(from, to, Game.LAYER_WALL | Game.LAYER_ZOMBIE | Game.LAYER_ANIMAL | Game.LAYER_NPC, [get_rid()])
+		q.hit_from_inside = true # hugging a wall, the muzzle is already inside it: no shooting through
 		var hit := space.intersect_ray(q)
 		var end := to
 		if not hit.is_empty():

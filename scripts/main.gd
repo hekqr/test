@@ -561,6 +561,9 @@ func _process(delta: float) -> void:
 	elif weather == "snow":
 		tint = tint.lerp(Color(0.86, 0.9, 1.0), 0.25).darkened(0.05)
 	night_tint.color = tint
+	if weather_fx:
+		# No rain or snow falling inside a building
+		weather_fx.modulate.a = move_toward(weather_fx.modulate.a, 0.0 if player.indoors() else 1.0, delta * 3.0)
 	world_days += delta / DAY_LENGTH
 	_weather_t -= delta
 	if _weather_t <= 0.0:
