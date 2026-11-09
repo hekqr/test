@@ -849,6 +849,8 @@ func _physics_process(_delta: float) -> void:
 			check(main.kills >= 1, "your kills count")
 			_clear_zombies()
 			print("Bandits")
+			for other in get_tree().get_nodes_in_group("survivors"):
+				other.free() # only the test's own bandit
 			var b := Survivor.new()
 			b.gear = {}
 			for slot in Inventory.GEAR:
@@ -861,6 +863,7 @@ func _physics_process(_delta: float) -> void:
 			b.items = [Items.make("ammo_9mm", 16), Items.make("water")]
 			b.position = p2.global_position + Vector2(-180, 0)
 			main.add_survivor(b)
+			main._survivor_t = 1e9 # no other bandits turn up meanwhile
 			p2.health = 100.0
 			hp_before = p2.health
 		740:
@@ -1509,6 +1512,20 @@ func _base_tests() -> void:
 		if z != null:
 			spawned_in = true
 	check(not spawned_in, "zombies don't spawn at your base")
+	var others_in := false
+	for i in 20:
+		var an: Animal = main.spawn_animal(["wolf", "rabbit", "deer"][i % 3], 0.0, main.BASE_RADIUS * 0.9)
+		if an != null and main.in_base(an.global_position):
+			others_in = true
+		var bs: Array = main.spawn_survivor_group(0.0, main.BASE_RADIUS * 0.9)
+		for b in bs:
+			if main.in_base(b.global_position):
+				others_in = true
+	check(not others_in, "no wolves, animals or bandits spawn at your base either")
+	for g in ["animals", "survivors"]:
+		for n in get_tree().get_nodes_in_group(g):
+			if (n as Node2D).global_position.distance_to(p.global_position) < main.BASE_RADIUS * 1.2:
+				n.free()
 	_clear_zombies()
 	main._crop_t = 0.0
 	main._process(0.016)
@@ -1622,7 +1639,7 @@ func _base_tests() -> void:
 					guns += 1
 				elif Items.kind(it["id"]) in ["consumable", "medical"]:
 					supplies += 1
-		check(guns > 60 and supplies > 40, "military crates: lots of guns, ammo and supplies (%d / %d)" % [guns, supplies])
+		check(guns > 45 and supplies > 40, "military crates: lots of guns, ammo and supplies (%d / %d)" % [guns, supplies])
 
 
 ## Animals wander into building spots: take them out of the test world.

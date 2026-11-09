@@ -756,7 +756,7 @@ func add_zombie(p: Vector2, type := "walker", gun := "", mag := 0) -> Zombie:
 func spawn_survivor_group(min_dist: float, max_dist := SPAWN_MAX + 400.0) -> Array:
 	var out := []
 	var center := _ring_point(min_dist, max_dist, 0.6, func(c: Vector2i):
-		return world.is_walkable(c) and world.building_at(world.center_of(c)) < 0 \
+		return world.is_walkable(c) and world.building_at(world.center_of(c)) < 0 and not in_base(world.center_of(c)) \
 			and (world.settlement_at(c) >= 0 or world.get_tile(c) == World.ROAD))
 	if center == Vector2.INF:
 		return out
@@ -783,7 +783,7 @@ func _on_survivor_died(s: Survivor) -> void:
 
 ## Animals live in the wilderness, away from roads and buildings.
 func spawn_animal(species: String, min_dist: float, max_dist := SPAWN_MAX + 200.0) -> Animal:
-	var p := _ring_point(min_dist, max_dist, 0.0, func(c: Vector2i): return world._is_wild(c))
+	var p := _ring_point(min_dist, max_dist, 0.0, func(c: Vector2i): return world._is_wild(c) and not in_base(world.center_of(c)))
 	if p == Vector2.INF:
 		return null
 	return add_animal(species, p)
