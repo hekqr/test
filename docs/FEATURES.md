@@ -331,8 +331,10 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ Map: road-exit names placed first, no name sits on another place's icon
 - ✅ Crafting list: long requirement lines fit, workbench recipes tagged, clearer scroll hint
 - ✅ Rain / snow don't fall indoors
+- ✅ Axe zombies give up on a thrown axe they can't get back to (they used to stand frozen)
 - ✅ New test tools: `key_fuzz` (random keys in random situations), `build_fuzz` (random building / taking
-  apart / save-load), `base_siege` and `house_siege` (crowds outside your base or a shut house)
+  apart / save-load), `region_fuzz` (wander between regions leaving things; everything must still be there),
+  `base_siege` and `house_siege` (crowds outside your base or a shut house)
 
 ## Ideas for endless play (next)
 - 📌 Watchtower
