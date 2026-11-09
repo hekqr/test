@@ -383,7 +383,7 @@ func _combat(delta: float) -> void:
 	var w := weapon()
 	var d := global_position.distance_to(foe.global_position)
 	if w["melee"]:
-		if _attack_cd <= 0.0 and d <= float(w["range"]) + RADIUS + 6.0:
+		if _attack_cd <= 0.0 and d <= float(w["range"]) + RADIUS + 6.0 and world.has_los(global_position, foe.global_position):
 			_attack_cd = float(w["cooldown"]) * 1.5
 			_swing_t = 0.22
 			var dir := (foe.global_position - global_position).normalized()

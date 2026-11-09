@@ -197,7 +197,7 @@ func _try_bite() -> void:
 		return
 	var s: Dictionary = SPECIES[species]
 	var to := prey.global_position - global_position
-	if to.length() < float(s["radius"]) + Player.RADIUS + 9.0:
+	if to.length() < float(s["radius"]) + Player.RADIUS + 9.0 and world.has_los(global_position, prey.global_position):
 		_bite_cd = randf_range(1.0, 1.4)
 		Zombie.hit(prey, randf_range(s["bite"][0], s["bite"][1]), to.normalized(), self)
 

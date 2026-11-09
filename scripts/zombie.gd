@@ -388,7 +388,7 @@ func _try_attack() -> void:
 	if _attack_cd > 0.0 or not _foe_ok():
 		return
 	var reach: float = _t["reach"]
-	if global_position.distance_to(foe.global_position) < RADIUS + Player.RADIUS + reach:
+	if global_position.distance_to(foe.global_position) < RADIUS + Player.RADIUS + reach and world.has_los(global_position, foe.global_position):
 		var unarmed := type == "axe" and not has_axe
 		_attack_cd = _t["cd"]
 		_attack_anim_t = 0.35 if type != "axe" else 0.5

@@ -1294,7 +1294,7 @@ func _auto_melee() -> void:
 	for n in get_tree().get_nodes_in_group("animals"):
 		var a := n as Animal
 		var d := a.global_position.distance_to(global_position)
-		if d < best_d:
+		if d < best_d and world.has_los(global_position, a.global_position):
 			best_d = d
 			target = a
 	if target:
@@ -1312,13 +1312,13 @@ func melee(dir: Vector2) -> void:
 	for n in get_tree().get_nodes_in_group("zombies") + get_tree().get_nodes_in_group("survivors"):
 		var t := n as Node2D
 		var d := t.global_position - global_position
-		if d.length() <= reach + Zombie.RADIUS + 4.0 and absf(dir.angle_to(d)) < deg_to_rad(65.0):
-			Zombie.hit(t, dmg, d.normalized(), self)
+		if d.length() <= reach + Zombie.RADIUS + 4.0 and absf(dir.angle_to(d)) < deg_to_rad(65.0) and world.has_los(global_position, t.global_position):
+			Zombie.hit(t, dmg, d.normalized(), self) # (not through a wall, window or shut door)
 			hits += 1
 	for n in get_tree().get_nodes_in_group("animals"):
 		var a := n as Animal
 		var d := a.global_position - global_position
-		if d.length() <= reach + 16.0 and absf(dir.angle_to(d)) < deg_to_rad(65.0):
+		if d.length() <= reach + 16.0 and absf(dir.angle_to(d)) < deg_to_rad(65.0) and world.has_los(global_position, a.global_position):
 			a.take_damage(dmg, d.normalized(), self)
 			hits += 1
 	if hits > 0:
