@@ -258,8 +258,12 @@ func in_base(pos: Vector2) -> bool:
 ## Sleep in your bed: through the night until 07:00 (or 4 hours in the daytime). You get hungrier and
 ## thirstier as the hours pass, heal if you're fed and warm, and crops grow meanwhile.
 func sleep() -> void:
+	# Walled in (a closed base): zombies outside the walls can't get to you, so they don't keep you up.
+	var walled := world.small_pocket(world.nearest_walkable(world.cell_of(player.global_position)), 900, true)
 	for n in get_tree().get_nodes_in_group("zombies"):
 		var z := n as Zombie
+		if not walled.is_empty() and not walled.has(world.nearest_walkable(world.cell_of(z.global_position))):
+			continue
 		if z.state == Zombie.State.CHASE or z.global_position.distance_to(player.global_position) < 500.0:
 			player.say("You can't sleep with zombies around")
 			return

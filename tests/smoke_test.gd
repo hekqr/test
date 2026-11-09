@@ -1828,6 +1828,16 @@ func _utility_tests() -> void:
 	zr._set_path(w.center_of(ring_c))
 	var path_ms := (Time.get_ticks_usec() - t_path) / 1000.0
 	check(zr.path.is_empty() and path_ms < 15.0, "zombies don't search the whole map for a way into a walled base (%.1f ms)" % path_ms)
+	var bed_in: Structure = main.add_structure("bed", ring_c + Vector2i(-1, -1))
+	p.global_position = w.center_of(ring_c)
+	main.time_of_day = 22.0 / 24.0
+	zr.state = Zombie.State.CHASE
+	p.bleeding = false
+	p.hunger = 100.0
+	p.thirst = 100.0
+	main.sleep()
+	check(main.time_of_day * 24.0 < 12.0, "in a walled base you can sleep with zombies outside the walls")
+	bed_in.remove()
 	zr.free()
 	print("Fish trap")
 	var bank := Vector2i(-1, -1)

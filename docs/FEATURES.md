@@ -323,6 +323,8 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ Shots fired while hugging a wall stop at the wall; point-blank shots hit the zombie in your face
 - ✅ Thrown axes stop at closed doors
 - ✅ Q no longer takes apart walls or gates by accident (use B, building mode, for that)
+- ✅ In a walled base you can sleep even with zombies outside the walls
+- ✅ After travelling you never arrive in a spot closed in by trees, water or walls
 - ✅ Map and inventory can't both be open (closing one used to unlock controls while the other showed);
   screens close when you die
 - ✅ Inventory centred on taller / wider screens; messages above the map, not across it
