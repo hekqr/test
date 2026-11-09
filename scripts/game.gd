@@ -9,6 +9,7 @@ const LAYER_NPC := 16 # hostile survivors
 const LAYER_WATER := 32 # lakes & rivers: block walking, not bullets or sight
 const LAYER_DOOR := 64 # closed doors: block zombies and animals, not people
 const LAYER_EDGE := 128 # the edge of a region: creatures stay in, you can walk on to the next region
+const LAYER_GATE := 256 # gates you built: only you get through (bandits and zombies never do)
 
 signal noise_made(pos: Vector2, radius: float)
 

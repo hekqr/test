@@ -1459,6 +1459,11 @@ func _base_tests() -> void:
 	p.place_kit()
 	p.finish_busy()
 	check(w.is_door(gate_cell) and main.structure_at(gate_cell).door != null, "gate built (a door zombies can't open)")
+	var gdoor: Door = main.structure_at(gate_cell).door
+	gdoor._t = 0.0
+	gdoor._physics_process(0.016)
+	check(gdoor.open and w.astar_z.is_point_solid(gate_cell) and not gdoor._shape.disabled and (gdoor.get_child(0) as StaticBody2D).collision_layer & Game.LAYER_GATE != 0,
+		"an open gate still keeps zombies out (and bandits: they're blocked by gates)")
 	p.start_placing("kit_chest")
 	var chest_cell := _face_free(p, [Vector2.LEFT, Vector2.UP, Vector2.DOWN])
 	p.place_kit()

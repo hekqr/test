@@ -87,6 +87,7 @@ func _ready() -> void:
 			door.world = world
 			door.cell = cell
 			door.metal = false
+			door.gate = true
 			door.tex_closed = ""
 			door.tex_open = ""
 			world.add_gate(cell, door)

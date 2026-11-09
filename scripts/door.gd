@@ -16,6 +16,9 @@ var tex_closed := "door_wood_closed"
 var tex_open := "door_wood" # "" = just the dark doorway
 var open := false
 var across_x := true # in a horizontal wall (you walk through it up / down)
+## A gate you built: it opens for you only, and even open it never lets zombies, animals or bandits in
+## (your base stays safe).
+var gate := false
 var _shape: CollisionShape2D
 var _t := randf() * 0.1
 
@@ -25,7 +28,7 @@ func _ready() -> void:
 	position = world.center_of(cell)
 	across_x = world._is_wallish(cell + Vector2i(-1, 0)) or world._is_wallish(cell + Vector2i(1, 0))
 	var body := StaticBody2D.new()
-	body.collision_layer = Game.LAYER_DOOR
+	body.collision_layer = Game.LAYER_DOOR | (Game.LAYER_GATE if gate else 0)
 	body.collision_mask = 0
 	_shape = CollisionShape2D.new()
 	var rs := RectangleShape2D.new()
@@ -51,6 +54,8 @@ func _person_near() -> bool:
 		var p := n as Player
 		if not p.dead and p.global_position.distance_to(global_position) < OPEN_RADIUS:
 			return true
+	if gate:
+		return false
 	for n in get_tree().get_nodes_in_group("survivors"):
 		if (n as Node2D).global_position.distance_to(global_position) < OPEN_RADIUS:
 			return true
@@ -68,8 +73,8 @@ func _occupied() -> bool:
 
 func _apply(o: bool) -> void:
 	open = o
-	_shape.set_deferred("disabled", o)
-	world.set_door_open(cell, o)
+	_shape.set_deferred("disabled", o and not gate)
+	world.set_door_open(cell, o, gate)
 	if front:
 		var tn := tex_open if o else tex_closed
 		front.visible = tn != ""

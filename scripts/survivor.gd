@@ -68,7 +68,7 @@ var _held: Sprite2D
 func _ready() -> void:
 	add_to_group("survivors")
 	collision_layer = Game.LAYER_NPC
-	collision_mask = Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_ZOMBIE | Game.LAYER_NPC | Game.LAYER_WATER | Game.LAYER_EDGE
+	collision_mask = Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_ZOMBIE | Game.LAYER_NPC | Game.LAYER_WATER | Game.LAYER_EDGE | Game.LAYER_GATE
 	add_child(Game.foot_shape(RADIUS, 7.0))
 	if gear.is_empty():
 		_roll_gear()

@@ -212,9 +212,9 @@ func is_door(c: Vector2i) -> bool:
 
 
 ## Called by doors: open doors let zombies through (and let them see through).
-func set_door_open(c: Vector2i, o: bool) -> void:
+func set_door_open(c: Vector2i, o: bool, gate := false) -> void:
 	door_closed[idx(c)] = 0 if o else 1
-	astar_z.set_point_solid(c, not o)
+	astar_z.set_point_solid(c, not o or gate) # zombies never path through your gate
 
 
 func cell_of(p: Vector2) -> Vector2i:
