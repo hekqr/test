@@ -16,6 +16,8 @@ is kept but can't be continued.
 |---|---|
 | WASD | Move |
 | Shift | Sprint (louder — attracts zombies) |
+| Ctrl | Sneak: slow and silent, harder to notice; a melee hit on a zombie that hasn't seen you does 2.5× damage |
+| G | Throw a stick: zombies that hear it land go and look there |
 | Space | Shoot — guns aim at the nearest enemy by themselves (stand still to steady the aim); melee attacks automatically |
 | T | Switch between auto aim (Space, no mouse needed) and mouse aim (aim with the mouse, click to shoot) |
 | Q (or the on-screen button) | Search (what you find drops on the floor; bins, car trunks and medicine cabinets take 1 s) / pick up / skin / cook / drink & fill gourd / open chest / use workbench / sleep / plant / harvest / chop wood (with an axe) |

@@ -745,9 +745,9 @@ func _draw() -> void:
 	# Help
 	if show_help and not inventory_open and not map_open and not p.dead:
 		var lines := [
-			"WASD move   Shift sprint   Melee is automatic   Space shoot (aims for you - stand still to steady)",
-			"Q search, pick up, skin, cook, drink, open, sleep, use   F fish   B build (Q on built = take apart)   C campfire   T aim mode",
-			"1 / 2 / 3: main / secondary / melee   R reload   X lower weapon / stop   Mouse wheel: zoom   K crafting   M map",
+			"WASD move   Shift sprint   Ctrl sneak   Melee is automatic   Space shoot (aims for you - stand still to steady)",
+			"Q search, pick up, skin, cook, drink, open, sleep, use   F fish   B build (Q on built = take apart)   C campfire   G throw stick",
+			"1 / 2 / 3: main / secondary / melee   R reload   X lower weapon / stop   T aim mode   Mouse wheel: zoom   K crafting   M map",
 			"E inventory: click an item to eat, drink, bandage, wear, build...   Esc pause   F1 hide help",
 		]
 		draw_rect(Rect2(14, 14, 660, 104), Color(0.08, 0.04, 0.07, 0.6))
@@ -760,6 +760,11 @@ func _draw() -> void:
 		_draw_inventory(p, vs)
 	if map_open:
 		_draw_map(p, vs)
+
+	# Sneaking: are you hidden, or has something noticed you?
+	if p.sneaking and not p.dead and not inventory_open and not map_open:
+		var seen: bool = main.player_noticed()
+		_text(Vector2(0, vs.y - 268.0), "SPOTTED" if seen else "HIDDEN", 13, Color(1, 0.5, 0.4) if seen else Color(0.6, 1.0, 0.6), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 
 	# Message
 	if p.message_t > 0.0:

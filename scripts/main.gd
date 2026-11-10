@@ -246,6 +246,22 @@ func _camp_garrison() -> void:
 					break
 
 
+## Is anything after you right now (a zombie chasing, a bandit fighting, a wolf hunting you)?
+func player_noticed() -> bool:
+	for n in get_tree().get_nodes_in_group("zombies"):
+		var z := n as Zombie
+		if z.state == Zombie.State.CHASE and z.foe == player:
+			return true
+	for n in get_tree().get_nodes_in_group("survivors"):
+		var s := n as Survivor
+		if s.state == Survivor.State.FIGHT and s.foe == player:
+			return true
+	for n in get_tree().get_nodes_in_group("wolves"):
+		if (n as Animal).prey == player:
+			return true
+	return false
+
+
 ## Near one of your beds.
 func in_base(pos: Vector2) -> bool:
 	for n in get_tree().get_nodes_in_group("structures"):

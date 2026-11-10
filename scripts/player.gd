@@ -6,6 +6,10 @@ signal died
 
 const RADIUS := 11.0
 const WALK_SPEED := 84.0
+const SNEAK_SPEED := 0.5 # sneaking (Ctrl): half speed, no footstep noise
+const SNEAK_SIGHT := 0.55 # ...and zombies / bandits / wolves see you from about half as far
+const SNEAK_ATTACK := 2.5 # melee on a zombie that hasn't noticed you
+const BLOOD_SCENT := 1.3 # bleeding: zombies and wolves notice you from further away
 const SPRINT_SPEED := 117.0
 const HAND := Vector2(0, -8)
 
@@ -88,6 +92,7 @@ const FISH_TIME := Vector2(3.0, 10.0)
 const FISH_HOOK := 0.55
 const FISH_HOOK_RAIN := 0.7
 var _thirst_msg_t := 0.0
+var sneaking := false
 var _hurt_t := 0.0
 var hit_flash := 0.0 # 1 when you get hit, fades out: the screen flashes red (drawn by the HUD)
 var _noise_t := 0.0
@@ -481,6 +486,42 @@ static func bench_repair_cost(fix: String) -> Array:
 	return ["scrap_metal", 1] if fix == "tool" else ["rags", 2]
 
 
+## How easy you are to notice: 1 normally, less while sneaking, more while bleeding (they smell blood).
+func visibility() -> float:
+	return (SNEAK_SIGHT if sneaking else 1.0) * (BLOOD_SCENT if bleeding else 1.0)
+
+
+const THROW_DIST := 260.0
+const THROW_NOISE := 300.0
+
+
+## G: throw a stick the way you're facing. It lands with a clatter: zombies that hear it go and look
+## there instead (a way past them, or a moment to slip away). The stick stays where it lands.
+func throw_stick() -> void:
+	if busy_t > 0.0:
+		return
+	if inv.count_of("sticks") <= 0:
+		say("Nothing to throw (you need a stick)")
+		return
+	inv.remove("sticks", 1)
+	var dir := aim if aim != Vector2.ZERO else facing
+	var land := global_position
+	# It flies until something solid is in the way
+	for k in range(1, int(THROW_DIST / 16.0) + 1):
+		var nxt := global_position + dir * 16.0 * k
+		if world.blocks_sight(world.cell_of(nxt)) or world.get_tile(world.cell_of(nxt)) == World.TREE:
+			break
+		land = nxt
+	var spot := LootSpot.new()
+	spot.is_bag = true
+	spot.contents = [Items.make("sticks", 1)]
+	spot.position = land
+	get_parent().add_child(spot)
+	Game.make_noise(land, THROW_NOISE)
+	FloatText.spawn(get_parent(), land, "clack!", Color(0.9, 0.9, 0.9), 12)
+	say("You throw a stick")
+
+
 ## Standing at a workbench you built.
 func near_bench() -> bool:
 	for n in get_tree().get_nodes_in_group("structures"):
@@ -658,9 +699,13 @@ func _move(delta: float) -> void:
 	var dir := Vector2.ZERO
 	if not Game.ui_open:
 		dir = Input.get_vector("move_left", "move_right", "move_up", "move_down")
-	var sprinting := Input.is_action_pressed("sprint") and dir != Vector2.ZERO and busy_t <= 0.0
+	# Hold Ctrl to sneak: slow and silent, and zombies only notice you from much closer.
+	sneaking = Input.is_action_pressed("sneak") and not Game.ui_open
+	var sprinting := Input.is_action_pressed("sprint") and dir != Vector2.ZERO and busy_t <= 0.0 and not sneaking
 	_sprinting = sprinting
 	var speed := SPRINT_SPEED if sprinting else WALK_SPEED
+	if sneaking:
+		speed *= SNEAK_SPEED
 	if health < 30.0:
 		speed *= 0.8
 	if busy_t > 0.0:
@@ -680,7 +725,7 @@ func _move(delta: float) -> void:
 		aim = aim.lerp(dir.normalized(), 0.35).normalized() # auto aim: face where you walk
 	_update_aim(delta)
 
-	if _moving:
+	if _moving and not sneaking:
 		_noise_t -= delta
 		if _noise_t <= 0.0:
 			_noise_t = 0.4
@@ -828,6 +873,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		interact()
 	elif event.is_action_pressed("build_fire"):
 		build_fire_timed()
+	elif event.is_action_pressed("throw"):
+		throw_stick()
 	elif event.is_action_pressed("fish"):
 		go_fishing()
 	else:
@@ -1313,7 +1360,11 @@ func melee(dir: Vector2) -> void:
 		var t := n as Node2D
 		var d := t.global_position - global_position
 		if d.length() <= reach + Zombie.RADIUS + 4.0 and absf(dir.angle_to(d)) < deg_to_rad(65.0) and world.has_los(global_position, t.global_position):
-			Zombie.hit(t, dmg, d.normalized(), self) # (not through a wall, window or shut door)
+			var hit_dmg := dmg
+			if t is Zombie and (t as Zombie).unaware():
+				hit_dmg *= SNEAK_ATTACK # it never saw you coming
+				FloatText.spawn(get_parent(), t.global_position + Vector2(0, -14), "Sneak attack!", Color(0.6, 1.0, 0.6), 15)
+			Zombie.hit(t, hit_dmg, d.normalized(), self) # (not through a wall, window or shut door)
 			hits += 1
 	for n in get_tree().get_nodes_in_group("animals"):
 		var a := n as Animal

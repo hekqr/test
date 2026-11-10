@@ -251,6 +251,11 @@ func _animate(moving: bool) -> void:
 		_held.z_index = -1 if d == "up" else 0
 
 
+## Hasn't noticed anyone: a melee hit now is a sneak attack.
+func unaware() -> bool:
+	return state != State.CHASE and not dead
+
+
 func _foe_ok() -> bool:
 	if foe == null or not is_instance_valid(foe):
 		return false
@@ -269,7 +274,7 @@ func _think() -> void:
 	if player != null and not player.dead:
 		var d := global_position.distance_to(player.global_position)
 		# At your base (near your bed) they spot you only from half as far
-		if d < best_d * (0.5 if player.in_base else 1.0) and world.has_los(global_position, player.global_position):
+		if d < best_d * (0.5 if player.in_base else 1.0) * player.visibility() and world.has_los(global_position, player.global_position):
 			best = player
 			best_d = d
 	for n in get_tree().get_nodes_in_group("survivors"):
@@ -535,7 +540,10 @@ func _draw() -> void:
 func take_damage(amount: float, dir: Vector2, from: Node2D = null) -> void:
 	if dead:
 		return
-	health -= amount * (1.0 - float(_t["armour"]) * 0.1)
+	var dealt := amount * (1.0 - float(_t["armour"]) * 0.1)
+	health -= dealt
+	if from is Player:
+		FloatText.spawn(get_parent(), global_position, str(int(round(dealt))), Color(1, 0.85, 0.4) if dealt < 60.0 else Color(1, 0.5, 0.3), 13 if dealt < 60.0 else 17)
 	_flash_t = 0.12
 	_knock = dir * float(_t["knock"])
 	last_hit_by = from if from != null else player

@@ -60,6 +60,7 @@ func _ready() -> void:
 	_key("move_left", [KEY_A, KEY_LEFT])
 	_key("move_right", [KEY_D, KEY_RIGHT])
 	_key("sprint", [KEY_SHIFT])
+	_key("sneak", [KEY_CTRL])
 	# Letter keys use the printed key label (so they work on any keyboard layout);
 	# movement and number keys use the physical key position.
 	_key("interact", [KEY_Q], false)
@@ -68,6 +69,7 @@ func _ready() -> void:
 	_key("reload", [KEY_R], false)
 	_key("holster", [KEY_X], false)
 	_key("build_fire", [KEY_C], false)
+	_key("throw", [KEY_G], false)
 	_key("craft", [KEY_K], false)
 	_key("map", [KEY_M], false)
 	_key("weapon_primary", [KEY_1])
@@ -101,8 +103,12 @@ func _key(action: String, keys: Array, physical := true) -> void:
 		InputMap.action_add_event(action, ev)
 
 
+## Rain drowns out sound: noise only carries 60% as far.
+const RAIN_NOISE := 0.6
+
+
 func make_noise(pos: Vector2, radius: float) -> void:
-	noise_made.emit(pos, radius)
+	noise_made.emit(pos, radius * (RAIN_NOISE if weather == "rain" else 1.0))
 
 
 # ---------------------------------------------------------------- art helpers

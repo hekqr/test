@@ -336,6 +336,18 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
   apart / save-load), `region_fuzz` (wander between regions leaving things; everything must still be there),
   `base_siege` and `house_siege` (crowds outside your base or a shut house)
 
+## Milestone 15 — Stealth and tricks worth knowing
+- ✅ **Sneak** (hold Ctrl): half speed, no footstep noise, zombies / bandits / wolves notice you from about half
+  as far. A HIDDEN / SPOTTED sign shows while you sneak
+- ✅ **Sneak attack**: a melee hit on a zombie that hasn't noticed you does 2.5× damage
+- ✅ **Throw a stick** (G): it lands up to 8 tiles ahead with a clatter and zombies go to look there
+- ✅ **Wolves fear fire**: they won't go for anyone within ~4 tiles of a lit campfire or stove
+- ✅ **Blood scent**: while you bleed, zombies and wolves notice you from 30% further — bandage quickly
+- ✅ **Rain covers noise**: footsteps and gunshots only carry 60% as far in the rain
+- ✅ Floating damage numbers on what you hit
+- ✅ `tests/base_playthrough.tscn`: builds a base with key presses and clicks only (chop, craft, B + Q, chest,
+  bed, take apart) — base building works end to end
+
 ## Ideas for endless play (next)
 - 📌 Watchtower
 - 📌 More renewable food: berries / mushrooms, slow loot respawn

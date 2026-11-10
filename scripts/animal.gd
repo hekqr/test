@@ -144,6 +144,23 @@ func scare(from: Vector2) -> void:
 
 # ---------------------------------------------------------------- wolves
 
+const FIRE_FEAR := 130.0 # wolves won't go for anyone this close to a lit fire
+
+
+func _near_fire(pos: Vector2) -> bool:
+	for f in get_tree().get_nodes_in_group("fires"):
+		var fire := f as Campfire
+		if fire.lit and fire.global_position.distance_to(pos) < FIRE_FEAR:
+			return true
+	return false
+
+
+## Gives up the hunt and backs off (fire).
+func scare_from_fire(from: Vector2) -> void:
+	_flee_from = from
+	_flee_t = 4.0
+	prey = null
+
 func _prey_ok() -> bool:
 	if prey == null or not is_instance_valid(prey):
 		return false
@@ -159,6 +176,10 @@ func _hunt_think() -> void:
 		return
 	var s: Dictionary = SPECIES[species]
 	var sight := lerpf(s["sight"], s["sight_night"], Game.night)
+	# Wolves keep away from fire: a lit campfire (or stove) near you sends them off.
+	if _prey_ok() and _near_fire(prey.global_position):
+		scare_from_fire(prey.global_position)
+		return
 	if _prey_ok():
 		var d := global_position.distance_to(prey.global_position)
 		var sees := d < sight * 1.4 and world.has_los(global_position, prey.global_position)
@@ -174,6 +195,10 @@ func _hunt_think() -> void:
 	for n in options:
 		var t := n as Node2D
 		var d := global_position.distance_to(t.global_position)
+		if t is Player:
+			d /= (t as Player).visibility() # sneaking: harder to spot; bleeding: easier
+		if _near_fire(t.global_position):
+			continue
 		if d < best_d and world.has_los(global_position, t.global_position):
 			best = t
 			best_d = d
@@ -206,6 +231,8 @@ func take_damage(amount: float, dir: Vector2, from: Node2D = null) -> void:
 	if dead:
 		return
 	health -= amount
+	if from is Player:
+		FloatText.spawn(get_parent(), global_position, str(int(round(amount))), Color(1, 0.85, 0.4), 13)
 	_flash_t = 0.12
 	last_hit_by = from if from != null else player
 	Game.hit_fx(get_parent(), global_position, dir)

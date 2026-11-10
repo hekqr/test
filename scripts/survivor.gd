@@ -260,7 +260,7 @@ func _think() -> void:
 		var d := global_position.distance_to(player.global_position)
 		if foe == player:
 			d *= 0.8
-		if d < sight and world.has_los(global_position + HAND, player.global_position + Vector2(0, -8)):
+		if d < sight * player.visibility() and world.has_los(global_position + HAND, player.global_position + Vector2(0, -8)):
 			best = player
 			best_d = d
 	for n in get_tree().get_nodes_in_group("zombies") + get_tree().get_nodes_in_group("wolves"):
