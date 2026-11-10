@@ -98,7 +98,7 @@ func _roll_gear() -> void:
 	gear["shirt"] = Items.used(Items.make(["tshirt", "flannel"].pick_random()), 30.0, 90.0)
 	gear["pants"] = Items.used(Items.make(["jeans", "cargo_pants"].pick_random()), 30.0, 90.0)
 	if randf() < 0.55:
-		gear["coat"] = Items.used(Items.make(["hoodie", "hoodie", "jacket"].pick_random()), 30.0, 90.0)
+		gear["coat"] = Items.used(Items.make(["hoodie", "hoodie", "jacket", "parka", "field_jacket"].pick_random()), 30.0, 90.0)
 	if randf() < 0.45:
 		gear["head"] = Items.used(Items.make(["cap", "cap", "beanie", "helmet"].pick_random()), 30.0, 90.0)
 	if randf() < 0.6:

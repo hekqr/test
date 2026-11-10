@@ -6,7 +6,7 @@ class_name Icons
 const SIZE := 32
 const OUTLINE := Color("1a1016")
 
-const NAMES := ["tshirt", "flannel", "hoodie", "jacket", "jeans", "cargo_pants", "boots", "vest",
+const NAMES := ["tshirt", "flannel", "hoodie", "jacket", "parka", "field_jacket", "jeans", "cargo_pants", "boots", "vest",
 	"helmet", "cap", "beanie", "backpack_small", "backpack_large", "soda", "meat", "cooked_meat", "matches", "water",
 	"rags", "rope", "sack", "sack_backpack", "spear", "map", "sewing_kit", "toolbox", "scrap_metal", "scrap_armour", "leather", "gourd",
 	"fish", "cooked_fish", "tomato", "potato", "tomato_seeds", "planks", "nails", "fishing_rod",
@@ -15,7 +15,7 @@ const NAMES := ["tshirt", "flannel", "hoodie", "jacket", "jeans", "cargo_pants",
 
 ## Default colours for items without a random colour.
 const DEFAULT := {
-	"tshirt": "6b7a4a", "flannel": "8c3b3b", "hoodie": "5a5f6e", "jacket": "6e4a32", "jeans": "3b5a8c",
+	"tshirt": "6b7a4a", "flannel": "8c3b3b", "hoodie": "5a5f6e", "jacket": "6e4a32", "parka": "3b5a8c", "field_jacket": "5a6438", "jeans": "3b5a8c",
 	"cargo_pants": "6a6440", "boots": "5a4030", "vest": "4e5434", "helmet": "4e5a3a", "cap": "8a3030",
 	"beanie": "3a4a5a", "backpack_small": "5a6a3a", "backpack_large": "6a4a30", "soda": "a83838",
 	"meat": "a83a3a", "cooked_meat": "7a4a2a", "matches": "a83838", "water": "7ab8e0",
@@ -69,7 +69,7 @@ static func _draw_item(img: Image, name: String, c: Color, silhouette: bool) -> 
 				_line(img, Vector2i(9, 13), Vector2i(9, 9), d)
 				_line(img, Vector2i(23, 13), Vector2i(23, 9), d)
 				_line(img, Vector2i(10, 27), Vector2i(22, 27), d)
-		"flannel", "hoodie", "jacket":
+		"flannel", "hoodie", "jacket", "parka", "field_jacket":
 			_poly(img, [Vector2(10, 4), Vector2(13, 4), Vector2(16, 6.5), Vector2(19, 4), Vector2(22, 4), Vector2(28, 8.5), Vector2(30.5, 26), Vector2(26.5, 27), Vector2(23.5, 15), Vector2(23.5, 28.5), Vector2(8.5, 28.5), Vector2(8.5, 15), Vector2(5.5, 27), Vector2(1.5, 26), Vector2(4, 8.5)], c)
 			if silhouette:
 				return
@@ -85,6 +85,20 @@ static func _draw_item(img: Image, name: String, c: Color, silhouette: bool) -> 
 				_line(img, Vector2i(11, 19), Vector2i(20, 19), dd)
 				_line(img, Vector2i(14, 8), Vector2i(14, 12), l)
 				_line(img, Vector2i(18, 8), Vector2i(18, 12), l)
+			elif name == "parka":
+				# fur-lined hood, puffy bands, zip
+				_poly(img, [Vector2(10, 4), Vector2(12, 0.5), Vector2(20, 0.5), Vector2(22, 4), Vector2(20, 8), Vector2(12, 8)], Color("d8ccb0"))
+				for y in [12, 17, 22]:
+					_line(img, Vector2i(9, y), Vector2i(23, y), d)
+				_line(img, Vector2i(16, 8), Vector2i(16, 28), dd)
+			elif name == "field_jacket":
+				# collar, four pockets, buttons
+				_poly(img, [Vector2(12.5, 4), Vector2(16, 9), Vector2(11, 8)], d)
+				_poly(img, [Vector2(19.5, 4), Vector2(16, 9), Vector2(21, 8)], d)
+				_line(img, Vector2i(16, 9), Vector2i(16, 28), dd)
+				for r in [[10, 11], [18, 11], [10, 20], [18, 20]]:
+					_rect(img, r[0], r[1], 5, 4, d)
+					_line(img, Vector2i(r[0], r[1]), Vector2i(r[0] + 4, r[1]), dd)
 			else:
 				_poly(img, [Vector2(12.5, 4), Vector2(16, 13), Vector2(11, 9)], d)
 				_poly(img, [Vector2(19.5, 4), Vector2(16, 13), Vector2(21, 9)], d)

@@ -519,6 +519,8 @@ const ICONS := {
 	"flannel": [_SHIRT, {"a": "base", "b": "dark", "c": "darker"}, true, "8c3b3b"],
 	"hoodie": [_COAT, {"a": "base", "b": "light", "d": "dark"}, false, "5a5f6e"],
 	"jacket": [_COAT, {"a": "base", "b": "light", "d": "dark"}, false, "6e4a32"],
+	"parka": [_COAT, {"a": "base", "b": "light", "d": "dark"}, false, "3b5a8c"],
+	"field_jacket": [_COAT, {"a": "base", "b": "light", "d": "dark"}, false, "5a6438"],
 	"jeans": [_PANTS, {"a": "base", "b": "dark", "c": "light", "p": "base"}, false, "3b5a8c"],
 	"cargo_pants": [_PANTS, {"a": "base", "b": "dark", "c": "light", "p": "dark"}, false, "6a6440"],
 	"boots": [_BOOT, {"a": "base", "b": "darker"}, false, "5a4030"],
