@@ -663,6 +663,8 @@ func _draw() -> void:
 		if p.bleeding:
 			_tex(Game.tex("blood_2"), Vector2(bx + 176, by + 4), 3.0)
 			_text(Vector2(bx + 210, by + 26), "Bleeding", 15, Color(1, 0.4, 0.4))
+		if p.well_fed() and not p.dead:
+			_text(Vector2(bx + 176, by + 70), "Well fed", 11, Color(0.6, 1.0, 0.6))
 		if p.poison_t > 0.0:
 			_text(Vector2(bx + 186, by + 70), "Sick (%ds)" % int(ceil(p.poison_t)), 15, Color(0.7, 0.9, 0.4))
 

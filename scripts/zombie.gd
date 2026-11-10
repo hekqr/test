@@ -251,6 +251,9 @@ func _animate(moving: bool) -> void:
 		_held.z_index = -1 if d == "up" else 0
 
 
+const POCKET_CHANCE := 0.12
+
+
 ## Hasn't noticed anyone: a melee hit now is a sneak attack.
 func unaware() -> bool:
 	return state != State.CHASE and not dead
@@ -595,6 +598,9 @@ func _drop_loot() -> void:
 			items.append(Items.used(Items.make("vest"), 10.0, 45.0))
 	elif type == "axe" and has_axe and randf() < 0.5:
 		items.append(Items.used(Items.make("axe"), 20.0, 60.0))
+	# Now and then a zombie still has something in its pockets
+	if randf() < POCKET_CHANCE:
+		items.append(Items.make(["rags", "rags", "matches", "bandage", "food", "soda", "nails", "ammo_9mm"].pick_random(), 1))
 	if items.is_empty():
 		return
 	var pile := LootSpot.new()

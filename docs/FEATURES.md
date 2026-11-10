@@ -345,6 +345,9 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ **Blood scent**: while you bleed, zombies and wolves notice you from 30% further — bandage quickly
 - ✅ **Rain covers noise**: footsteps and gunshots only carry 60% as far in the rain
 - ✅ Floating damage numbers on what you hit
+- ✅ **Steady shot**: a fully settled aim (stand still) does 35% more damage to zombies and bandits
+- ✅ **Well fed**: hunger and thirst both above 75% make you 6% faster (and let you heal)
+- ✅ Zombies sometimes (12%) still have something in their pockets
 - ✅ `tests/base_playthrough.tscn`: builds a base with key presses and clicks only (chop, craft, B + Q, chest,
   bed, take apart) — base building works end to end
 

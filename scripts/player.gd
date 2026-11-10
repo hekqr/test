@@ -6,6 +6,8 @@ signal died
 
 const RADIUS := 11.0
 const WALK_SPEED := 84.0
+const STEADY_SHOT := 1.35 # damage bonus for a fully steadied aim
+const WELL_FED_SPEED := 1.06 # hunger and thirst both above 75%: a little faster
 const SNEAK_SPEED := 0.5 # sneaking (Ctrl): half speed, no footstep noise
 const SNEAK_SIGHT := 0.55 # ...and zombies / bandits / wolves see you from about half as far
 const SNEAK_ATTACK := 2.5 # melee on a zombie that hasn't noticed you
@@ -486,6 +488,11 @@ static func bench_repair_cost(fix: String) -> Array:
 	return ["scrap_metal", 1] if fix == "tool" else ["rags", 2]
 
 
+## Fed and watered (both above 75%): you move a little faster (and you heal, see can_heal).
+func well_fed() -> bool:
+	return hunger >= 75.0 and thirst >= 75.0
+
+
 ## How easy you are to notice: 1 normally, less while sneaking, more while bleeding (they smell blood).
 func visibility() -> float:
 	return (SNEAK_SIGHT if sneaking else 1.0) * (BLOOD_SCENT if bleeding else 1.0)
@@ -708,6 +715,8 @@ func _move(delta: float) -> void:
 		speed *= SNEAK_SPEED
 	if health < 30.0:
 		speed *= 0.8
+	elif well_fed():
+		speed *= WELL_FED_SPEED
 	if busy_t > 0.0:
 		speed *= 0.5 # eating / bandaging / searching: you can only shuffle along
 	velocity = dir * speed
@@ -1454,6 +1463,8 @@ func shoot() -> void:
 		return
 	g["mag"] -= 1
 	_attack_cd = w["cooldown"]
+	# A fully settled aim (you stood still) hits harder
+	var shot_mult := STEADY_SHOT if aim_steadiness() >= 0.97 else 1.0
 	_shots.clear()
 	var space := get_world_2d().direct_space_state
 	var origin := global_position + HAND
@@ -1471,7 +1482,7 @@ func shoot() -> void:
 			end = hit["position"]
 			var col: Object = hit["collider"]
 			if col is Zombie or col is Survivor:
-				Zombie.hit(col as Node2D, w["damage"], dir, self)
+				Zombie.hit(col as Node2D, float(w["damage"]) * shot_mult, dir, self)
 			elif col is Animal:
 				(col as Animal).take_damage(w["damage"], dir, self)
 		_shots.append(end)
