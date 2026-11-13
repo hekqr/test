@@ -292,6 +292,8 @@ func _map_input(event: InputEvent) -> bool:
 
 
 func set_inventory_open(open: bool) -> void:
+	if open != inventory_open:
+		Sfx.ui("ui_open", -6.0)
 	if open and map_open:
 		map_open = false # one screen at a time
 	inventory_open = open
@@ -301,7 +303,23 @@ func set_inventory_open(open: bool) -> void:
 	Input.set_default_cursor_shape(Input.CURSOR_ARROW if open else Input.CURSOR_CROSS)
 
 
+var settings: SettingsMenu
+
+
+## The Settings button on the pause screen.
+func settings_rect() -> Rect2:
+	var vs := get_viewport_rect().size
+	return Rect2(vs.x / 2.0 - 90.0, vs.y * 0.45 + 92.0, 180.0, 40.0)
+
+
 func _input(event: InputEvent) -> void:
+	if settings and settings.visible:
+		return
+	if get_tree().paused and not main.player.dead and event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		if settings and settings_rect().has_point(event.position):
+			settings.open()
+			get_viewport().set_input_as_handled()
+		return
 	if map_open:
 		if _map_input(event):
 			get_viewport().set_input_as_handled()
@@ -351,6 +369,7 @@ func _input(event: InputEvent) -> void:
 		if mb.button_index == MOUSE_BUTTON_LEFT:
 			var i := _menu_index(mb.position)
 			if i >= 0:
+				Sfx.ui("ui_click", -6.0)
 				p.do_action(_menu["loc"], _menu["items"][i][1])
 		_menu = {}
 		get_viewport().set_input_as_handled()
@@ -398,6 +417,7 @@ func open_menu(p: Player, loc: Dictionary, at: Vector2) -> void:
 	var acts := p.actions_for(loc)
 	if not acts.is_empty():
 		_menu = {"loc": loc, "pos": at + Vector2(8, 8), "items": acts}
+		Sfx.ui("ui_click", -10.0)
 
 
 func _menu_rect() -> Rect2:
@@ -452,9 +472,10 @@ func _drop_drag(p: Player, pos: Vector2, loc: Dictionary) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	var p: Player = main.player
+	if settings and settings.visible:
+		return
 	if event.is_action_pressed("fullscreen"):
-		var full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
+		Game.toggle_fullscreen()
 	elif event.is_action_pressed("help"):
 		show_help = not show_help
 	elif p.dead and event.is_action_pressed("reload"):
@@ -729,7 +750,9 @@ func _draw() -> void:
 	# Clock / stats (top-right)
 	_text(Vector2(vs.x - 20, 32), "Day %d  %s" % [main.day, main.clock_text()], 20, Color.WHITE, HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	_text(Vector2(vs.x - 20, 54), "Survived %d:%02d   Kills %d" % [st / 60, st % 60, main.kills], 14, Color(0.85, 0.85, 0.85), HORIZONTAL_ALIGNMENT_RIGHT, 0)
-	_text(Vector2(vs.x - 20, 74), main.region_name, 14, Color(0.95, 0.85, 0.6), HORIZONTAL_ALIGNMENT_RIGHT, 0)
+	var dcol: Color = [Color(0.6, 0.85, 0.55), Color(0.9, 0.85, 0.5), Color(0.95, 0.65, 0.4), Color(0.95, 0.45, 0.35), Color(0.95, 0.3, 0.3)][main.danger]
+	_text(Vector2(vs.x - 20, 74), "%s  -  %s" % [main.region_name, World.biome_name(main.world.biome)], 14, Color(0.95, 0.85, 0.6), HORIZONTAL_ALIGNMENT_RIGHT, 0)
+	_text(Vector2(vs.x - 20, 114), "Danger: " + main.danger_text(), 13, dcol, HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	_text(Vector2(vs.x - 20, 94), {"clear": "Clear", "rain": "Rain", "snow": "Snow"}.get(main.weather, ""), 14, Color(0.75, 0.85, 0.95), HORIZONTAL_ALIGNMENT_RIGHT, 0)
 
 	# Action button: appears automatically near containers / items / fires / carcasses
@@ -742,15 +765,16 @@ func _draw() -> void:
 		var face_mid := ar.position.y + (6.0 if pressed else 0.0) + 8.5 * UI_SCALE
 		var baseline := face_mid + (_font.get_ascent(16) - _font.get_descent(16)) / 2.0
 		_text(Vector2(ar.position.x, roundf(baseline)), label, 16, C_EDGE, HORIZONTAL_ALIGNMENT_CENTER, ar.size.x, false)
-		_text(Vector2(ar.end.x + 8, ar.position.y + 38), "[Q]", 14, C_DIM)
+		_text(Vector2(ar.end.x + 8, ar.position.y + 38), "[%s]" % Game.key("interact"), 14, C_DIM)
 
 	# Help
 	if show_help and not inventory_open and not map_open and not p.dead:
+		var k := func(a: String) -> String: return Game.key(a)
 		var lines := [
-			"WASD move   Shift sprint   Ctrl sneak   Melee is automatic   Space shoot (aims for you - stand still to steady)",
-			"Q search, pick up, skin, cook, drink, open, sleep, use   F fish   B build (Q on built = take apart)   C campfire   G throw stick",
-			"1 / 2 / 3: main / secondary / melee   R reload   X lower weapon / stop   T aim mode   Mouse wheel: zoom   K crafting   M map",
-			"E inventory: click an item to eat, drink, bandage, wear, build...   Esc pause   F1 hide help",
+			"%s%s%s%s move   %s sprint   %s sneak   Melee is automatic   %s shoot (aims for you - stand still to steady)" % [k.call("move_up"), k.call("move_left"), k.call("move_down"), k.call("move_right"), k.call("sprint"), k.call("sneak"), k.call("fire")],
+			"%s search, pick up, skin, cook, drink, open, sleep, use   %s fish   %s build   %s campfire   %s throw stick" % [k.call("interact"), k.call("fish"), k.call("build"), k.call("build_fire"), k.call("throw")],
+			"%s / %s / %s: main / secondary / melee   %s reload   %s lower weapon / stop   %s aim mode   Mouse wheel: zoom   %s crafting   %s map" % [k.call("weapon_primary"), k.call("weapon_secondary"), k.call("weapon_melee"), k.call("reload"), k.call("holster"), k.call("aim_mode"), k.call("craft"), k.call("map")],
+			"%s inventory: click an item to eat, drink, bandage, wear, build...   %s pause (settings)   %s hide help" % [k.call("inventory"), k.call("pause"), k.call("help")],
 		]
 		draw_rect(Rect2(14, 14, 660, 104), Color(0.08, 0.04, 0.07, 0.6))
 		for i in lines.size():
@@ -781,15 +805,20 @@ func _draw() -> void:
 	if get_tree().paused:
 		draw_rect(Rect2(Vector2.ZERO, vs), Color(0, 0, 0, 0.55))
 		_text(Vector2(0, vs.y * 0.45), "PAUSED", 48, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
-		_text(Vector2(0, vs.y * 0.45 + 40), "Esc resume   Q save & quit to menu", 18, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		_text(Vector2(0, vs.y * 0.45 + 40), "%s resume   %s save & quit to menu" % [Game.key("pause"), Game.key("interact")], 18, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 		_text(Vector2(0, vs.y * 0.45 + 66), "The game saves automatically", 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		if settings and not settings.visible:
+			var sr := settings_rect()
+			draw_rect(sr, C_EDGE)
+			draw_rect(sr.grow(-2), Color("4e4250") if sr.has_point(_mouse) else Color("3a3040"))
+			_text(Vector2(sr.position.x, sr.position.y + 27), "Settings", 18, C_TEXT, HORIZONTAL_ALIGNMENT_CENTER, sr.size.x)
 
 	# Death
 	if p.dead:
 		draw_rect(Rect2(Vector2.ZERO, vs), Color(0.25, 0, 0, 0.6))
 		_text(Vector2(0, vs.y * 0.42), "YOU DIED", 56, Color(1, 0.85, 0.85), HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 		_text(Vector2(0, vs.y * 0.42 + 44), "Survived %d:%02d   Day %d   Kills %d" % [st / 60, st % 60, main.day, main.kills], 20, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
-		_text(Vector2(0, vs.y * 0.42 + 80), "R  new survivor (new world)      Esc  main menu", 18, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+		_text(Vector2(0, vs.y * 0.42 + 80), "%s  new survivor (new world)      %s  main menu" % [Game.key("reload"), Game.key("pause")], 18, Color.WHITE, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 
 
 ## The inventory screen is laid out for 1280 x 720; on taller / wider screens it sits in the middle.
@@ -813,7 +842,7 @@ func _draw_inventory(p: Player, vs: Vector2) -> void:
 		var on := (i == 0 and left_tab == "near") or (i == 1 and left_tab == "craft")
 		draw_rect(tr2, C_EDGE)
 		draw_rect(tr2.grow(-2), C_LIGHT if on else C_CARD)
-		_text(Vector2(tr2.position.x, tr2.position.y + 21), [near_title, "CRAFTING [K]"][i], 14 if on else 13, C_TEXT if on else C_DIM, HORIZONTAL_ALIGNMENT_CENTER, tr2.size.x)
+		_text(Vector2(tr2.position.x, tr2.position.y + 21), [near_title, "CRAFTING [%s]" % Game.key("craft")][i], 14 if on else 13, C_TEXT if on else C_DIM, HORIZONTAL_ALIGNMENT_CENTER, tr2.size.x)
 	if left_tab == "craft":
 		_draw_crafting(p)
 	else:
@@ -1173,6 +1202,7 @@ func _draw_map(p: Player, vs: Vector2) -> void:
 	var ly := r.position.y + 4.0
 	draw_rect(Rect2(lx - 10, ly - 4, 190, 356), Color(0.12, 0.08, 0.1, 0.85))
 	_text(Vector2(lx, ly + 18), main.region_name.to_upper(), 16, C_TEXT)
+	_text(Vector2(lx + 176, ly + 18), World.biome_name(main.world.biome), 12, C_DIM, HORIZONTAL_ALIGNMENT_RIGHT, 0)
 	var rows := [["city", "City"], ["town", "Town"], ["village", "Village"], ["hamlet", "Hamlet"], ["military", "Military camp"]]
 	for i in rows.size():
 		var y := ly + 46 + i * 26
@@ -1198,7 +1228,7 @@ func _draw_map(p: Player, vs: Vector2) -> void:
 	draw_colored_polygon(PackedVector2Array([cp + Vector2(0, -22), cp + Vector2(6, 0), cp + Vector2(-6, 0)]), Color("c23a30"))
 	draw_colored_polygon(PackedVector2Array([cp + Vector2(0, 22), cp + Vector2(6, 0), cp + Vector2(-6, 0)]), Color("5a4630"))
 	_text(cp + Vector2(-5, -30), "N", 14, C_TEXT)
-	_text(Vector2(0, r.end.y + 34), "Scroll to zoom  -  drag to move  -  M / Esc to close", 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
+	_text(Vector2(0, r.end.y + 34), "Scroll to zoom  -  drag to move  -  %s / %s to close" % [Game.key("map"), Game.key("pause")], 14, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 	if not has_map:
 		_text(Vector2(0, r.end.y + 54), "Only places you've been are drawn. A Road map (cars, shops, garages, police) shows everything.", 13, C_DIM, HORIZONTAL_ALIGNMENT_CENTER, vs.x)
 

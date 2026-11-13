@@ -22,7 +22,9 @@ Top-down 2D zombie survival game for Windows. Godot 4.7.2, GDScript. The user do
   `godot --headless --path . res://tests/ui_fuzz.tscn -- 500` (steps). Smoke tests can run in parallel; keep
   to 2-3 godot processes at once (more ran the container out of memory).
 - More test tools (all `godot --headless --path . res://tests/<name>.tscn [-- steps]`): `key_fuzz`, `build_fuzz`, `region_fuzz`,
-  `base_siege`, `house_siege`, `base_playthrough`, `travel_probe`, `perf_probe`.
+  `base_siege`, `house_siege`, `base_playthrough`, `travel_probe`, `perf_probe`. Screenshot tools (run with xvfb-run):
+  `gear_shot` (worn gear on characters), `biome_shot` (one region of every biome), `settings_shot`.
+- Sounds: `python3 tools/make_sfx.py` writes `assets/sfx/*.wav` (synthesised, ours - commit them with their .import files).
 
 ## Design decisions (from the user)
 - Base walls/gates are unbreakable: the base is a fully safe, sustainable place. No raids on bases.

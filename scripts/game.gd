@@ -18,6 +18,8 @@ var night := 0.0
 ## "clear", "rain" or "snow". Set by main.gd. Rain / snow: colder, you warm up slower; rain: fish bite
 ## faster and crops grow faster.
 var weather := "clear"
+## How much colder this region's air is than home (snowfields are much colder).
+var region_cold := 0.0
 ## True while a full-screen UI (inventory) is open: blocks attacking/moving.
 var ui_open := false
 ## Save file location (tests point this somewhere else).
@@ -37,12 +39,60 @@ var click_used := false
 var aim_mode := "auto"
 const SETTINGS_PATH := "user://settings.cfg"
 
+## Sound volumes 0..1 (Master, sound effects, ambience: wind, rain, birds).
+var vol_master := 0.8
+var vol_sfx := 1.0
+var vol_ambience := 0.7
+## "windowed", "fullscreen" or "borderless"; the window size when windowed; vsync.
+var window_mode := "windowed"
+var resolution := Vector2i(1280, 720)
+var vsync := true
+const RESOLUTIONS := [Vector2i(1280, 720), Vector2i(1366, 768), Vector2i(1600, 900), Vector2i(1920, 1080), Vector2i(2560, 1440)]
+
+## Rebindable keys, in the order the settings screen lists them: action -> [name, default keys, physical?]
+## Letter keys use the printed key label (any keyboard layout); movement / numbers use the key position.
+const KEYS := {
+	"move_up": ["Move up", [KEY_W, KEY_UP], true],
+	"move_down": ["Move down", [KEY_S, KEY_DOWN], true],
+	"move_left": ["Move left", [KEY_A, KEY_LEFT], true],
+	"move_right": ["Move right", [KEY_D, KEY_RIGHT], true],
+	"sprint": ["Sprint", [KEY_SHIFT], true],
+	"sneak": ["Sneak", [KEY_CTRL], true],
+	"interact": ["Use / search / pick up", [KEY_Q], false],
+	"inventory": ["Inventory", [KEY_E, KEY_TAB, KEY_I], false],
+	"craft": ["Crafting", [KEY_K], false],
+	"map": ["Map", [KEY_M], false],
+	"build": ["Build mode", [KEY_B], false],
+	"build_fire": ["Make a campfire", [KEY_C], false],
+	"fish": ["Fish", [KEY_F], false],
+	"throw": ["Throw a stick", [KEY_G], false],
+	"fire": ["Shoot (auto aim)", [KEY_SPACE], true],
+	"reload": ["Reload", [KEY_R], false],
+	"holster": ["Lower weapon / stop", [KEY_X], false],
+	"weapon_primary": ["Main weapon", [KEY_1], true],
+	"weapon_secondary": ["Secondary weapon", [KEY_2], true],
+	"weapon_melee": ["Melee weapon", [KEY_3], true],
+	"aim_mode": ["Switch aim mode", [KEY_T], false],
+	"help": ["Show / hide help", [KEY_F1], true],
+	"pause": ["Pause / back", [KEY_ESCAPE], true],
+	"fullscreen": ["Fullscreen", [KEY_F11], true],
+	"quit": ["Quit to menu (paused)", [KEY_BACKSPACE], false],
+}
+
 
 func load_settings() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load(SETTINGS_PATH) == OK:
 		aim_mode = String(cfg.get_value("controls", "aim_mode", "auto"))
 		save_slot = clampi(int(cfg.get_value("game", "slot", 1)), 1, SaveGame.SLOTS)
+		vol_master = clampf(float(cfg.get_value("audio", "master", vol_master)), 0.0, 1.0)
+		vol_sfx = clampf(float(cfg.get_value("audio", "sfx", vol_sfx)), 0.0, 1.0)
+		vol_ambience = clampf(float(cfg.get_value("audio", "ambience", vol_ambience)), 0.0, 1.0)
+		window_mode = String(cfg.get_value("display", "mode", window_mode))
+		var r = cfg.get_value("display", "resolution", [resolution.x, resolution.y])
+		if r is Array and r.size() == 2:
+			resolution = Vector2i(int(r[0]), int(r[1]))
+		vsync = bool(cfg.get_value("display", "vsync", vsync))
 
 
 func save_settings() -> void:
@@ -50,44 +100,194 @@ func save_settings() -> void:
 	cfg.load(SETTINGS_PATH)
 	cfg.set_value("controls", "aim_mode", aim_mode)
 	cfg.set_value("game", "slot", save_slot)
+	cfg.set_value("audio", "master", vol_master)
+	cfg.set_value("audio", "sfx", vol_sfx)
+	cfg.set_value("audio", "ambience", vol_ambience)
+	cfg.set_value("display", "mode", window_mode)
+	cfg.set_value("display", "resolution", [resolution.x, resolution.y])
+	cfg.set_value("display", "vsync", vsync)
+	# Keys: only the ones you changed
+	if cfg.has_section("keys"):
+		cfg.erase_section("keys")
+	for action in KEYS:
+		var cur := _key_codes(action)
+		if cur != _default_codes(action):
+			cfg.set_value("keys", action, cur)
 	cfg.save(SETTINGS_PATH)
 
 
 func _ready() -> void:
 	load_settings()
-	_key("move_up", [KEY_W, KEY_UP])
-	_key("move_down", [KEY_S, KEY_DOWN])
-	_key("move_left", [KEY_A, KEY_LEFT])
-	_key("move_right", [KEY_D, KEY_RIGHT])
-	_key("sprint", [KEY_SHIFT])
-	_key("sneak", [KEY_CTRL])
-	# Letter keys use the printed key label (so they work on any keyboard layout);
-	# movement and number keys use the physical key position.
-	_key("interact", [KEY_Q], false)
-	_key("fish", [KEY_F], false)
-	_key("build", [KEY_B], false)
-	_key("reload", [KEY_R], false)
-	_key("holster", [KEY_X], false)
-	_key("build_fire", [KEY_C], false)
-	_key("throw", [KEY_G], false)
-	_key("craft", [KEY_K], false)
-	_key("map", [KEY_M], false)
-	_key("weapon_primary", [KEY_1])
-	_key("weapon_secondary", [KEY_2])
-	_key("weapon_melee", [KEY_3])
-	# (The mouse wheel zooms the camera / the map; weapons are on 1 / 2 / 3.)
-	_key("fire", [KEY_SPACE])
-	_key("aim_mode", [KEY_T], false)
-	_key("inventory", [KEY_E, KEY_TAB, KEY_I], false)
-	_key("help", [KEY_F1])
-	_key("pause", [KEY_ESCAPE])
-	_key("fullscreen", [KEY_F11])
-	_key("quit", [KEY_BACKSPACE], false)
+	for action in KEYS:
+		_key(action, KEYS[action][1], KEYS[action][2])
 	if not InputMap.has_action("attack"):
 		InputMap.add_action("attack")
 		var mb := InputEventMouseButton.new()
 		mb.button_index = MOUSE_BUTTON_LEFT
 		InputMap.action_add_event("attack", mb)
+	# Saved key changes
+	var cfg := ConfigFile.new()
+	if cfg.load(SETTINGS_PATH) == OK and cfg.has_section("keys"):
+		for action in cfg.get_section_keys("keys"):
+			if KEYS.has(action):
+				var codes = cfg.get_value("keys", action, [])
+				if codes is Array:
+					_set_codes(action, codes)
+	_setup_audio()
+	apply_audio()
+	apply_display()
+
+
+# ---------------------------------------------------------------- keys
+
+## The keys of an action as saved text: "p<physical keycode>" / "k<keycode>".
+func _key_codes(action: String) -> Array:
+	var out := []
+	for ev in InputMap.action_get_events(action):
+		if ev is InputEventKey:
+			var k := ev as InputEventKey
+			out.append("p%d" % k.physical_keycode if k.physical_keycode != 0 else "k%d" % k.keycode)
+	return out
+
+
+func _default_codes(action: String) -> Array:
+	var out := []
+	for k in KEYS[action][1]:
+		out.append(("p%d" if KEYS[action][2] else "k%d") % k)
+	return out
+
+
+func _set_codes(action: String, codes: Array) -> void:
+	for ev in InputMap.action_get_events(action):
+		if ev is InputEventKey:
+			InputMap.action_erase_event(action, ev)
+	for c in codes:
+		var s := String(c)
+		if s.length() < 2:
+			continue
+		var ev := InputEventKey.new()
+		if s[0] == "p":
+			ev.physical_keycode = int(s.substr(1))
+		else:
+			ev.keycode = int(s.substr(1))
+		InputMap.action_add_event(action, ev)
+
+
+## Binds a key to an action (replacing its keys). If another action had that key, it gets this
+## action's old key instead (a swap). Returns the name of that other action, or "".
+func rebind(action: String, ev: InputEventKey) -> String:
+	var code := "p%d" % ev.physical_keycode if KEYS[action][2] else "k%d" % (ev.keycode if ev.keycode != 0 else _from_physical(ev.physical_keycode))
+	var old := _key_codes(action)
+	var swapped := ""
+	for other in KEYS:
+		if other == action:
+			continue
+		for oe in InputMap.action_get_events(other):
+			if oe is InputEventKey and _same_key(oe as InputEventKey, ev):
+				InputMap.action_erase_event(other, oe)
+				if InputMap.action_get_events(other).filter(func(e): return e is InputEventKey).is_empty() and not old.is_empty():
+					_set_codes(other, [_convert(String(old[0]), KEYS[other][2])])
+				swapped = String(KEYS[other][0])
+	_set_codes(action, [code])
+	save_settings()
+	return swapped
+
+
+func _same_key(a: InputEventKey, b: InputEventKey) -> bool:
+	var ka := a.keycode if a.keycode != 0 else _from_physical(a.physical_keycode)
+	var kb := b.keycode if b.keycode != 0 else _from_physical(b.physical_keycode)
+	return ka == kb
+
+
+## A saved key code as a physical / label code.
+func _convert(code: String, physical: bool) -> String:
+	var n := int(code.substr(1))
+	if code[0] == "p" and not physical:
+		return "k%d" % _from_physical(n)
+	if code[0] == "k" and physical:
+		return "p%d" % n # (letters / numbers / F-keys have the same code both ways on a standard layout)
+	return code
+
+
+func reset_keys() -> void:
+	for action in KEYS:
+		_set_codes(action, _default_codes(action))
+	save_settings()
+
+
+## The key label at a physical key position (the same code on a standard layout, or with no display).
+func _from_physical(code: int) -> int:
+	if DisplayServer.get_name() == "headless":
+		return code
+	var k := DisplayServer.keyboard_get_keycode_from_physical(code)
+	return k if k != 0 else code
+
+
+## The name of an action's (first) key, for help text: "Q", "Space", "F1"...
+func key(action: String) -> String:
+	for ev in InputMap.action_get_events(action):
+		if ev is InputEventKey:
+			var k := ev as InputEventKey
+			var code := k.keycode if k.keycode != 0 else _from_physical(k.physical_keycode)
+			return OS.get_keycode_string(code)
+	return "-"
+
+
+## All of an action's keys: "E / Tab / I".
+func keys_text(action: String) -> String:
+	var out := PackedStringArray()
+	for ev in InputMap.action_get_events(action):
+		if ev is InputEventKey:
+			var k := ev as InputEventKey
+			out.append(OS.get_keycode_string(k.keycode if k.keycode != 0 else _from_physical(k.physical_keycode)))
+	return " / ".join(out) if not out.is_empty() else "(none)"
+
+
+# ---------------------------------------------------------------- audio / display
+
+func _setup_audio() -> void:
+	for bus in ["SFX", "Ambience"]:
+		if AudioServer.get_bus_index(bus) < 0:
+			AudioServer.add_bus()
+			var i := AudioServer.bus_count - 1
+			AudioServer.set_bus_name(i, bus)
+			AudioServer.set_bus_send(i, "Master")
+
+
+func apply_audio() -> void:
+	AudioServer.set_bus_volume_db(0, linear_to_db(maxf(vol_master, 0.0001)))
+	AudioServer.set_bus_mute(0, vol_master <= 0.001)
+	for b in [["SFX", vol_sfx], ["Ambience", vol_ambience]]:
+		var i := AudioServer.get_bus_index(b[0])
+		if i >= 0:
+			AudioServer.set_bus_volume_db(i, linear_to_db(maxf(float(b[1]), 0.0001)))
+			AudioServer.set_bus_mute(i, float(b[1]) <= 0.001)
+
+
+## F11: fullscreen on / off (remembered).
+func toggle_fullscreen() -> void:
+	window_mode = "windowed" if window_mode != "windowed" else "borderless"
+	apply_display()
+	save_settings()
+
+
+func apply_display() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED)
+	match window_mode:
+		"fullscreen":
+			DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN)
+		"borderless":
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+		_:
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+			DisplayServer.window_set_flag(DisplayServer.WINDOW_FLAG_BORDERLESS, false)
+			var screen := DisplayServer.screen_get_usable_rect()
+			var size := Vector2i(mini(resolution.x, screen.size.x), mini(resolution.y, screen.size.y))
+			DisplayServer.window_set_size(size)
+			DisplayServer.window_set_position(screen.position + (screen.size - size) / 2)
 
 
 func _key(action: String, keys: Array, physical := true) -> void:

@@ -12,6 +12,9 @@ The game saves automatically (every 30 s, when you quit, and when you die). Ther
 is kept but can't be continued.
 
 ## Controls
+These are the default keys: every key can be changed in **Settings** (title screen, or Esc → Settings), along
+with sound volumes, window / fullscreen, window size and VSync.
+
 | Key | Action |
 |---|---|
 | WASD | Move |
@@ -31,9 +34,13 @@ is kept but can't be continued.
 | Mouse wheel | Zoom in / out |
 | X | Lower weapon (fists) |
 | E (or Tab / I) | Inventory (E again closes it): click an item to see what you can do with it (Eat, Drink, Use, Wear, Repair, Tear into rags, Drop...), double-click for its main action, drag to move, drag outside to drop |
-| Esc | Pause (Q or Backspace = save & quit to menu) |
+| Esc | Pause (Settings button; Q or Backspace = save & quit to menu) |
 | F11 | Fullscreen |
 | F1 | Toggle help |
+
+## Sounds
+All sound effects are made from scratch by `tools/make_sfx.py` (synthesised; no recordings or third-party
+audio) into `assets/sfx/`. Rebuild them with `python3 tools/make_sfx.py` (needs numpy and scipy).
 
 ## Art assets (not in this repo)
 The game uses two third-party pixel-art packs. Their licenses allow **non-commercial use only** and

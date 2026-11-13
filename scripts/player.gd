@@ -96,12 +96,14 @@ const FISH_HOOK_RAIN := 0.7
 var _thirst_msg_t := 0.0
 var sneaking := false
 var _hurt_t := 0.0
+## A crawler has hold of your ankle: you move at half speed until it runs out.
+var grabbed_t := 0.0
 var hit_flash := 0.0 # 1 when you get hit, fades out: the screen flashes red (drawn by the HUD)
 var _noise_t := 0.0
 var _sprite: AnimatedSprite2D
 var _held: Sprite2D
 var _moving := false
-var _pack: Node2D # draws the backpack on the character
+var _pack: GearOverlay # draws worn gear (hat, armour, backpack) on the character
 var _melee_dir := Vector2.RIGHT
 var camera: Camera2D
 const ZOOM_MIN := 1.0 # see more
@@ -124,8 +126,9 @@ func _ready() -> void:
 	mat.shader = load("res://shaders/outfit.gdshader")
 	_sprite.material = mat
 	add_child(_sprite)
-	_pack = Node2D.new()
-	_pack.draw.connect(_draw_pack)
+	_pack = GearOverlay.new()
+	_pack.sprite = _sprite
+	_pack.gear = inv.gear
 	add_child(_pack)
 	inv.changed.connect(update_outfit)
 	_held = Sprite2D.new()
@@ -340,6 +343,7 @@ func start_busy(label: String, secs: float, done: Callable) -> bool:
 	busy_label = label
 	busy_total = secs
 	busy_t = secs
+	Sfx.for_action(label, global_position)
 	_busy_done = done
 	reloading = false
 	return true
@@ -525,6 +529,8 @@ func throw_stick() -> void:
 	spot.position = land
 	get_parent().add_child(spot)
 	Game.make_noise(land, THROW_NOISE)
+	Sfx.at("swing", global_position, -6.0)
+	Sfx.at("clatter", land)
 	FloatText.spawn(get_parent(), land, "clack!", Color(0.9, 0.9, 0.9), 12)
 	say("You throw a stick")
 
@@ -660,7 +666,12 @@ func _physics_process(delta: float) -> void:
 
 func _timers(delta: float) -> void:
 	if busy_t > 0.0:
+		var before_t := busy_t
 		busy_t -= delta
+		# keep chopping / hammering while it lasts
+		if busy_label.begins_with("Chopping") or busy_label.begins_with("Building..") or busy_label.begins_with("Dismantling"):
+			if fmod(before_t, 0.9) < fmod(busy_t, 0.9) and busy_t > 0.3:
+				Sfx.for_action(busy_label, global_position)
 		if busy_t <= 0.0:
 			finish_busy()
 	if cook_t > 0.0:
@@ -671,6 +682,7 @@ func _timers(delta: float) -> void:
 	_swing_t -= delta
 	_shot_t -= delta
 	_hurt_t -= delta
+	grabbed_t -= delta
 	hit_flash = maxf(hit_flash - delta * 2.5, 0.0)
 	message_t -= delta
 	if reloading:
@@ -719,6 +731,8 @@ func _move(delta: float) -> void:
 		speed *= WELL_FED_SPEED
 	if busy_t > 0.0:
 		speed *= 0.5 # eating / bandaging / searching: you can only shuffle along
+	if grabbed_t > 0.0:
+		speed *= 0.5
 	velocity = dir * speed
 	var before := global_position
 	move_and_slide()
@@ -734,12 +748,37 @@ func _move(delta: float) -> void:
 		aim = aim.lerp(dir.normalized(), 0.35).normalized() # auto aim: face where you walk
 	_update_aim(delta)
 
+	_footsteps(global_position.distance_to(before), sprinting)
 	if _moving and not sneaking:
 		_noise_t -= delta
 		if _noise_t <= 0.0:
 			_noise_t = 0.4
 			var quiet := 0.7 if inv.gear["boots"] != null else 1.0
 			Game.make_noise(global_position, (280.0 if sprinting else 90.0) * quiet)
+
+
+var _step_d := 0.0
+
+
+## Footstep sounds: grass, snow, or hard floors / roads. Quiet when sneaking.
+func _footsteps(moved: float, sprinting: bool) -> void:
+	if moved <= 0.1 or dead:
+		return
+	_step_d += moved
+	var stride := 46.0 if sprinting else 36.0
+	if _step_d < stride:
+		return
+	_step_d = 0.0
+	var t := world.get_tile(world.cell_of(global_position))
+	var kind := "step_grass_"
+	if t in [World.FLOOR, World.ROAD] or world.is_door(world.cell_of(global_position)):
+		kind = "step_hard_"
+	elif world.biome == "snow":
+		kind = "step_snow_"
+	var vol := -20.0 if sneaking else (-7.0 if sprinting else -11.0)
+	if inv.gear["boots"] == null:
+		vol -= 2.0
+	Sfx.at(kind, global_position, vol, 0.1, 0.0)
 
 
 func _needs(delta: float) -> void:
@@ -796,8 +835,9 @@ func target_temp() -> float:
 	var air := lerpf(TEMP_DAY, TEMP_NIGHT, Game.night)
 	if not indoors():
 		air -= {"rain": 6.0, "snow": 12.0}.get(Game.weather, 0.0)
+		air -= Game.region_cold
 	if indoors():
-		air += TEMP_INDOORS
+		air += TEMP_INDOORS - Game.region_cold * 0.5
 	var fire := 0.0
 	for f in get_tree().get_nodes_in_group("fires"):
 		fire = maxf(fire, (f as Campfire).warmth_at(global_position))
@@ -1130,10 +1170,10 @@ func start_placing(kit := "") -> void:
 				break
 	if kit == "" or inv.count_of(kit) <= 0:
 		placing = NO_KIT
-		say("Building (no kits - craft them with K): Q takes apart what you built, X to stop")
+		say("Building (no kits - craft them with %s): %s takes apart what you built, %s to stop" % [Game.key("craft"), Game.key("interact"), Game.key("holster")])
 		return
 	placing = kit
-	say("Building: %s - Q to place (or take apart), B next kit, X stop" % Items.name_of(kit).to_lower())
+	say("Building: %s - %s to place (or take apart), %s next kit, %s stop" % [Items.name_of(kit).to_lower(), Game.key("interact"), Game.key("build"), Game.key("holster")])
 
 
 ## The next kit you carry (B while building).
@@ -1383,6 +1423,8 @@ func melee(dir: Vector2) -> void:
 			hits += 1
 	if hits > 0:
 		_wear_weapon(float(w.get("wear", 0.0)))
+		Sfx.at("hit_", global_position + dir * 20.0, -2.0)
+	Sfx.at("swing", global_position, -8.0, 0.12)
 	Game.make_noise(global_position, w["noise"])
 
 
@@ -1450,6 +1492,7 @@ func shoot() -> void:
 	var g := gun()
 	if int(g["mag"]) <= 0:
 		_attack_cd = 0.3
+		Sfx.at("gun_empty", global_position, -4.0)
 		if inv.count_of(w["ammo"]) > 0:
 			start_reload()
 		else:
@@ -1459,10 +1502,12 @@ func shoot() -> void:
 	var cond := float(g.get("cond", 100.0))
 	if cond < 50.0 and randf() < (50.0 - cond) / 50.0 * 0.15:
 		_attack_cd = 0.9
+		Sfx.at("gun_empty", global_position, -2.0)
 		say("Jammed! (%d%% condition)" % int(cond))
 		return
 	g["mag"] -= 1
 	_attack_cd = w["cooldown"]
+	Sfx.gun(String(w["ammo"]), global_position)
 	# A fully settled aim (you stood still) hits harder
 	var shot_mult := STEADY_SHOT if aim_steadiness() >= 0.97 else 1.0
 	_shots.clear()
@@ -1500,6 +1545,7 @@ func start_reload() -> void:
 		say("No ammo")
 		return
 	reloading = true
+	Sfx.at("reload", global_position, -4.0)
 	_reload_total = w["reload"]
 	_reload_t = _reload_total
 	reload_progress = 0.0
@@ -1587,6 +1633,7 @@ func take_damage(amount: float, can_bleed := true) -> void:
 			say(", ".join(ruined) + (" is" if ruined.size() == 1 else " are") + " ruined!")
 	health -= amount
 	if can_bleed:
+		Sfx.at("hurt_", global_position, -3.0, 0.06, 0.3)
 		_hurt_t = 0.2
 		hit_flash = 1.0
 		var covered := inv.gear["coat"] != null or inv.gear["armour"] != null
@@ -1596,6 +1643,7 @@ func take_damage(amount: float, can_bleed := true) -> void:
 	if health <= 0.0:
 		health = 0.0
 		dead = true
+		Sfx.at("player_die", global_position)
 		velocity = Vector2.ZERO
 		_held.visible = false
 		_sprite.modulate = Color.WHITE
@@ -1685,7 +1733,7 @@ func update_outfit() -> void:
 		return
 	paint_outfit(_sprite.material as ShaderMaterial, inv.gear)
 	if _pack:
-		_pack.queue_redraw()
+		_pack.gear = inv.gear
 
 
 ## Sets the outfit shader colours from worn clothing (player and bandits).
@@ -1703,27 +1751,6 @@ static func paint_outfit(mat: ShaderMaterial, gear: Dictionary) -> void:
 	mat.set_shader_parameter("hair_light", hat.lightened(0.1) if hat != null else HAIR_LIGHT)
 
 
-## Backpack on the character's back (drawn over the body when facing away / sideways).
-func _draw_pack() -> void:
-	var col = _cloth_color("back")
-	if col == null or dead:
-		return
-	var d := Game.dir_name(facing)
-	var c: Color = col
-	var r: Rect2
-	match d:
-		"up":
-			r = Rect2(-7, -15, 14, 12)
-		"side":
-			r = Rect2(-11, -15, 6, 11)
-		"side-left":
-			r = Rect2(5, -15, 6, 11)
-		_:
-			return # facing the camera: only the straps would show
-	_pack.draw_rect(r.grow(1), Color("1a1016"))
-	_pack.draw_rect(r, c)
-	_pack.draw_rect(Rect2(r.position.x, r.position.y + r.size.y * 0.45, r.size.x, 2), c.darkened(0.3))
-
 func _animate() -> void:
 	facing = _melee_dir if (weapon()["melee"] and _swing_t > -0.15) else aim
 	var d := Game.dir_name(facing)
@@ -1731,8 +1758,8 @@ func _animate() -> void:
 	if _swing_t > -0.05 and weapon_id() == "fists":
 		anim = "punch_" + d
 	if _pack:
-		_pack.z_index = 0
-		_pack.queue_redraw()
+		_pack.facing = facing
+		_pack.dead = dead
 	if _sprite.animation != anim:
 		var keep := _sprite.animation.begins_with("run") and anim.begins_with("run")
 		var f := _sprite.frame

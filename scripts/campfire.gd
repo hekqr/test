@@ -17,8 +17,12 @@ var _light: PointLight2D
 var _t := 0.0
 
 
+var _crackle: AudioStreamPlayer2D
+
+
 func _ready() -> void:
 	add_to_group("fires")
+	_crackle = Sfx.loop_on(self, "amb_fire", -8.0, 420.0)
 	if permanent:
 		fuel = MAX_FUEL
 	var g := Gradient.new()
@@ -48,6 +52,8 @@ func _process(delta: float) -> void:
 		_light.energy = (0.9 + 0.12 * sin(_t * 11.0) + 0.08 * sin(_t * 23.0)) * (1.0 if fuel > 20.0 else fuel / 20.0)
 	else:
 		_light.energy = 0.0
+	if _crackle:
+		_crackle.volume_db = -8.0 if lit else -80.0
 	queue_redraw()
 
 

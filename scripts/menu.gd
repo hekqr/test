@@ -49,7 +49,9 @@ func _buttons() -> Array:
 		if not _saves[i].is_empty():
 			out.append(["new%d" % (i + 1), Rect2(r.end.x - 118, r.position.y + 15, 104, PANEL_H - 30)])
 	var sz := Game.tex("ui_button").get_size() * SCALE
-	out.append(["quit", Rect2(Vector2((vs.x - sz.x) / 2.0, vs.y * 0.33 + SaveGame.SLOTS * (PANEL_H + 14) + 20), sz)])
+	var by := vs.y * 0.33 + SaveGame.SLOTS * (PANEL_H + 14) + 20
+	out.append(["settings", Rect2(Vector2(vs.x / 2.0 - sz.x - 10, by), sz)])
+	out.append(["quit", Rect2(Vector2(vs.x / 2.0 + 10, by), sz)])
 	return out
 
 
@@ -76,13 +78,25 @@ func _gui_input(event: InputEvent) -> void:
 
 ## Q: continue the last slot you played.
 func _unhandled_input(event: InputEvent) -> void:
+	if _settings and _settings.visible:
+		return
 	if event.is_action_pressed("interact") and SaveGame.slot_can_continue(Game.save_slot):
 		_press("slot%d" % Game.save_slot)
 
 
+var _settings: SettingsMenu
+
+
 func _press(id: String) -> void:
+	Sfx.ui("ui_click", -4.0)
 	if id == "quit":
 		get_tree().quit()
+		return
+	if id == "settings":
+		if _settings == null:
+			_settings = SettingsMenu.new()
+			add_child(_settings)
+		_settings.open()
 		return
 	var slot := int(id.right(1))
 	if id.begins_with("slot"):
@@ -143,12 +157,12 @@ func _draw() -> void:
 		var id: String = b[0]
 		var r: Rect2 = b[1]
 		var hover := _hit(_mouse) == id
-		if id == "quit":
+		if id in ["quit", "settings"]:
 			var pressed := _down == id and hover
 			var mod := Color(1.1, 1.08, 1.0) if hover and not pressed else Color.WHITE
 			var tn := "ui_button_pressed" if pressed else "ui_button"
 			draw_texture_rect(Game.tex(tn), Rect2(r.position + Vector2(0, 8 if pressed else 0), Game.tex(tn).get_size() * SCALE), false, mod)
-			draw_string(_font, Vector2(r.position.x, r.position.y + (58 if pressed else 50)), "Quit", HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 26, C_EDGE)
+			draw_string(_font, Vector2(r.position.x, r.position.y + (58 if pressed else 50)), "Quit" if id == "quit" else "Settings", HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 26 if id == "quit" else 22, C_EDGE)
 		elif id.begins_with("slot"):
 			_draw_slot(int(id.right(1)), r, hover)
 		else:
@@ -159,7 +173,7 @@ func _draw() -> void:
 			draw_string(_font, Vector2(r.position.x, r.position.y + 29), "Sure?" if sure else "New", HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 18, C_TEXT)
 	if _confirm_new > 0:
 		_text(Vector2(0, _buttons()[-1][1].end.y + 40), "This replaces the survivor in slot %d. Click Sure? to confirm." % _confirm_new, 15, Color(1, 0.75, 0.6), vs.x)
-	_text(Vector2(0, vs.y - 24), "The game saves automatically   -   Q continues your last game", 14, C_DIM, vs.x)
+	_text(Vector2(0, vs.y - 24), "The game saves automatically   -   %s continues your last game" % Game.key("interact"), 14, C_DIM, vs.x)
 
 
 ## One save slot: its number and what's in it.
@@ -189,4 +203,4 @@ func _draw_slot(slot: int, r: Rect2, hover: bool) -> void:
 			action = "Continue"
 	draw_string(_font, Vector2(x, r.position.y + 58), info, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 160, 15, col)
 	if action != "":
-		draw_string(_font, Vector2(r.position.x + 130, r.position.y + 32), action + (" (Q)" if last else ""), HORIZONTAL_ALIGNMENT_LEFT, -1, 18, C_DIM)
+		draw_string(_font, Vector2(r.position.x + 130, r.position.y + 32), action + (" (%s)" % Game.key("interact") if last else ""), HORIZONTAL_ALIGNMENT_LEFT, -1, 18, C_DIM)

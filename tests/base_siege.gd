@@ -68,7 +68,7 @@ func _process(delta: float) -> void:
 		p.health = 100.0
 		hp0 = p.health
 		# The crowd, just outside the gate and around the walls
-		var types := ["walker", "runner", "brute", "axe", "armed", "walker", "runner", "armed"]
+		var types := ["walker", "runner", "brute", "axe", "armed", "walker", "runner", "armed", "crawler"]
 		for i in types.size():
 			var pos := w.center_of(gate_c + Vector2i(2 + i % 3, -3 + i))
 			main.add_zombie(pos, types[i], "pistol" if types[i] == "armed" else "", 8)

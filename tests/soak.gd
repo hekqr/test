@@ -372,7 +372,7 @@ func _fight() -> void:
 	for i in randi_range(2, 5):
 		var pos: Vector2 = p.global_position + Vector2.from_angle(randf() * TAU) * randf_range(140.0, 300.0)
 		if main.world.is_walkable(main.world.cell_of(pos)):
-			var type: String = ["walker", "runner", "brute", "axe", "armed"].pick_random()
+			var type: String = ["walker", "runner", "brute", "axe", "armed", "crawler"].pick_random()
 			main.add_zombie(pos, type, "pistol" if type == "armed" else "", 8)
 
 

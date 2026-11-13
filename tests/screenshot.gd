@@ -87,7 +87,7 @@ func _process(_delta: float) -> void:
 		_enemies = []
 		var at := _open_row(w) + Vector2(-210, 0)
 		var row := 0
-		for t in ["walker", "runner", "brute", "axe", "armed"]:
+		for t in ["walker", "runner", "brute", "axe", "armed", "crawler"]:
 			var z: Zombie = main.add_zombie(at + Vector2(row * 70, 0), t)
 			z.facing = Vector2.DOWN
 			_enemies.append(z)

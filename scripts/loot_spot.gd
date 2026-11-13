@@ -247,6 +247,8 @@ func search(p: Player) -> String:
 			r["count"] = rest
 			left.append(r)
 	var had_items := not contents.is_empty()
+	if not found.is_empty():
+		Sfx.ui("pickup", -4.0)
 	contents = left
 	refresh()
 	var verb := "Picked up: " if is_bag else "Took: "

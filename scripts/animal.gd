@@ -208,6 +208,8 @@ func _hunt_think() -> void:
 
 ## Hunt someone, and call the pack.
 func _set_prey(who: Node2D) -> void:
+	if prey == null and species == "wolf":
+		Sfx.at("wolf_snarl", global_position, -2.0, 0.12, 1.0)
 	prey = who
 	_lost_t = 0.0
 	for n in get_tree().get_nodes_in_group("wolves"):
@@ -224,6 +226,7 @@ func _try_bite() -> void:
 	var to := prey.global_position - global_position
 	if to.length() < float(s["radius"]) + Player.RADIUS + 9.0 and world.has_los(global_position, prey.global_position):
 		_bite_cd = randf_range(1.0, 1.4)
+		Sfx.at("wolf_snarl", global_position, -4.0, 0.15, 0.4)
 		Zombie.hit(prey, randf_range(s["bite"][0], s["bite"][1]), to.normalized(), self)
 
 

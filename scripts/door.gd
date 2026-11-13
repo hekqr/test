@@ -23,7 +23,11 @@ var _shape: CollisionShape2D
 var _t := randf() * 0.1
 
 
+var _born := 0
+
+
 func _ready() -> void:
+	_born = Time.get_ticks_msec()
 	add_to_group("doors")
 	position = world.center_of(cell)
 	across_x = world._is_wallish(cell + Vector2i(-1, 0)) or world._is_wallish(cell + Vector2i(1, 0))
@@ -72,6 +76,8 @@ func _occupied() -> bool:
 
 
 func _apply(o: bool) -> void:
+	if o != open and is_inside_tree() and Time.get_ticks_msec() - _born > 500:
+		Sfx.at("door_open" if o else "door_close", global_position, -6.0 if not gate else -3.0, 0.1, 0.2)
 	open = o
 	_shape.set_deferred("disabled", o and not gate)
 	world.set_door_open(cell, o, gate)

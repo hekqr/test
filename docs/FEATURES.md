@@ -351,6 +351,26 @@ Status: ✅ done · 🔜 next · 💭 idea / undecided
 - ✅ `tests/base_playthrough.tscn`: builds a base with key presses and clicks only (chop, craft, B + Q, chest,
   bed, take apart) — base building works end to end
 
+## Milestone 16 — World variety, gear on show, settings and sound
+- ✅ **Biomes**: every region has a landscape — farmland (home), deep forest (thick woods, few towns),
+  open plains (few trees, more towns), coast (the sea along one edge, roads cross on causeways) and
+  snowfields (the north: snowy ground, much colder, it snows instead of raining)
+- ✅ **Danger rises with distance from home** (safe → deadly): more zombies, more runners / brutes / armed
+  ones and more bandits — but containers are emptier less often and hold more. Shown under the clock
+- ✅ **Crawler zombie**: drags itself along the ground — slow, but hard to see in the grass from afar (plain
+  to see on roads and floors); its bite grabs your ankle (half speed for a moment). Mostly out in the wild
+- ✅ **Worn gear shows on characters** (you and bandits): cap brim, beanie with pom-pom, helmet rim and chin
+  strap, tactical vest with pouches, bolted scrap armour, backpack
+- ✅ **Settings screen** (title screen, and Settings on the pause screen): master / effects / ambience volume,
+  window / borderless / fullscreen, window size, VSync, aim mode, and every key can be changed (a key that's
+  already used swaps over; Reset keys). Help text and hints show your keys
+- ✅ **Sound**: gunshots for each gun, empty click, reload, swings and hits, zombie groans (you hear them
+  before you see them), alerts when one spots you, attacks and deaths, your grunts, footsteps (grass, snow,
+  floors / roads; quiet when sneaking), doors, searching, picking up, chopping, hammering, eating, drinking,
+  bandaging, lighting a fire, a stick's clatter, wolves snarling — and howling at night from where the pack is.
+  Ambience: wind (stronger in the snow), rain, crickets at night, birds on clear days, crackling fires;
+  muffled indoors. All sounds are synthesised by `tools/make_sfx.py`
+
 ## Ideas for endless play (next)
 - 📌 Watchtower
 - 📌 More renewable food: berries / mushrooms, slow loot respawn

@@ -9,6 +9,8 @@ extends CharacterBody2D
 ##   brute   big, a bit slower, hits 50% harder (300)
 ##   axe     throws its axe from a distance, then walks over and picks it up again
 ##           (grab the axe first and it has to fight with its hands) (100)
+##   crawler legless, drags itself along the ground: slow, but low and hard to see in the grass until
+##           it's close. Grabs your ankle when it bites (half speed for a moment) (60)
 ##   armed   a dead soldier / cop in a vest (armour) that still fires its gun until the magazine
 ##           is empty; drops the gun when killed (100)
 ## Every zombie's health, speed and damage vary by up to 10%.
@@ -25,6 +27,7 @@ const TYPES := {
 	"runner": {"name": "Runner", "health": 80.0, "walk": 30.0, "chase": 114.0, "dmg": [7.0, 12.0], "cd": 0.9, "reach": 8.0, "knock": 260.0, "armour": 0.0},
 	"brute": {"name": "Brute", "health": 300.0, "walk": 20.0, "chase": 60.0, "dmg": [12.0, 21.0], "cd": 1.4, "reach": 12.0, "knock": 90.0, "armour": 0.0},
 	"axe": {"name": "Axe zombie", "health": 100.0, "walk": 22.0, "chase": 60.0, "dmg": [16.0, 24.0], "cd": 1.3, "reach": 12.0, "knock": 150.0, "armour": 0.0},
+	"crawler": {"name": "Crawler", "health": 60.0, "walk": 9.0, "chase": 34.0, "dmg": [9.0, 15.0], "cd": 1.3, "reach": 6.0, "knock": 120.0, "armour": 0.0},
 	"armed": {"name": "Armed zombie", "health": 100.0, "walk": 22.0, "chase": 58.0, "dmg": [8.0, 14.0], "cd": 1.1, "reach": 8.0, "knock": 200.0, "armour": 3.0},
 }
 const VARIANCE := 0.1 # each zombie's stats vary by up to 10%
@@ -98,6 +101,8 @@ func _ready() -> void:
 	collision_layer = Game.LAYER_ZOMBIE
 	collision_mask = Game.LAYER_WALL | Game.LAYER_PLAYER | Game.LAYER_ZOMBIE | Game.LAYER_NPC | Game.LAYER_WATER | Game.LAYER_DOOR | Game.LAYER_EDGE
 	add_child(Game.foot_shape(RADIUS + (3.0 if type == "brute" else 0.0), 9.0 if type == "brute" else 7.0))
+	if type == "crawler":
+		_tint = Color(0.82, 0.86, 0.8) # dirty, grass-stained
 	health = float(_t["health"]) * _vary()
 	max_health = health
 	walk_speed = float(_t["walk"]) * _vary()
@@ -119,7 +124,7 @@ func _ready() -> void:
 			_held.texture = Items.icon_of(Items.WEAPONS[gun]["held"])
 			_held.scale = Vector2.ONE * (2.0 if maxf(_held.texture.get_width(), _held.texture.get_height()) <= 18.0 else 0.85)
 			add_child(_held)
-	_sprite.play(_anim("idle_down"))
+	_sprite.play(_anim("idle_side" if type == "crawler" else "idle_down"))
 	_sprite.frame = randi() % 4
 	add_child(_sprite)
 	_fit_offset()
@@ -128,6 +133,8 @@ func _ready() -> void:
 
 
 func _make_frames() -> SpriteFrames:
+	if type == "crawler":
+		return _crawler_frames()
 	var key: String = {"walker": "zsmall", "runner": "zsmall", "armed": "zsmall", "brute": "zbig", "axe": "zaxe"}[type]
 	var spec := {}
 	match key:
@@ -154,6 +161,31 @@ func _make_frames() -> SpriteFrames:
 				spec["death_" + d] = ["zaxe_death_" + d, 6, 10.0, false]
 				spec["na_death_" + d] = ["zaxe_na_death_" + d, 6, 10.0, false]
 	return Game.frames(key, spec)
+
+
+static var _crawl_frames: SpriteFrames
+
+
+## Crawlers use the last two frames of the "lying on the ground" animation, alternated so it looks
+## like the zombie drags itself forward. Only side views (it turns its whole body).
+static func _crawler_frames() -> SpriteFrames:
+	if _crawl_frames:
+		return _crawl_frames
+	var src := Game.frames("zcrawl_src", {"death_side": ["zsmall_death_side", 6, 10.0, false], "death_side-left": ["zsmall_death_side-left", 6, 10.0, false]})
+	var sf := SpriteFrames.new()
+	sf.remove_animation("default")
+	for d in ["side", "side-left"]:
+		var a: Texture2D = src.get_frame_texture("death_" + d, 4)
+		var b: Texture2D = src.get_frame_texture("death_" + d, 5)
+		for anim in [["idle_", [b], 2.0, true], ["walk_", [a, b], 3.0, true], ["attack_", [a, b, a], 10.0, false], ["death_", [b], 1.0, false]]:
+			var name: String = anim[0] + d
+			sf.add_animation(name)
+			sf.set_animation_speed(name, anim[2])
+			sf.set_animation_loop(name, anim[3])
+			for t in anim[1]:
+				sf.add_frame(name, t)
+	_crawl_frames = sf
+	return sf
 
 
 func _vary() -> float:
@@ -230,6 +262,9 @@ func _physics_process(delta: float) -> void:
 
 func _animate(moving: bool) -> void:
 	var d := Game.dir_name(facing)
+	if type == "crawler":
+		d = "side" if facing.x >= 0.0 else "side-left"
+		modulate.a = _crawler_alpha()
 	var anim := _anim(("walk_" if moving else "idle_") + d)
 	if _special_t > 0.0:
 		anim = ("throw_" if state != State.FETCH else "take_") + d
@@ -252,6 +287,21 @@ func _animate(moving: bool) -> void:
 
 
 const POCKET_CHANCE := 0.12
+const CRAWLER_SEEN := 150.0 # fully visible this close
+const CRAWLER_HIDDEN := 330.0 # hardest to see from here on
+
+
+## Crawlers are low to the ground: in grass and at night they're hard to see until they're close.
+## On roads, pavement and floors they're in plain view.
+func _crawler_alpha() -> float:
+	if player == null or state == State.CHASE and _attack_anim_t > 0.0:
+		return 1.0
+	var t: int = world.get_tile(world.cell_of(global_position))
+	if t in [World.ROAD, World.FLOOR] or world.is_door(world.cell_of(global_position)):
+		return 1.0
+	var dist := global_position.distance_to(player.global_position)
+	var hide := clampf((dist - CRAWLER_SEEN) / (CRAWLER_HIDDEN - CRAWLER_SEEN), 0.0, 1.0)
+	return lerpf(1.0, lerpf(0.3, 0.12, Game.night), hide)
 
 
 ## Hasn't noticed anyone: a melee hit now is a sneak attack.
@@ -291,6 +341,8 @@ func _think() -> void:
 		foe = best
 		if state == State.FETCH and best_d > 90.0 and _axe_waiting():
 			return # keep going for the axe unless the target is right here
+		if state != State.CHASE and best is Player:
+			Sfx.at("zombie_alert_", global_position, -2.0, 0.12, 0.4) # it saw you
 		state = State.CHASE
 		_lose_t = 5.0
 		target = foe.global_position
@@ -327,6 +379,9 @@ func _think() -> void:
 				_set_path(axe_spot.global_position)
 		State.WANDER:
 			_wander(THINK_INTERVAL)
+	# Now and then a groan (how you hear one round the corner)
+	if randf() < (0.06 if state == State.CHASE else 0.012) and player != null and global_position.distance_to(player.global_position) < 700.0:
+		Sfx.at("zombie_groan_", global_position, -7.0 if type != "crawler" else -11.0, 0.15, 0.6)
 
 
 var _fetch_t := 0.0 # time left to get the thrown axe back (then it gives up on it)
@@ -412,6 +467,11 @@ func _try_attack() -> void:
 		if unarmed:
 			dmg *= 0.55
 		hit(foe, dmg, facing, self)
+		Sfx.at("zombie_attack", global_position, -3.0, 0.12, 0.3)
+		Sfx.at("hit_", foe.global_position, -5.0)
+		if type == "crawler" and foe is Player:
+			(foe as Player).grabbed_t = 1.2
+			(foe as Player).say("A crawler grabbed your ankle!")
 
 
 ## Deals damage to the player or a bandit.
@@ -507,6 +567,7 @@ func _try_shoot(delta: float) -> void:
 
 func _fire(g: Array) -> void:
 	mag -= 1
+	Sfx.gun("ammo_9mm" if gun == "pistol" else "ammo_556", global_position, -2.0)
 	var origin := global_position + Vector2(0, -8)
 	var dir := (foe.global_position + Vector2(0, -8) - origin).normalized().rotated(randf_range(-0.2, 0.2))
 	var to := origin + dir * float(g[4])
@@ -565,6 +626,7 @@ func take_damage(amount: float, dir: Vector2, from: Node2D = null) -> void:
 
 func _die(dir: Vector2) -> void:
 	dead = true
+	Sfx.at("zombie_die", global_position, -3.0, 0.12, 0.2)
 	remove_from_group("zombies")
 	set_physics_process(false)
 	collision_layer = 0

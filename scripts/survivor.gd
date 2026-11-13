@@ -63,6 +63,7 @@ var _healed := false
 var _moving := false
 var _sprite: AnimatedSprite2D
 var _held: Sprite2D
+var _overlay: GearOverlay
 
 
 func _ready() -> void:
@@ -82,6 +83,10 @@ func _ready() -> void:
 	Player.paint_outfit(mat, gear)
 	_sprite.play("idle_down")
 	add_child(_sprite)
+	_overlay = GearOverlay.new()
+	_overlay.sprite = _sprite
+	_overlay.gear = gear
+	add_child(_overlay)
 	_held = Sprite2D.new()
 	_held.scale = Vector2(2, 2)
 	add_child(_held)
@@ -389,6 +394,8 @@ func _combat(delta: float) -> void:
 			var dir := (foe.global_position - global_position).normalized()
 			var it = weapon_item()
 			Zombie.hit(foe, float(w["damage"]) * Items.weapon_factor(it) * MELEE_DAMAGE, dir, self)
+			Sfx.at("swing", global_position, -8.0)
+			Sfx.at("hit_", foe.global_position, -3.0)
 			_wear(it, float(w.get("wear", 0.0)))
 			Game.make_noise(global_position, w["noise"])
 		return
@@ -415,6 +422,7 @@ func _combat(delta: float) -> void:
 
 func _shoot(w: Dictionary, g: Dictionary) -> void:
 	g["mag"] -= 1
+	Sfx.gun(String(w["ammo"]), global_position)
 	_wear(g, float(w.get("wear", 0.0)))
 	var space := get_world_2d().direct_space_state
 	var origin := global_position + HAND
@@ -482,6 +490,7 @@ func take_damage(amount: float, dir := Vector2.ZERO, from: Node2D = null) -> voi
 	if dead:
 		return
 	health -= amount * armour_mult()
+	Sfx.at("hurt_", global_position, -5.0, 0.15, 0.3)
 	_flash_t = 0.12
 	_knock = dir * 120.0
 	if from != null:
@@ -502,12 +511,14 @@ func take_damage(amount: float, dir := Vector2.ZERO, from: Node2D = null) -> voi
 
 func _die(dir: Vector2) -> void:
 	dead = true
+	Sfx.at("player_die", global_position, -4.0, 0.15)
 	health = 0.0
 	remove_from_group("survivors")
 	collision_layer = 0
 	collision_mask = 0
 	z_index = -5
 	_held.visible = false
+	_overlay.dead = true
 	_sprite.modulate = Color.WHITE
 	_sprite.play("death_side" if dir.x >= 0.0 else "death_side-left")
 	var blood := Game.make_sprite("blood_%d" % randi_range(1, 5))
@@ -543,6 +554,7 @@ func _animate() -> void:
 		anim = "punch_" + d
 	if _sprite.animation != anim:
 		_sprite.play(anim)
+	_overlay.facing = facing
 	_sprite.speed_scale = 0.45 if (_moving and state == State.WANDER) else 0.75
 	_sprite.modulate = Color(1, 0.55, 0.55) if _flash_t > 0.0 else Color.WHITE
 	var held: String = weapon()["held"]

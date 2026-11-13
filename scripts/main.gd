@@ -16,7 +16,7 @@ const MAX_DEER := 4
 const MAX_WOLVES := 5 # in packs of 2-3
 const MAX_SURVIVORS := 3 # hostile bandits alive at once
 ## Zombie mix: [type, weight]. Runners show up more at night, armed zombies more in the city.
-const ZOMBIE_MIX := [["walker", 62.0], ["runner", 12.0], ["brute", 10.0], ["axe", 7.0], ["armed", 9.0]]
+const ZOMBIE_MIX := [["walker", 62.0], ["runner", 12.0], ["brute", 10.0], ["axe", 7.0], ["armed", 9.0], ["crawler", 8.0]]
 
 var world: World
 var player: Player
@@ -68,6 +68,8 @@ func _ready() -> void:
 ## fires, tap water, the map you've explored).
 var region := Vector2i.ZERO
 var region_name := ""
+## 0 (home) .. 4: more and nastier zombies, more bandits, better loot (World.danger_of).
+var danger := 0
 ## "x,y" -> the regions you're not in: {loot, taps, fires, structures, explored} kept as JSON text, so
 ## autosaves don't have to copy and convert every region you've visited each time.
 var regions_state := {}
@@ -103,6 +105,11 @@ func _setup(save: Dictionary) -> void:
 	entities.add_to_group("entities")
 	add_child(entities)
 	world.generate(region_seed(), entities)
+	danger = World.danger_of(region)
+	Game.region_cold = float(World.BIOMES[world.biome]["cold"])
+	Loot.bonus = danger * 0.08
+	if world.biome == "snow" and weather == "rain":
+		_set_weather("snow", _weather_t)
 	explored.resize(World.W * World.H)
 	explored_coarse.resize((World.W >> 2) * (World.H >> 2))
 	# You know your home region: its map starts filled in. Other regions you have to explore.
@@ -152,9 +159,9 @@ func _setup(save: Dictionary) -> void:
 		_apply_save(save)
 	if save.has("arrive"):
 		_arrive(String(save["arrive"]["side"]), float(save["arrive"]["along"]))
-		player.say("Entering " + region_name)
+		player.say("Entering %s - %s, %s" % [region_name, World.biome_name(world.biome).to_lower(), danger_text()])
 	if fresh:
-		for i in MAX_ZOMBIES_DAY:
+		for i in int(MAX_ZOMBIES_DAY * (1.0 + danger * 0.15)):
 			spawn_zombie(700.0)
 		for k in 6:
 			if not spawn_survivor_group(1300.0, 3200.0).is_empty():
@@ -190,6 +197,12 @@ func _setup(save: Dictionary) -> void:
 	hud = Hud.new()
 	hud.main = self
 	layer.add_child(hud)
+	var amb := Ambience.new()
+	amb.main = self
+	add_child(amb)
+	hud.settings = SettingsMenu.new()
+	hud.settings.visible = false
+	layer.add_child(hud.settings)
 
 	Input.set_default_cursor_shape(Input.CURSOR_CROSS)
 	hud.prepare_map() # build the paper map now, not when it's first opened
@@ -328,26 +341,25 @@ func sleep() -> void:
 	save_game()
 
 
-## Puts you just inside the edge of the region you arrived at (`side`), across from where you left.
+## Puts you just inside the edge of the region you arrived at (`side`), across from where you left:
+## the nearest open spot to there (on the coast: the shore past the sea).
 func _arrive(side: String, along: float) -> void:
 	var a := clampi(int(along / World.T), 3, World.W - 4)
-	for depth in range(2, 60):
-		for k in 25:
-			var off := (k + 1) / 2 * (1 if k % 2 == 1 else -1)
-			var c: Vector2i
-			match side:
-				"W":
-					c = Vector2i(depth, a + off)
-				"E":
-					c = Vector2i(World.W - 1 - depth, a + off)
-				"N":
-					c = Vector2i(a + off, depth)
-				_:
-					c = Vector2i(a + off, World.H - 1 - depth)
-			# (not a little spot closed in by trees, water or walls)
-			if world.is_walkable(c) and world.building_at(world.center_of(c)) < 0 and world._pocket(c, 300, world.astar).is_empty():
-				player.position = world.center_of(c)
-				return
+	var start: Vector2i = {"W": Vector2i(2, a), "E": Vector2i(World.W - 3, a), "N": Vector2i(a, 2)}.get(side, Vector2i(a, World.H - 3))
+	for r in range(0, 220):
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if maxi(absi(dx), absi(dy)) != r:
+					continue # (just the ring at distance r)
+				var c := start + Vector2i(dx, dy)
+				# (not a little spot closed in by trees, water or walls)
+				if world.in_bounds(c) and world.is_walkable(c) and world.building_at(world.center_of(c)) < 0 and world._pocket(c, 300, world.astar).is_empty():
+					player.position = world.center_of(c)
+					return
+
+
+func danger_text() -> String:
+	return ["safe", "a little dangerous", "dangerous", "very dangerous", "deadly"][danger]
 
 
 ## Walks you into the neighbouring region (dir = which way you went off the map).
@@ -418,7 +430,7 @@ func _spawn_container(c: Dictionary) -> void:
 	l.flip = c["flip"]
 	l.reach = c["reach"]
 	l.position = c["pos"]
-	if randf() < float(c.get("empty_chance", 0.0)):
+	if randf() < float(c.get("empty_chance", 0.0)) * (1.0 - danger * 0.12):
 		l.loaded = true # someone got here first: starts empty
 	entities.add_child(l)
 
@@ -633,17 +645,24 @@ func _process(delta: float) -> void:
 			spawn_animal("deer", SPAWN_MIN)
 		if n["wolf"] < MAX_WOLVES - 1:
 			spawn_wolf_pack(SPAWN_MIN + 200.0)
+		# Wolves howl at night: from the direction they are (a warning if you listen)
+		if n["wolf"] > 0 and Game.night > 0.5 and randf() < 0.3 and not player.dead:
+			var wolves := get_tree().get_nodes_in_group("wolves")
+			if not wolves.is_empty():
+				var wv: Node2D = wolves.pick_random()
+				var off := wv.global_position - player.global_position
+				Sfx.at("wolf_howl", player.global_position + off.limit_length(1000.0), -4.0, 0.08, 5.0)
 
 	_survivor_t -= delta
 	if _survivor_t <= 0.0:
 		_survivor_t = 30.0
-		if get_tree().get_nodes_in_group("survivors").size() < MAX_SURVIVORS:
+		if get_tree().get_nodes_in_group("survivors").size() < MAX_SURVIVORS + danger / 2:
 			spawn_survivor_group(SPAWN_MIN + 300.0)
 
 	_spawn_t -= delta
 	if _spawn_t <= 0.0:
 		_spawn_t = ZOMBIE_SPAWN_EVERY
-		var cap := int(lerpf(MAX_ZOMBIES_DAY, MAX_ZOMBIES_NIGHT, 1.0 - light))
+		var cap := int(lerpf(MAX_ZOMBIES_DAY, MAX_ZOMBIES_NIGHT, 1.0 - light) * (1.0 + danger * 0.15))
 		if get_tree().get_nodes_in_group("zombies").size() < cap:
 			spawn_zombie(SPAWN_MIN)
 
@@ -652,7 +671,8 @@ func _process(delta: float) -> void:
 func _change_weather() -> void:
 	var hour := DAY_LENGTH / 24.0
 	if weather == "clear":
-		_set_weather("snow" if randf() < 0.3 else "rain", randf_range(2.0, 5.0) * hour)
+		var snowy := 0.9 if world.biome == "snow" else (0.05 if world.biome == "plains" else 0.3)
+		_set_weather("snow" if randf() < snowy else "rain", randf_range(2.0, 5.0) * hour)
 	else:
 		_set_weather("clear", randf_range(4.0, 10.0) * hour)
 	player.say({"rain": "It starts to rain", "snow": "It starts to snow", "clear": "The sky clears up"}[weather])
@@ -749,10 +769,14 @@ func pick_zombie_type(town := -1) -> String:
 	var mix := []
 	for row in ZOMBIE_MIX:
 		var w: float = row[1]
+		if row[0] in ["runner", "brute", "armed"]:
+			w *= 1.0 + danger * 0.3 # nastier ones further from home
 		if row[0] == "runner":
 			w *= 1.0 + Game.night
 		elif row[0] == "armed":
 			w *= 1.8 if city else (0.4 if town < 0 else 1.0)
+		elif row[0] == "crawler":
+			w *= 2.0 if town < 0 else 0.7 # mostly out in the fields and woods
 		mix.append([row[0], w])
 		total += w
 	var r := randf() * total

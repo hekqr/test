@@ -57,6 +57,33 @@ func _physics_process(_delta: float) -> void:
 			check(w.is_walkable(w.cell_of(p.global_position)), "player spawns on walkable tile")
 			check(SaveGame.can_continue(), "new game is saved straight away")
 			check(w.find_path(p.global_position, w.center_of(w.building_floors[0][0])).size() > 1, "pathfinding into a building works")
+			print("Settings / keys / regions")
+			var cfg_backup := FileAccess.get_file_as_string(Game.SETTINGS_PATH)
+			var ez := InputEventKey.new()
+			ez.keycode = KEY_Z
+			Game.rebind("interact", ez)
+			check(Game.key("interact") == "Z", "keys can be changed (Use is now %s)" % Game.key("interact"))
+			var ek := InputEventKey.new()
+			ek.keycode = KEY_K
+			var swapped := Game.rebind("interact", ek)
+			check(Game.key("interact") == "K" and Game.key("craft") == "Z" and swapped == "Crafting", "a key already in use swaps with it (crafting now %s)" % Game.key("craft"))
+			var press := InputEventKey.new()
+			press.keycode = KEY_K
+			press.pressed = true
+			check(press.is_action("interact") and not press.is_action("craft"), "the new key works")
+			Game.reset_keys()
+			check(Game.key("interact") == "Q" and Game.key("craft") == "K" and Game.keys_text("inventory") == "E / Tab / I", "reset keys")
+			if cfg_backup != "":
+				var fa := FileAccess.open(Game.SETTINGS_PATH, FileAccess.WRITE)
+				fa.store_string(cfg_backup)
+				fa.close()
+			check(main.danger == 0 and w.biome == "temperate", "home is safe farmland")
+			var biomes := {}
+			for ry in range(-4, 5):
+				for rx in range(-4, 5):
+					biomes[World.biome_of(main.world_seed, Vector2i(rx, ry))] = true
+			check(biomes.size() == 5 and World.biome_of(main.world_seed, Vector2i(0, -3)) == "snow", "other regions: forest, plains, coast, snowfields (north) (%s)" % str(biomes.keys()))
+			check(World.danger_of(Vector2i(2, -1)) == 3 and World.danger_of(Vector2i(9, 0)) == 4, "danger rises with distance from home")
 			print("Buildings / street / nature")
 			_check_templates()
 			var types := {}
@@ -804,6 +831,32 @@ func _physics_process(_delta: float) -> void:
 			var wt: Dictionary = Zombie.TYPES["walker"]
 			check(float(Zombie.TYPES["brute"]["dmg"][0]) == float(wt["dmg"][0]) * 1.5 and float(Zombie.TYPES["brute"]["dmg"][1]) == float(wt["dmg"][1]) * 1.5 and float(Zombie.TYPES["brute"]["chase"]) < float(wt["chase"]), "brutes hit 50% harder and are a bit slower")
 			check(float(Zombie.TYPES["runner"]["dmg"][1]) < float(wt["dmg"][1]), "runners hit a bit softer")
+			check(in_range.call(hp["crawler"], 60.0) and float(Zombie.TYPES["crawler"]["chase"]) < 40.0, "crawlers: 60 health, slow")
+			# Crawlers are hard to see in the grass from afar, plain to see up close / on the road
+			var zc: Zombie = main.add_zombie(p2.global_position + Vector2(0, 900), "crawler")
+			var gcell := Vector2i(-1, -1)
+			var pc: Vector2i = main.world.cell_of(p2.global_position)
+			for dy in range(-12, 13):
+				for dx in range(-12, 13):
+					var cc := pc + Vector2i(dx, dy)
+					if gcell.x < 0 and main.world.get_tile(cc) == World.GROUND and Vector2(dx, dy).length() * World.T > 340.0:
+						gcell = cc
+			if gcell.x >= 0:
+				zc.global_position = main.world.center_of(gcell)
+				var far_a := zc._crawler_alpha()
+				zc.global_position = p2.global_position + Vector2(40, 0)
+				var near_a := zc._crawler_alpha()
+				check(far_a < 0.35 and near_a > 0.95, "crawlers are hard to see in the grass from afar (%.2f), clear up close (%.2f)" % [far_a, near_a])
+			zc.foe = p2
+			zc.global_position = p2.global_position + Vector2(18, 0)
+			zc._attack_cd = 0.0
+			var hp_before := p2.health
+			zc._try_attack()
+			if p2.health < hp_before:
+				check(p2.grabbed_t > 0.0, "a crawler's bite grabs your ankle (half speed for a moment)")
+			p2.grabbed_t = 0.0
+			p2.health = hp_before
+			zc.free()
 			var hps := {}
 			for i in 12:
 				var zz: Zombie = main.add_zombie(p2.global_position + Vector2(0, 900), "walker")
@@ -959,7 +1012,7 @@ func _physics_process(_delta: float) -> void:
 		1100:
 			var p2: Player = main.player
 			check(main.region == Vector2i(1, 0) and main.region_name != home_name, "walked east into the next region (%s)" % main.region_name)
-			check(p2.global_position.x < 4 * World.T and p2.global_position.x > World.T, "you arrive at its west edge")
+			check(p2.global_position.x < (60 if main.world.biome == "coast" else 6) * World.T and p2.global_position.x > World.T, "you arrive at its west edge (%s, %s %s)" % [p2.global_position / World.T, main.world.biome, main.world.coast_side])
 			check(main.world.edge_exit("W").y == east_road_y and main.world.get_tile(main.world.edge_exit("W")) == World.ROAD, "the road carries on across the edge")
 			check(p2.inv.gear["hands"] != null and p2.inv.gear["hands"]["id"] == "rope", "you keep your things")
 			check(main.explored[main.world.idx(Vector2i(World.W - 2, World.H - 2))] == 0, "a new region's map is blank until you explore it")
@@ -1745,7 +1798,7 @@ func _utility_tests() -> void:
 	inv.gear["shirt"] = tee
 	var rags := inv.count_of("rags")
 	inv.add("rags", 2)
-	check(p.repair({"t": "gear", "s": "shirt"}) and float(tee["cond"]) > 65.0 and inv.count_of("rags") == rags, "repair clothing at the workbench with 2 rags")
+	check(p.repair({"t": "gear", "s": "shirt"}) and float(tee["cond"]) > 65.0 and inv.count_of("rags") == rags, "repair clothing at the workbench with 2 rags (%s, rags %d -> %d)" % [p.message, rags, inv.count_of("rags")])
 	print("Stove")
 	var stove := _build(p, "kit_stove")
 	check(stove != null and stove.fire != null and stove.fire.lit and stove.fire.permanent, "stove built - it burns")

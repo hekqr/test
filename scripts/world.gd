@@ -61,6 +61,73 @@ static func region_name(game_seed: int, r: Vector2i) -> String:
 	return REGION_NAMES[posmod(posmod(game_seed, 8) + r.x * 7 + r.y * 11, REGION_NAMES.size())]
 
 
+## Every region has a landscape. Home (0, 0) is always the farmland you start in; the north is
+## snowbound. trees = [chance in woods, chance in the open, noise level where woods start]
+## cold = how much colder the air is; towns = how many settlements (x the usual number);
+## tint = colour the ground / trees are pulled toward, and how far.
+const BIOMES := {
+	"temperate": {"name": "Farmland", "trees": [0.35, 0.02, 0.15], "cold": 0.0, "towns": 1.0, "tint": [Color.WHITE, 0.0], "tree_tint": Color.WHITE},
+	"forest": {"name": "Deep forest", "trees": [0.4, 0.06, -0.08], "cold": 3.0, "towns": 0.5, "tint": [Color("2c4a2a"), 0.35], "tree_tint": Color(0.85, 0.92, 0.85)},
+	"plains": {"name": "Open plains", "trees": [0.22, 0.004, 0.38], "cold": -2.0, "towns": 1.15, "tint": [Color("9a9a48"), 0.3], "tree_tint": Color(1.0, 1.0, 0.9)},
+	"snow": {"name": "Snowfields", "trees": [0.3, 0.02, 0.15], "cold": 14.0, "towns": 0.7, "tint": [Color("dde6ee"), 0.78], "tree_tint": Color(0.8, 0.9, 1.0)},
+	"coast": {"name": "Coast", "trees": [0.3, 0.015, 0.2], "cold": 4.0, "towns": 0.85, "tint": [Color("8a9a5a"), 0.12], "tree_tint": Color.WHITE},
+}
+var biome := "temperate"
+var coast_side := "" # coast regions: the edge the sea is on
+const SEA_DEPTH := 46 # tiles (give or take the shoreline's wiggle)
+
+
+static func biome_of(game_seed: int, r: Vector2i) -> String:
+	if r == Vector2i.ZERO:
+		return "temperate"
+	var h := posmod(hash([game_seed, r.x, r.y, "biome"]), 100)
+	if r.y <= -2 or (r.y == -1 and h < 35):
+		return "snow"
+	if h < 28:
+		return "forest"
+	if h < 52:
+		return "plains"
+	if h < 70:
+		return "coast"
+	return "temperate"
+
+
+## How dangerous a region is (0 = home .. 4): the further from home, the more zombies (and nastier
+## ones) and bandits - but also more left to loot.
+static func danger_of(r: Vector2i) -> int:
+	return mini(absi(r.x) + absi(r.y), 4)
+
+
+static func biome_name(b: String) -> String:
+	return String(BIOMES.get(b, BIOMES["temperate"])["name"])
+
+
+## Pulls a ground / tree colour toward the region's look.
+func tint_color(c: Color) -> Color:
+	var t: Array = BIOMES[biome]["tint"]
+	var k: float = t[1]
+	if k <= 0.0:
+		return c
+	var target: Color = t[0]
+	if biome == "snow":
+		# keep the grass texture's light / dark as drifts in the snow
+		var v := c.get_luminance()
+		target = target.lightened(clampf((v - 0.3) * 0.6, -0.15, 0.15))
+	var out := c.lerp(target, k)
+	out.a = c.a
+	return out
+
+
+func _tint_image(img: Image) -> void:
+	if float(BIOMES[biome]["tint"][1]) <= 0.0:
+		return
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			if c.a > 0.0:
+				img.set_pixel(x, y, tint_color(c))
+
+
 ## Where the road crosses an edge of this region ("N", "S", "W", "E"): a border cell.
 func edge_exit(side: String) -> Vector2i:
 	var h := 0
@@ -236,6 +303,9 @@ func size_px() -> Vector2:
 
 func generate(seed_value: int, entities: Node2D) -> void:
 	rng.seed = seed_value
+	biome = biome_of(edge_seed, region)
+	if biome == "coast":
+		coast_side = ["N", "S", "E", "W"][posmod(hash([edge_seed, region.x, region.y, "sea"]), 4)]
 	tiles.resize(W * H)
 	tiles.fill(GROUND)
 	floor_kind.resize(W * H)
@@ -339,8 +409,12 @@ func _make_settlements() -> void:
 		var tmp = names[i]
 		names[i] = names[j]
 		names[j] = tmp
+	var towns_mult: float = BIOMES[biome]["towns"]
 	for entry in CLUSTERS:
-		for k in int(entry[1]):
+		var n_clusters := int(entry[1])
+		if entry[0] in ["town", "village", "hamlet"]:
+			n_clusters = maxi(1, int(round(n_clusters * towns_mult)))
+		for k in n_clusters:
 			var kind: String = entry[0]
 			var count := rng.randi_range(int(entry[2]), int(entry[3]))
 			var st := _layout(kind, count)
@@ -352,6 +426,8 @@ func _make_settlements() -> void:
 				var streets := _cluster_streets(st, c)
 				var r := _streets_rect(streets).grow(10)
 				if r.position.x < 4 or r.position.y < 4 or r.end.x > W - 4 or r.end.y > H - 4:
+					continue
+				if _in_sea_band(r):
 					continue
 				var ok := true
 				for s2 in settlements:
@@ -372,6 +448,21 @@ func _make_settlements() -> void:
 						forced.append("shop")
 					_forced.append(forced)
 					break
+
+
+## Coast regions: keep towns clear of the sea (and a strip of shore).
+func _in_sea_band(r: Rect2i) -> bool:
+	var m := SEA_DEPTH + 14
+	match coast_side:
+		"N":
+			return r.position.y < m
+		"S":
+			return r.end.y > H - m
+		"W":
+			return r.position.x < m
+		"E":
+			return r.end.x > W - m
+	return false
 
 
 ## Street plan for a settlement: a main street, cross streets off one side, and for towns / the city a back
@@ -923,12 +1014,13 @@ func _make_trees() -> void:
 	var built := _dilate(_mask_of([ROAD, WALL, FLOOR, WINDOW, FURN]), 1)
 	if _town_id.is_empty():
 		_build_town_id()
+	var tr: Array = BIOMES[biome]["trees"]
 	for y in H:
 		for x in W:
 			var i := y * W + x
 			if tiles[i] != GROUND or built[i] == 1:
 				continue
-			var p := 0.35 if noise.get_noise_2d(x, y) > 0.15 else 0.02
+			var p: float = tr[0] if noise.get_noise_2d(x, y) > float(tr[2]) else tr[1]
 			if _town_id[i] >= 0:
 				if settlements[_town_id[i]]["type"] == "military":
 					continue # a cleared camp: no trees inside the fence
@@ -998,6 +1090,8 @@ func _make_water() -> void:
 		for c in best:
 			if _water_ok(c, 1):
 				set_tile(c, WATER)
+	if coast_side != "":
+		_make_sea(noise)
 	var lakes := rng.randi_range(W * H / 20000, W * H / 13000)
 	for attempt in 600:
 		if lakes <= 0:
@@ -1014,6 +1108,25 @@ func _make_water() -> void:
 				if v < 1.0 and in_bounds(n) and _water_ok(n, 2) and near_road2[idx(n)] == 0:
 					set_tile(n, WATER)
 		lakes -= 1
+
+
+## Coast regions: the sea along one edge, with a wiggly shoreline. Roads cross it on causeways.
+func _make_sea(noise: FastNoiseLite) -> void:
+	for a in W:
+		var depth := SEA_DEPTH + int(noise.get_noise_1d(a * 0.6) * 10.0 + noise.get_noise_1d(a * 2.5) * 3.0)
+		for d in depth:
+			var c: Vector2i
+			match coast_side:
+				"N":
+					c = Vector2i(a, d)
+				"S":
+					c = Vector2i(a, H - 1 - d)
+				"W":
+					c = Vector2i(d, a)
+				_:
+					c = Vector2i(W - 1 - d, a)
+			if in_bounds(c) and get_tile(c) == GROUND and _near_built[idx(c)] == 0:
+				set_tile(c, WATER)
 
 
 ## A meandering river from one edge of the map to the other, 2-3 tiles wide.
@@ -1208,7 +1321,17 @@ func _build_astar() -> void:
 func _build_tilemaps() -> void:
 	var ts := TileSet.new()
 	ts.tile_size = Vector2i(16, 16)
-	var ground_id := ts.add_source(_atlas(Game.tex("tiles_ground"), GRASS_TILES + GRASS_DECOR_TILES + WOOD_TILES))
+	var ground_tex: Texture2D = Game.tex("tiles_ground")
+	var wood_id := -1
+	if float(BIOMES[biome]["tint"][1]) > 0.0:
+		var gi := ground_tex.get_image()
+		gi.convert(Image.FORMAT_RGBA8)
+		_tint_image(gi)
+		wood_id = ts.add_source(_atlas(ground_tex, WOOD_TILES))
+		ground_tex = ImageTexture.create_from_image(gi)
+	var ground_id := ts.add_source(_atlas(ground_tex, GRASS_TILES + GRASS_DECOR_TILES + ([] if wood_id >= 0 else WOOD_TILES)))
+	if wood_id < 0:
+		wood_id = ground_id
 	var face_ids := {}
 	for st in ["dark", "beige", "gray", "white"]:
 		face_ids[st] = ts.add_source(_atlas(Game.tex("bld_" + st), FACE_TILES))
@@ -1263,7 +1386,7 @@ func _build_tilemaps() -> void:
 			elif fk == F_CONCRETE:
 				ground.set_cell(c, floor_id, Vector2i(2 + rng.randi() % 2, 0))
 			elif fk == F_WOOD:
-				ground.set_cell(c, ground_id, WOOD_TILES[rng.randi() % WOOD_TILES.size()])
+				ground.set_cell(c, wood_id, WOOD_TILES[rng.randi() % WOOD_TILES.size()])
 			elif t != WATER:
 				var g: Array = GRASS_DECOR_TILES if rng.randf() < 0.06 else GRASS_TILES
 				ground.set_cell(c, ground_id, g[rng.randi() % g.size()])
@@ -1314,6 +1437,7 @@ func _make_grass() -> Texture2D:
 			var g: Array = GRASS_DECOR_TILES if rng.randf() < 0.06 else GRASS_TILES
 			var t: Vector2i = g[rng.randi() % g.size()]
 			img.blit_rect(src, Rect2i(t * 16, Vector2i(16, 16)), Vector2i(tx * 16, ty * 16))
+	_tint_image(img)
 	return ImageTexture.create_from_image(img)
 
 
@@ -1476,11 +1600,12 @@ func _place_trees(entities: Node2D) -> void:
 	decor.z_index = -7
 	add_child(decor)
 	_stream_roots = [tall, flat, decor]
+	var tree_mod: Color = BIOMES[biome]["tree_tint"]
 	for i in tree_cells.size():
 		var c := tree_cells[i]
 		var sz := Game.tex(tree_tex[i]).get_size()
 		_add_static({"tex": tree_tex[i], "pos": center_of(c) + Vector2(0, 10), "flip": rng.randf() < 0.5, "layer": 0,
-			"offset": Vector2(-floorf(sz.x / 2.0), -sz.y + 2.0), "centered": false})
+			"offset": Vector2(-floorf(sz.x / 2.0), -sz.y + 2.0), "centered": false, "mod": tree_mod})
 
 
 ## Street props and nature. Tall ones are y-sorted with the player; flat ones lie on the ground.
@@ -1531,6 +1656,7 @@ func _build_chunk(ck: Vector2i) -> void:
 		sp.flip_h = spec["flip"]
 		sp.centered = spec.get("centered", true)
 		sp.offset = spec.get("offset", Vector2.ZERO)
+		sp.modulate = spec.get("mod", Color.WHITE)
 		sp.modulate.a = spec.get("alpha", 1.0)
 		nodes[int(spec["layer"])].add_child(sp)
 	_chunk_live[ck] = nodes

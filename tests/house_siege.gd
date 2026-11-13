@@ -71,7 +71,7 @@ func _process(delta: float) -> void:
 			return
 		var r: Rect2i = w.buildings[house]
 		p.global_position = w.center_of(spot)
-		var types := ["walker", "runner", "brute", "axe", "armed", "walker", "runner", "armed"]
+		var types := ["walker", "runner", "brute", "axe", "armed", "walker", "runner", "armed", "crawler"]
 		var placed := 0
 		for k in 400:
 			if placed >= types.size():

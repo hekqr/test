@@ -97,6 +97,13 @@ static func title(kind: String) -> String:
 	return CONTAINERS[kind]["name"]
 
 
+## Dangerous regions far from home have been picked over less: fewer empty rolls (set per region).
+static var bonus := 0.0
+
+
 static func roll(kind: String) -> Array:
 	var c: Dictionary = CONTAINERS[kind]
-	return Items.roll(c["table"], c["rolls"], c["empty"])
+	var rolls: Vector2i = c["rolls"]
+	if bonus > 0.0 and rolls.y > 0 and randf() < bonus:
+		rolls.y += 1
+	return Items.roll(c["table"], rolls, float(c["empty"]) * (1.0 - bonus))
